@@ -1,0 +1,14 @@
+anthropic
+beautifulsoup4
+fastapi
+httpx
+langchain-text-splitters
+lxml
+openai
+pydantic
+python-dotenv
+qdrant-client
+readability-lxml
+temporalio
+uvicorn[standard]
+pytest

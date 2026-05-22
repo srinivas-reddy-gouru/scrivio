@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scrivio — AI Article Studio</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: #f0f6ff;
+    color: #1e293b;
+    min-height: 100vh;
+  }
+
+  /* ── Header — white + indigo ────────────────── */
+  .site-header {
+    background: #fff;
+    border-bottom: 1px solid #d2e3fc;
+    position: sticky; top: 0; z-index: 40;
+  }
+  .brand-text {
+    background: linear-gradient(135deg, #1967d2, #1a73e8);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    font-weight: 800;
+  }
+
+  /* ── Nav links (JS toggles .active) ─────────── */
+  .nav-link {
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    padding: 0.375rem 0.875rem; border-radius: 9999px;
+    font-size: 0.8125rem; font-weight: 500; color: #64748b;
+    transition: background 0.15s ease, color 0.15s ease;
+    cursor: pointer; border: none; background: transparent; font-family: inherit;
+  }
+  .nav-link:hover { background: #e8f0fe; color: #1967d2; }
+  .nav-link.active { background: #e8f0fe; color: #1967d2; font-weight: 600; }
+
+  /* ── Main form card ──────────────────────────── */
+  .form-card {
+    background: #fff; border-radius: 1.25rem; overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.04), 0 16px 48px rgba(66,133,244,0.12);
+    border: 1px solid #d2e3fc;
+  }
+
+  /* ── Card gradient banner (integrated branding) */
+  .card-banner {
+    background: linear-gradient(135deg, #4285F4 0%, #1a73e8 60%, #0d62e0 100%);
+    padding: 1.75rem 2rem 1.5rem;
+    position: relative; overflow: hidden;
+  }
+  .card-banner::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+  }
+  .banner-chip {
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 9999px; padding: 0.2rem 0.75rem;
+    font-size: 0.7rem; font-weight: 600; color: rgba(255,255,255,0.9);
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Generic card (settings / result / history) */
+  .card {
+    background: #fff; border-radius: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.04), 0 8px 24px rgba(66,133,244,0.07);
+    border: 1px solid #d2e3fc;
+  }
+
+  /* ── Field label ─────────────────────────────── */
+  .field-label {
+    display: block; font-size: 0.7rem; font-weight: 700;
+    color: #1a73e8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem;
+  }
+
+  /* ── Inputs ─────────────────────────────────── */
+  .q-input {
+    width: 100%; padding: 0.625rem 0.875rem;
+    border: 1.5px solid #d2e3fc; border-radius: 0.5rem;
+    background: #f8fbff; color: #1e293b; font-size: 0.9375rem; font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    outline: none;
+  }
+  .q-input:focus { border-color: #4285F4; box-shadow: 0 0 0 3px rgba(66,133,244,0.12); background: #fff; }
+  .q-input::placeholder { color: #aecbfa; }
+  .q-input-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234285F4' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 0.75rem center; padding-right: 2.5rem;
+  }
+
+  /* ── Primary button (used in JS innerHTML too) ─ */
+  .btn-primary {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    background: linear-gradient(135deg, #4285F4, #1a73e8);
+    color: #fff; font-weight: 600; font-size: 0.9375rem;
+    padding: 0.6875rem 1.625rem; border-radius: 0.625rem;
+    border: none; cursor: pointer; font-family: inherit;
+    box-shadow: 0 4px 14px rgba(66,133,244,0.35);
+    transition: transform 0.12s, box-shadow 0.15s, opacity 0.15s;
+  }
+  .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(66,133,244,0.45); }
+  .btn-primary:active:not(:disabled) { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .btn-outline {
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    background: #fff; color: #4285F4; font-weight: 500; font-size: 0.875rem;
+    padding: 0.5625rem 1.125rem; border-radius: 0.5rem;
+    border: 1.5px solid #aecbfa; cursor: pointer;
+    transition: all 0.15s; font-family: inherit;
+  }
+  .btn-outline:hover { background: #e8f0fe; border-color: #8ab4f8; }
+
+  .btn-danger {
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    background: #ef4444; color: #fff; font-weight: 600; font-size: 0.875rem;
+    padding: 0.5rem 1rem; border-radius: 0.5rem;
+    border: none; cursor: pointer; font-family: inherit; transition: background 0.15s;
+  }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Toggle (JS toggles .on) ─────────────────── */
+  .toggle-track {
+    position: relative; display: inline-flex; align-items: center;
+    width: 2.75rem; height: 1.5rem; border-radius: 9999px;
+    background: #aecbfa; transition: background 0.2s; cursor: pointer; flex-shrink: 0;
+  }
+  .toggle-track.on { background: linear-gradient(135deg, #4285F4, #1a73e8); }
+  .toggle-thumb {
+    position: absolute; left: 3px; width: 1.125rem; height: 1.125rem;
+    border-radius: 9999px; background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .toggle-track.on .toggle-thumb { transform: translateX(1.25rem); }
+
+  /* ── Feature toggle card (JS toggles .active) ── */
+  .feature-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.875rem 1rem; border-radius: 0.75rem;
+    border: 1.5px solid #d2e3fc; background: #f8fbff;
+    cursor: pointer; gap: 0.75rem;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .feature-toggle:hover { border-color: #8ab4f8; background: #f0f6ff; }
+  .feature-toggle.active { border-color: #4285F4; background: #e8f0fe; }
+
+  /* ── Source option cards (JS toggles .selected) */
+  .source-option {
+    display: flex; align-items: flex-start; gap: 0.75rem;
+    padding: 0.75rem 0.875rem; border-radius: 0.625rem;
+    border: 1.5px solid #d2e3fc; background: #f8fbff;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  .source-option:not(.selected):hover { border-color: #8ab4f8; background: #f0f6ff; }
+  .source-option.selected { border-color: #4285F4 !important; background: #e8f0fe !important; }
+
+  /* ── Provider option cards ───────────────────── */
+  .provider-option { transition: border-color 0.15s, background 0.15s; }
+  .provider-option.selected { border-color: #4285F4 !important; background: #e8f0fe !important; }
+  .provider-option:not(.selected):hover { border-color: #aecbfa; background: #f0f6ff; }
+
+  /* ── Quality preset pills (JS toggles .selected) */
+  .preset-pills { display: flex; gap: 0.375rem; flex-wrap: wrap; }
+  .preset-pill {
+    padding: 0.3125rem 0.8125rem; border-radius: 9999px;
+    font-size: 0.8125rem; font-weight: 500;
+    border: 1.5px solid #d2e3fc; background: #fff; color: #64748b;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap; font-family: inherit;
+  }
+  .preset-pill:hover { border-color: #8ab4f8; background: #e8f0fe; color: #1967d2; }
+  .preset-pill.selected {
+    border-color: transparent; background: linear-gradient(135deg, #4285F4, #1a73e8);
+    color: #fff; box-shadow: 0 2px 8px rgba(66,133,244,0.3);
+  }
+
+  /* ── Divider label ───────────────────────────── */
+  .divider-label {
+    display: flex; align-items: center; gap: 0.75rem;
+    font-size: 0.65rem; font-weight: 700; color: #8ab4f8;
+    text-transform: uppercase; letter-spacing: 0.1em;
+  }
+  .divider-label::before, .divider-label::after { content: ''; flex: 1; height: 1px; background: #d2e3fc; }
+
+  /* ── Status bar ──────────────────────────────── */
+  .status-bar {
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+    padding: 0.5rem 0.875rem; background: #f0f6ff;
+    border: 1px solid #d2e3fc; border-radius: 0.625rem;
+    font-size: 0.75rem; color: #64748b;
+  }
+
+  /* ── Stage timeline ──────────────────────────── */
+  .stage-row { position: relative; padding-left: 2.5rem; }
+  .stage-row::before {
+    content: ''; position: absolute;
+    left: 0.875rem; top: 1.75rem; bottom: -0.5rem;
+    width: 2px; background: linear-gradient(to bottom, #aecbfa, #d2e3fc);
+  }
+  .stage-row:last-child::before { display: none; }
+  .stage-row { animation: slideIn 0.3s ease-out; }
+
+  /* ── History card (JS sets className) ───────── */
+  .history-card { transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; }
+  .history-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(66,133,244,0.13); border-color: #aecbfa !important; }
+
+  /* ── Settings key row ────────────────────────── */
+  .key-row { display: flex; align-items: flex-start; gap: 1rem; padding: 1.125rem 0; border-bottom: 1px solid #f1f5f9; }
+  .key-row:last-child { border-bottom: none; }
+  .key-status { width: 0.5rem; height: 0.5rem; border-radius: 9999px; margin-top: 0.35rem; flex-shrink: 0; }
+  .key-status.present { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.15); }
+  .key-status.missing { background: #e2e8f0; }
+
+  /* ── Execution header ────────────────────────── */
+  .exec-header {
+    background: linear-gradient(135deg, #4285F4, #1a73e8);
+    border-radius: 1rem 1rem 0 0; padding: 1.5rem; color: #fff;
+  }
+
+  /* ── Prose (article) ─────────────────────────── */
+  .prose { color: #1e293b; line-height: 1.8; max-width: 70ch; margin: 0 auto; }
+  .prose h1 { font-size: 2rem; font-weight: 800; margin: 1rem 0 1.5rem; letter-spacing: -0.03em; color: #0f172a; }
+  .prose h2 { font-size: 1.45rem; font-weight: 700; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid #f1f5f9; color: #0d47a1; }
+  .prose h3 { font-size: 1.2rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: #1565c0; }
+  .prose p { margin: 0.875rem 0; }
+  .prose code { background: #e8f0fe; padding: 0.15rem 0.4rem; border-radius: 0.3rem; font-size: 0.875em; color: #1967d2; }
+  .prose pre { background: #0f172a; color: #e2e8f0; padding: 1.125rem 1.375rem; border-radius: 0.75rem; overflow-x: auto; margin: 1.25rem 0; font-size: 0.875rem; line-height: 1.65; }
+  .prose pre code { background: transparent; padding: 0; color: inherit; }
+  .prose a { color: #4285F4; text-decoration: underline; text-underline-offset: 2px; }
+  .prose a:hover { color: #1967d2; }
+  .prose blockquote { border-left: 3px solid #8ab4f8; padding: 0.75rem 1rem; color: #64748b; margin: 1rem 0; font-style: italic; background: #e8f0fe; border-radius: 0 0.5rem 0.5rem 0; }
+  .prose ul, .prose ol { margin: 0.875rem 0; padding-left: 1.5rem; }
+  .prose li { margin: 0.4rem 0; }
+  .prose strong { font-weight: 700; color: #0f172a; }
+  .prose table { border-collapse: collapse; margin: 1.25rem 0; width: 100%; font-size: 0.9em; }
+  .prose th, .prose td { border: 1px solid #d2e3fc; padding: 0.5rem 0.75rem; text-align: left; }
+  .prose th { background: #f0f6ff; font-weight: 600; }
+  .prose .mermaid { background: #fff; padding: 1.5rem; border-radius: 0.875rem; border: 1px solid #d2e3fc; margin: 1.75rem 0; text-align: center; }
+
+  pre.debug { white-space: pre-wrap; word-break: break-word; }
+  .empty-state svg { color: #aecbfa; }
+  details[open] .details-chevron { transform: rotate(90deg); }
+  .details-chevron { transition: transform 0.2s ease; }
+
+  /* ── Animations ──────────────────────────────── */
+  @keyframes slideIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes spin    { to { transform: rotate(360deg); } }
+  @keyframes fadeUp  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .spinner  { animation: spin 0.85s linear infinite; }
+  .view-fade { animation: fadeUp 0.2s ease-out; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     HEADER  — white + indigo accents
+══════════════════════════════════════ -->
+<header class="site-header">
+  <div class="max-w-5xl mx-auto px-5 py-3 flex items-center justify-between gap-4">
+
+    <div class="flex items-center gap-6">
+      <!-- Brand -->
+      <a href="#" id="brand-link" class="flex items-center gap-2 select-none">
+        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none">
+          <defs>
+            <linearGradient id="qg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#4285F4"/>
+              <stop offset="100%" stop-color="#1a73e8"/>
+            </linearGradient>
+          </defs>
+          <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" stroke="url(#qg)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+          <line x1="16" y1="8" x2="2" y2="22" stroke="url(#qg)" stroke-width="1.75" stroke-linecap="round"/>
+        </svg>
+        <span class="brand-text text-lg tracking-tight">Scrivio</span>
+      </a>
+
+      <!-- Nav -->
+      <nav class="flex items-center gap-0.5">
+        <button id="nav-new" class="nav-link">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New article
+        </button>
+        <button id="nav-history" class="nav-link">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          History
+        </button>
+        <button id="nav-settings" class="nav-link">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </button>
+      </nav>
+    </div>
+
+    <!-- Server status -->
+    <div id="server-health" class="flex items-center gap-1.5">
+      <span id="server-dot" class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+      <span id="server-text" class="text-xs text-slate-400">checking</span>
+    </div>
+  </div>
+</header>
+
+
+<!-- ══════════════════════════════════════
+     MAIN
+══════════════════════════════════════ -->
+<main class="max-w-5xl mx-auto px-5 py-8">
+
+  <!-- ── New article ───────────────────────────── -->
+  <section id="config-panel" class="view view-fade">
+    <div class="form-card">
+
+      <!-- Gradient banner — branding integrated into the card -->
+      <div class="card-banner relative">
+        <div class="relative z-10">
+          <div class="flex flex-wrap gap-2 mb-3">
+            <span class="banner-chip">✦ AI-powered writing</span>
+            <span class="banner-chip">✦ Web-sourced citations</span>
+            <span class="banner-chip">✦ Mermaid diagrams</span>
+          </div>
+          <h1 class="text-xl sm:text-2xl font-extrabold text-white leading-snug">
+            Research, draft and polish expert articles in minutes.
+          </h1>
+          <p class="text-sm text-blue-100 mt-1.5 max-w-xl">
+            Multi-stage AI pipeline: live web research, claim verification, structured drafting and voice polishing.
+          </p>
+        </div>
+      </div>
+
+      <!-- White form body -->
+      <form id="generate-form" class="p-6 sm:p-8 space-y-5">
+
+        <!-- Topic -->
+        <div>
+          <label class="field-label" for="topic">Topic</label>
+          <input id="topic" type="text" required autocomplete="off"
+            placeholder="e.g. Spring Boot, or 'How does Kafka handle backpressure?'"
+            class="q-input text-base font-medium" />
+        </div>
+
+        <!-- Level / Audience / Preset -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+          <div>
+            <label class="field-label" for="explanation_level">Depth level</label>
+            <select id="explanation_level" class="q-input q-input-select">
+              <option value="basic">Basic</option>
+              <option value="intermediate" selected>Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label" for="audience_role">Audience</label>
+            <input id="audience_role" type="text" value="software engineer" class="q-input" />
+          </div>
+          <div>
+            <label class="field-label">Quality preset</label>
+            <div class="preset-pills mt-0.5" id="preset-pills">
+              <button type="button" class="preset-pill" data-preset="fast">⚡ Fast</button>
+              <button type="button" class="preset-pill selected" data-preset="balanced">⚖️ Balanced</button>
+              <button type="button" class="preset-pill" data-preset="best">✨ Best</button>
+            </div>
+            <input type="hidden" id="model_preset" value="balanced" />
+          </div>
+        </div>
+
+        <div class="divider-label">Options</div>
+
+        <!-- Source mode + Diagrams -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+          <!-- Source -->
+          <div class="flex flex-col">
+            <label class="field-label">Knowledge source</label>
+            <div class="flex flex-col gap-2 flex-1">
+              <label id="source-live" class="source-option selected" onclick="selectSource('live', this)">
+                <input type="radio" name="source_mode" value="live" checked class="mt-0.5 h-4 w-4 text-blue-600 shrink-0 accent-blue-600" />
+                <div>
+                  <div class="text-sm font-semibold text-blue-800 flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    Live web search
+                  </div>
+                  <div class="text-xs text-blue-500 mt-0.5">Fetches real sources — needs <span class="font-mono font-semibold">TAVILY_API_KEY</span></div>
+                </div>
+              </label>
+              <label id="source-llm" class="source-option" onclick="selectSource('llm', this)">
+                <input type="radio" name="source_mode" value="llm" class="mt-0.5 h-4 w-4 shrink-0 accent-blue-600" />
+                <div>
+                  <div class="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-1.14z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-1.14z"/></svg>
+                    LLM knowledge only
+                  </div>
+                  <div class="text-xs text-slate-400 mt-0.5">Model's training data — no search key needed</div>
+                </div>
+              </label>
+              <p id="source-warning" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1"></p>
+            </div>
+            <input type="hidden" id="web_search" value="true" />
+          </div>
+
+          <!-- Diagrams -->
+          <div class="flex flex-col">
+            <label class="field-label">Diagrams</label>
+            <div class="feature-toggle active flex-1"
+              id="toggle-include-diagrams"
+              onclick="toggleFeature('include_diagrams', this)"
+              style="align-items:flex-start;padding-top:1rem;">
+              <div class="flex items-start gap-2.5">
+                <div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                  <svg class="w-3.5 h-3.5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                  </svg>
+                </div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-800">Mermaid diagrams</div>
+                  <div class="text-xs text-slate-400 mt-0.5 leading-relaxed">Auto-generates architecture &amp; flow diagrams. Works with your configured LLM key.</div>
+                </div>
+              </div>
+              <div class="toggle-track on flex-shrink-0" id="track-include_diagrams">
+                <div class="toggle-thumb"></div>
+              </div>
+              <input type="hidden" id="include_diagrams" value="true" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced -->
+        <details class="border border-blue-100 rounded-xl overflow-hidden">
+          <summary class="cursor-pointer select-none flex items-center gap-2 font-semibold text-blue-500 px-4 py-3 bg-blue-50/60 hover:bg-blue-50 transition-colors list-none text-sm">
+            <svg class="w-3.5 h-3.5 details-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            Advanced options
+          </summary>
+          <div class="p-4 space-y-4 bg-white">
+            <div>
+              <label class="field-label" for="extra_context">Extra context</label>
+              <textarea id="extra_context" rows="2"
+                placeholder="e.g. cover bean lifecycle, dependency injection, and auto-configuration"
+                class="q-input resize-none"></textarea>
+            </div>
+            <div>
+              <label class="field-label" for="must_cover">Must cover <span class="normal-case font-normal text-slate-400">(comma-separated)</span></label>
+              <input id="must_cover" type="text" placeholder="e.g. bean lifecycle, dependency injection" class="q-input" />
+            </div>
+            <label class="flex items-center gap-2.5 cursor-pointer text-sm text-slate-600 hover:text-slate-800">
+              <input id="skip_clarification" type="checkbox" class="h-4 w-4 rounded accent-blue-600" />
+              Skip clarification questions — use default angle for broad topics
+            </label>
+          </div>
+        </details>
+
+        <!-- Generate row -->
+        <div class="flex flex-wrap items-center gap-3 pt-1">
+          <button type="submit" id="generate-btn" class="btn-primary">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Generate article
+          </button>
+          <div id="config-status-bar" class="status-bar flex-1 min-w-0">
+            <span id="status-provider" class="flex items-center gap-1.5 font-medium">
+              <span class="w-2 h-2 rounded-full bg-slate-300 flex-shrink-0"></span>detecting…
+            </span>
+            <span class="text-slate-200 hidden sm:inline">|</span>
+            <span id="status-search" class="flex items-center gap-1"></span>
+            <span class="text-slate-200 hidden sm:inline">|</span>
+            <span id="preset-callout-text" class="text-slate-400 text-xs truncate"></span>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </section>
+
+
+  <!-- ── Clarification ─────────────────────────── -->
+  <section id="clarification-panel" class="view hidden max-w-2xl mx-auto">
+    <div class="card overflow-hidden">
+      <div class="bg-amber-50 border-b border-amber-100 px-6 py-5 flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+          <svg class="w-4 h-4 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div>
+          <h2 class="font-bold text-slate-900">A few quick questions</h2>
+          <p class="text-sm text-slate-500 mt-0.5" id="clarification-default"></p>
+        </div>
+      </div>
+      <div class="px-6 py-5">
+        <form id="clarification-form" class="space-y-5"></form>
+        <div class="flex gap-3 pt-5 border-t border-slate-100 mt-5">
+          <button type="button" id="answer-btn" class="btn-primary">Submit answers</button>
+          <button type="button" id="skip-clarification-btn" class="btn-outline">Skip — use default</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ── Execution ─────────────────────────────── -->
+  <section id="execution-panel" class="view hidden max-w-2xl mx-auto">
+    <div class="card overflow-hidden">
+      <div class="exec-header flex items-start justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <svg class="spinner w-4 h-4 text-blue-200" fill="none" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="40 60" stroke-linecap="round"/>
+            </svg>
+            <h2 class="font-bold text-white">Generating your article…</h2>
+          </div>
+          <p class="text-sm text-blue-200 pl-6" id="execution-subtitle">Warming up the pipeline</p>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <span id="elapsed" class="text-sm text-blue-200 font-mono bg-white/10 px-2.5 py-1 rounded-md">0.0s</span>
+          <button type="button" id="stop-btn" class="btn-danger text-sm">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+            Stop
+          </button>
+        </div>
+      </div>
+      <div class="px-6 py-5 space-y-1" id="stages"></div>
+    </div>
+  </section>
+
+
+  <!-- ── Result ────────────────────────────────── -->
+  <section id="result-panel" class="view hidden">
+    <div class="card overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center gap-3">
+          <button type="button" id="result-back-btn" class="btn-outline text-sm">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            Back
+          </button>
+          <span class="text-xs text-slate-400 font-mono" id="output-dir"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-semibold text-blue-600 uppercase tracking-wider">Level</label>
+          <select id="level-selector" class="q-input q-input-select py-1.5 text-sm" style="width:auto;"></select>
+        </div>
+      </div>
+      <div class="px-6 py-8">
+        <article id="article" class="prose"></article>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ── History ───────────────────────────────── -->
+  <section id="history-panel" class="view hidden">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-2xl font-extrabold text-slate-900">Article history</h2>
+        <p class="text-sm text-slate-400 mt-0.5">Click any article to read it.</p>
+      </div>
+      <button type="button" id="history-refresh-btn" class="btn-outline">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+    </div>
+    <div id="history-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    <div id="history-empty" class="empty-state hidden text-center py-20">
+      <svg class="w-14 h-14 mx-auto mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+      <h3 class="text-lg font-semibold text-slate-400">No articles yet</h3>
+      <p class="text-sm text-slate-400 mt-1">Generate your first article to see it here.</p>
+    </div>
+    <div id="history-loading" class="text-center py-20 text-sm text-slate-400">Loading…</div>
+  </section>
+
+
+  <!-- ── Past article ───────────────────────────── -->
+  <section id="past-article-panel" class="view hidden">
+    <div class="card overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center gap-3">
+          <button type="button" id="past-back-btn" class="btn-outline text-sm">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            History
+          </button>
+          <span class="text-xs text-slate-400 font-mono" id="past-article-meta"></span>
+        </div>
+        <div class="flex items-center gap-2" id="past-level-wrap">
+          <label class="text-xs font-semibold text-blue-600 uppercase tracking-wider">Level</label>
+          <select id="past-level-selector" class="q-input q-input-select py-1.5 text-sm" style="width:auto;"></select>
+        </div>
+      </div>
+      <div class="px-6 py-8">
+        <article id="past-article" class="prose"></article>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ── Settings ──────────────────────────────── -->
+  <section id="settings-panel" class="view hidden max-w-2xl mx-auto">
+    <div class="mb-6">
+      <h2 class="text-2xl font-extrabold text-slate-900">Settings</h2>
+      <p class="text-sm text-slate-400 mt-1">Stored in your <code class="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-mono">.env</code> file — changes take effect immediately.</p>
+    </div>
+
+    <!-- Provider -->
+    <div class="card mb-4 overflow-hidden" id="provider-card">
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
+        <div class="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center">
+          <svg class="w-3 h-3 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">LLM provider</h3>
+          <p class="text-xs text-slate-400">Auto-selected from available API keys.</p>
+        </div>
+      </div>
+      <div id="provider-card-body" class="px-5 py-4"><p class="text-sm text-slate-400">Loading…</p></div>
+      <div id="provider-pref-row" class="hidden px-5 pb-4">
+        <button id="provider-save-btn" class="btn-primary text-sm">Save preference</button>
+        <span id="provider-save-status" class="ml-3 text-sm text-slate-500"></span>
+      </div>
+    </div>
+
+    <!-- API keys -->
+    <div class="card mb-4 overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
+        <div class="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center">
+          <svg class="w-3 h-3 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">API keys</h3>
+          <p class="text-xs text-slate-400">Green dot = present. Last 4 characters shown.</p>
+        </div>
+      </div>
+      <div id="settings-keys" class="px-5"><p class="py-8 text-sm text-slate-400 text-center">Loading…</p></div>
+      <div class="px-5 pb-4 flex items-center gap-3">
+        <button id="settings-save-btn" class="btn-primary text-sm">Save keys</button>
+        <span id="settings-save-status" class="text-sm text-slate-500"></span>
+      </div>
+    </div>
+
+    <!-- Reference -->
+    <div class="card overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
+        <div class="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center">
+          <svg class="w-3 h-3 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <h3 class="font-bold text-slate-900 text-sm">Which keys do I need?</h3>
+      </div>
+      <div class="px-5 py-4 text-sm text-slate-700 space-y-4">
+        <div>
+          <p class="font-semibold text-slate-800 mb-2">✓ Minimum — to generate an article</p>
+          <div class="pl-4 flex flex-col gap-1 text-slate-500 text-xs">
+            <div><code class="bg-blue-50 text-blue-700 font-mono font-semibold px-1.5 py-0.5 rounded text-xs">ANTHROPIC_API_KEY</code> — Claude (Anthropic)</div>
+            <div><code class="bg-blue-50 text-blue-700 font-mono font-semibold px-1.5 py-0.5 rounded text-xs">OPENAI_API_KEY</code> — GPT-4o (OpenAI)</div>
+          </div>
+        </div>
+        <div class="border-t border-slate-100 pt-3">
+          <p class="font-semibold text-slate-800 mb-2">+ Optional — unlocks more features</p>
+          <div class="pl-4 flex flex-col gap-2 text-xs text-slate-500">
+            <div><code class="bg-blue-50 text-blue-700 font-mono font-semibold px-1.5 py-0.5 rounded text-xs">TAVILY_API_KEY</code> — live web search for real citations</div>
+            <div><code class="bg-blue-50 text-blue-700 font-mono font-semibold px-1.5 py-0.5 rounded text-xs">OPENAI_API_KEY</code> — claim verification via GPT-4o-mini</div>
+          </div>
+        </div>
+        <div class="border-t border-slate-100 pt-3">
+          <p class="font-semibold text-slate-800 mb-2">Quality presets</p>
+          <div class="pl-4 flex flex-col gap-1 text-xs text-slate-500">
+            <div><span class="font-semibold text-slate-700">⚡ Fast</span> — Haiku for most stages; Sonnet for drafting + polish. ~40% cheaper.</div>
+            <div><span class="font-semibold text-slate-700">⚖️ Balanced</span> — Haiku for routing, Sonnet for writing. <span class="text-slate-400">(default)</span></div>
+            <div><span class="font-semibold text-slate-700">✨ Best</span> — Sonnet everywhere. Maximum quality.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+
+<!-- ══════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════ -->
+<script>
+  const State = {
+    currentJobId: null, eventSource: null, startTime: null,
+    elapsedTimer: null, stages: new Map(), pendingRequest: null,
+    articles: null, currentView: 'config', pastArticle: null, keyStatus: null,
+  };
+
+  mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+  function $(id) { return document.getElementById(id); }
+
+  const VIEWS = {
+    config:         ['config-panel'],
+    clarification:  ['clarification-panel'],
+    execution:      ['execution-panel'],
+    result:         ['result-panel'],
+    history:        ['history-panel'],
+    'past-article': ['past-article-panel'],
+    settings:       ['settings-panel'],
+  };
+
+  function showView(view) {
+    State.currentView = view;
+    for (const list of Object.values(VIEWS))
+      for (const id of list) $(id).classList.add('hidden');
+    for (const id of (VIEWS[view] || [])) {
+      const el = $(id);
+      el.classList.remove('hidden');
+      el.classList.remove('view-fade');
+      void el.offsetWidth;
+      el.classList.add('view-fade');
+    }
+    $('nav-new').classList.toggle('active',
+      ['config','clarification','execution','result'].includes(view));
+    $('nav-history').classList.toggle('active', ['history','past-article'].includes(view));
+    $('nav-settings').classList.toggle('active', view === 'settings');
+  }
+
+  function toggleFeature(fieldId, container) {
+    const hidden = $(fieldId), track = $('track-' + fieldId);
+    const isOn = hidden.value === 'true';
+    hidden.value = isOn ? 'false' : 'true';
+    track.classList.toggle('on', !isOn);
+    container.classList.toggle('active', !isOn);
+  }
+
+  function selectSource(mode, container) {
+    $('source-live').classList.toggle('selected', mode === 'live');
+    $('source-llm').classList.toggle('selected', mode === 'llm');
+    $('web_search').value = mode === 'live' ? 'true' : 'false';
+    const radio = container.querySelector('input[type=radio]');
+    if (radio) radio.checked = true;
+    updateSourceWarning(mode);
+  }
+
+  function updateSourceWarning(mode) {
+    const ks = State.keyStatus, el = $('source-warning');
+    if (!el) return;
+    if (mode === 'live' && ks && !ks.has_search) {
+      el.textContent = '⚠ No TAVILY_API_KEY detected — will run without live sources. Add your key in Settings.';
+      el.classList.remove('hidden');
+    } else { el.classList.add('hidden'); }
+  }
+
+  async function refreshKeyStatus() {
+    try {
+      const r = await fetch('/settings');
+      if (!r.ok) return;
+      State.keyStatus = await r.json();
+      updateFormStatusBar(State.keyStatus);
+      updateSourceWarning($('web_search').value === 'true' ? 'live' : 'llm');
+    } catch {}
+  }
+
+  function updateFormStatusBar(ks) {
+    if (!ks) return;
+    const provEl = $('status-provider'), srchEl = $('status-search');
+    const provLabel = { anthropic:'🤖 Claude (Anthropic)', openai:'🤖 GPT-4o (OpenAI)', none:'⚠ No LLM key' }[ks.resolved_provider] || '⚠ Unknown';
+    const provColor = ks.resolved_provider === 'none' ? 'bg-red-400' : 'bg-emerald-500';
+    const autoNote  = ks.provider_auto ? ' · auto' : ' · preferred';
+    provEl.innerHTML = `<span class="w-2 h-2 rounded-full ${provColor} flex-shrink-0"></span>${escapeHtml(provLabel)}<span class="text-slate-300">${autoNote}</span>`;
+    srchEl.innerHTML = ks.has_search
+      ? `<span class="text-emerald-600 font-medium">🌐 Web search ready</span>`
+      : `<span class="text-slate-400">🔒 No search key</span>`;
+  }
+
+  function renderProviderCard(ks) {
+    const body = $('provider-card-body'), prefRow = $('provider-pref-row');
+    if (ks.resolved_provider === 'none') {
+      body.innerHTML = `<div class="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl"><svg class="w-5 h-5 text-red-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div><div class="text-sm font-semibold text-red-800">No LLM key configured</div><div class="text-xs text-red-700 mt-1">Add <span class="font-mono font-semibold">ANTHROPIC_API_KEY</span> or <span class="font-mono font-semibold">OPENAI_API_KEY</span> below.</div></div></div>`;
+      prefRow.classList.add('hidden'); return;
+    }
+    if (ks.provider_auto) {
+      const isAnth = ks.resolved_provider === 'anthropic';
+      const name = isAnth ? 'Claude (Anthropic)' : 'GPT-4o (OpenAI)';
+      const model = isAnth ? 'Sonnet for writing · Haiku for routing' : 'GPT-4o for writing · GPT-4o-mini for routing';
+      const absent = isAnth ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+      body.innerHTML = `<div class="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-xl"><svg class="w-5 h-5 text-green-600 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg><div><div class="text-sm font-semibold text-green-800">Auto-selected: ${escapeHtml(name)}</div><div class="text-xs text-green-700 mt-1">${escapeHtml(model)}</div><div class="text-xs text-slate-500 mt-2">Add <span class="font-mono font-semibold">${escapeHtml(absent)}</span> to enable the other provider.</div></div></div>`;
+      prefRow.classList.add('hidden');
+    } else {
+      const prefAnth = ks.provider_preference === 'anthropic';
+      body.innerHTML = `<p class="text-xs text-slate-500 mb-3">Both keys configured. Choose which provider to use for writing stages.</p><div class="space-y-2"><label id="prov-anthropic" class="provider-option flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer ${prefAnth ? 'border-blue-400 bg-blue-50 selected' : 'border-slate-200 bg-slate-50'}" onclick="selectProvider('anthropic', this)"><input type="radio" name="llm_provider" value="anthropic" ${prefAnth ? 'checked' : ''} class="mt-0.5 h-4 w-4 accent-blue-600 shrink-0" /><div><div class="text-sm font-semibold ${prefAnth ? 'text-blue-900' : 'text-slate-700'}">Anthropic — Claude</div><div class="text-xs ${prefAnth ? 'text-blue-700' : 'text-slate-500'} mt-0.5">Sonnet for writing · Haiku for routing</div></div></label><label id="prov-openai" class="provider-option flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer ${!prefAnth ? 'border-blue-400 bg-blue-50 selected' : 'border-slate-200 bg-slate-50'}" onclick="selectProvider('openai', this)"><input type="radio" name="llm_provider" value="openai" ${!prefAnth ? 'checked' : ''} class="mt-0.5 h-4 w-4 accent-blue-600 shrink-0" /><div><div class="text-sm font-semibold ${!prefAnth ? 'text-blue-900' : 'text-slate-700'}">OpenAI — GPT-4o</div><div class="text-xs ${!prefAnth ? 'text-blue-700' : 'text-slate-500'} mt-0.5">GPT-4o for writing · GPT-4o-mini for routing</div></div></label></div>`;
+      prefRow.classList.remove('hidden');
+    }
+  }
+
+  function selectProvider(provider, container) {
+    document.querySelectorAll('.provider-option').forEach(el => el.classList.remove('selected'));
+    container.classList.add('selected');
+    const radio = container.querySelector('input[type=radio]');
+    if (radio) radio.checked = true;
+    $('provider-save-status').textContent = '';
+  }
+
+  const PRESET_DESCRIPTIONS = {
+    fast:     '⚡ Fast — Haiku for most stages; Sonnet only for drafting + polish. ~40% cheaper.',
+    balanced: '⚖️ Balanced — Haiku for routing, Sonnet for all writing.',
+    best:     '✨ Best — Sonnet everywhere. Maximum quality.',
+  };
+  function updatePresetCallout(preset) { $('preset-callout-text').textContent = PRESET_DESCRIPTIONS[preset] || ''; }
+  document.querySelectorAll('.preset-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.preset-pill').forEach(p => p.classList.remove('selected'));
+      pill.classList.add('selected');
+      $('model_preset').value = pill.dataset.preset;
+      updatePresetCallout(pill.dataset.preset);
+    });
+  });
+  updatePresetCallout('balanced');
+
+  function buildRequest() {
+    const mustCoverRaw = $('must_cover').value.trim();
+    return {
+      topic:             $('topic').value.trim(),
+      explanation_level: $('explanation_level').value,
+      audience_role:     $('audience_role').value.trim() || 'software engineer',
+      model_preset:      $('model_preset').value,
+      web_search:        $('web_search').value === 'true',
+      include_diagrams:  $('include_diagrams').value === 'true',
+      extra_context:     $('extra_context').value.trim(),
+      must_cover:        mustCoverRaw ? mustCoverRaw.split(',').map(s => s.trim()).filter(Boolean) : [],
+      skip_clarification: $('skip_clarification').checked,
+    };
+  }
+
+  async function checkHealth() {
+    try {
+      const r = await fetch('/health');
+      if (r.ok) { $('server-dot').className = 'w-1.5 h-1.5 rounded-full bg-emerald-400'; $('server-text').textContent = 'connected'; }
+      else { $('server-dot').className = 'w-1.5 h-1.5 rounded-full bg-amber-400'; $('server-text').textContent = 'server error'; }
+    } catch { $('server-dot').className = 'w-1.5 h-1.5 rounded-full bg-red-500'; $('server-text').textContent = 'offline'; }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function formatTimestamp(iso) {
+    if (!iso) return '';
+    try { const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleString(); } catch { return iso; }
+  }
+
+  const STATUS_ICONS = {
+    running:   '<svg class="spinner w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="40 60" stroke-linecap="round"/></svg>',
+    completed: '<svg class="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>',
+    error:     '<svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>',
+    cancelled: '<svg class="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>',
+  };
+
+  function renderStages() {
+    const container = $('stages');
+    container.innerHTML = '';
+    for (const [name, stage] of State.stages) {
+      const elapsed = stage.completed_at ? ((stage.completed_at - stage.started_at)/1000).toFixed(1)+'s' : stage.started_at ? '...' : '';
+      const hasData = stage.data && Object.keys(stage.data).length > 0;
+      const detailsId = `stage-${name}-details`;
+      const row = document.createElement('div');
+      row.className = 'stage-row';
+      row.innerHTML = `
+        <div class="absolute left-0 top-0 flex items-center justify-center w-7 h-7 bg-white rounded-full shadow-sm">
+          ${STATUS_ICONS[stage.status] || ''}
+        </div>
+        <div class="py-1.5">
+          <div class="flex items-baseline gap-3 flex-wrap">
+            <span class="font-semibold text-slate-800 capitalize text-sm">${escapeHtml(name.replace(/_/g,' '))}</span>
+            <span class="text-xs text-slate-400 font-mono">${elapsed}</span>
+            ${stage.message ? `<span class="text-xs text-slate-500">${escapeHtml(stage.message)}</span>` : ''}
+            ${(hasData||stage.error) ? `<button class="text-xs text-blue-500 hover:underline ml-auto font-medium" data-toggle="${detailsId}">debug ▾</button>` : ''}
+          </div>
+          ${(hasData||stage.error) ? `<div id="${detailsId}" class="hidden mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">${renderStageDebug(name,stage)}</div>` : ''}
+        </div>`;
+      container.appendChild(row);
+    }
+    container.querySelectorAll('[data-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => document.getElementById(btn.dataset.toggle).classList.toggle('hidden'));
+    });
+  }
+
+  function renderStageDebug(name, stage) {
+    const d = stage.error ? { error: stage.error, ...stage.data } : { ...stage.data };
+    const parts = [];
+    if (name === 'brief' && d.brief) { const b = d.brief; parts.push(kvBlock('Brief', [['title',b.suggested_title],['angle',b.angle],['thesis',b.thesis],['reader pain point',b.reader_pain_point],['key insight',b.key_insight],['hook seed',b.hook_seed]])); delete d.brief; }
+    if (name === 'relevance_check') { parts.push(kvBlock('Verdict',[['aligned',String(d.aligned)],['brief regenerated',String(d.brief_regenerated)],['reasoning',d.reasoning||'(none)'],['suggested adjustment',d.suggested_thesis_adjustment||'(none)']])); if (d.missing_aspects&&d.missing_aspects.length) parts.push(listBlock('Missing aspects',d.missing_aspects)); ['aligned','brief_regenerated','reasoning','suggested_thesis_adjustment','missing_aspects','missing_aspects_count'].forEach(k=>delete d[k]); }
+    if (name === 'search') { parts.push(kvBlock('Summary',[['spans collected',d.spans_count],['from cache',String(!!d.cached)],['search queries run',(d.queries||[]).length],['urls considered',d.search_results_total||(d.urls&&d.urls.length)||0],['urls fetched',d.fetch_attempted||(d.urls&&d.urls.length)||0]])); if (d.queries&&d.queries.length) parts.push(listBlock('Search queries',d.queries)); if (d.urls&&d.urls.length) parts.push(urlTable('URLs fetched',d.urls)); if (d.skipped_urls&&d.skipped_urls.length) parts.push(urlTable('URLs skipped',d.skipped_urls)); ['queries','urls','skipped_urls','fetch_attempted','search_results_total','spans_count','cached'].forEach(k=>delete d[k]); }
+    if (name === 'planning') { parts.push(kvBlock('Summary',[['sections',d.sections],['claims',d.claims_count],['diagrams planned',d.visual_intents_count],['from cache',String(!!d.cached)]])); if (d.section_titles&&d.section_titles.length) parts.push(listBlock('Section titles',d.section_titles)); if (d.visual_intents&&d.visual_intents.length) parts.push(diagramTable('Diagrams',d.visual_intents)); ['sections','claims_count','visual_intents_count','section_titles','visual_intents','cached'].forEach(k=>delete d[k]); }
+    if (name === 'verification') { parts.push(kvBlock('Support verdict',[['supported',d.supported],['weak',d.weak],['unsupported',d.unsupported],['total claims',d.total]])); parts.push(kvBlock('Relevance verdict',[['off topic (dropped)',d.off_topic],['tangential',d.tangential],['claims dropped',d.claims_dropped]])); if (d.sample_verdicts&&d.sample_verdicts.length) parts.push(verdictTable('Sample verdicts (first 6)',d.sample_verdicts)); ['supported','weak','unsupported','total','off_topic','tangential','claims_dropped','sample_verdicts','cached'].forEach(k=>delete d[k]); }
+    if (name === 'drafting') { parts.push(kvBlock('Summary',[['sections drafted',d.sections],['total words',d.total_words],['diagrams rendered',d.assets_rendered],['diagrams failed',d.assets_failed],['from cache',String(!!d.cached)]])); if (d.section_word_counts&&d.section_word_counts.length) parts.push(wordCountTable('Per-section word counts',d.section_word_counts)); ['sections','total_words','assets_rendered','assets_failed','section_word_counts','cached'].forEach(k=>delete d[k]); }
+    if (name === 'editor') { parts.push(kvBlock('Verdict',[['approved',String(d.approved)],['revisions requested',d.revisions],['overall',d.overall_assessment||'']])); if (d.revision_targets&&d.revision_targets.length) parts.push(revisionTable('Revision targets',d.revision_targets)); ['approved','revisions','overall_assessment','revision_targets'].forEach(k=>delete d[k]); }
+    if (name === 'polish'||name === 'compilation') { parts.push(kvBlock('Summary',[['levels emitted',(d.levels||[]).join(', ')],['output words',d.output_word_count||'']])); ['levels','skipped_levels','output_word_count'].forEach(k=>delete d[k]); }
+    if (name === 'critic') { parts.push(kvBlock('Verdict',[['approved',String(d.approved)],['re-polished',String(!!d.refined)],['blocking issues',d.blocking],['moderate issues',d.moderate],['minor issues',d.minor],['overall',d.overall_assessment||'']])); if (d.issues&&d.issues.length) parts.push(criticIssueTable('Issues',d.issues)); ['approved','refined','blocking','moderate','minor','overall_assessment','issues'].forEach(k=>delete d[k]); }
+    if (Object.keys(d).length > 0) parts.push(`<details><summary class="cursor-pointer text-slate-500">Raw data</summary><pre class="debug mt-2">${escapeHtml(JSON.stringify(d,null,2))}</pre></details>`);
+    return parts.join('');
+  }
+
+  function kvBlock(title,rows){const items=rows.filter(([,v])=>v!==undefined&&v!==null&&v!=='').map(([k,v])=>`<div class="flex gap-3"><span class="text-slate-400 w-40 shrink-0">${escapeHtml(k)}</span><span class="break-words text-slate-700">${escapeHtml(String(v))}</span></div>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div>${items}</div>`;}
+  function listBlock(title,items){const lis=items.map(i=>`<li class="break-words">${escapeHtml(String(i))}</li>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div><ul class="list-disc list-inside space-y-0.5">${lis}</ul></div>`;}
+  function urlTable(title,urls){const rows=urls.map(u=>`<tr><td class="py-1 pr-2 text-right text-slate-400 w-10">${u.trust_score!=null?u.trust_score:''}</td><td class="py-1 pr-2 text-slate-400 w-16">${escapeHtml(u.status||'')}</td><td class="py-1 pr-2 text-right text-slate-400 w-12">${u.spans_yielded!=null?u.spans_yielded:''}</td><td class="py-1"><a href="${escapeHtml(u.url)}" target="_blank" rel="noopener" class="text-blue-500 hover:underline break-all">${escapeHtml(u.url)}</a>${u.title?` <span class="text-slate-400">— ${escapeHtml(u.title)}</span>`:''}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)} <span class="text-slate-400 font-normal">(${urls.length})</span></div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-right pr-2">trust</th><th class="text-left pr-2">status</th><th class="text-right pr-2">spans</th><th class="text-left">url</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+  function diagramTable(title,intents){const rows=intents.map(i=>`<tr><td class="py-1 pr-2 text-slate-400 w-20">${escapeHtml(i.format||'')}</td><td class="py-1 pr-2 text-slate-600">${escapeHtml(i.section_title||'')}</td><td class="py-1">${escapeHtml(i.description||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-left pr-2">format</th><th class="text-left pr-2">section</th><th class="text-left">description</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+  function verdictTable(title,verdicts){const rows=verdicts.map(v=>`<tr><td class="py-1 pr-2 ${v.support==='supported'?'text-green-700':v.support==='weak'?'text-amber-700':'text-red-700'} font-medium">${escapeHtml(v.support||'')}</td><td class="py-1 pr-2 ${v.relevance==='relevant'?'text-green-700':v.relevance==='tangential'?'text-amber-700':'text-red-700'} font-medium">${escapeHtml(v.relevance||'')}</td><td class="py-1 text-slate-600">${escapeHtml(v.note||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-left pr-2">support</th><th class="text-left pr-2">relevance</th><th class="text-left">note</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+  function wordCountTable(title,counts){const rows=counts.map(c=>`<tr><td class="py-1 pr-2 text-right text-slate-400 w-16">${c.words}</td><td class="py-1 text-slate-600">${escapeHtml(c.title||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-right pr-2">words</th><th class="text-left">section</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+  function criticIssueTable(title,issues){const sevColor=s=>s==='blocking'?'text-red-700 bg-red-50':s==='moderate'?'text-amber-700 bg-amber-50':'text-slate-600 bg-slate-100';const rows=issues.map(i=>`<tr class="align-top"><td class="py-1.5 pr-2"><span class="px-2 py-0.5 rounded text-xs font-medium ${sevColor(i.severity)}">${escapeHtml(i.severity||'')}</span></td><td class="py-1.5 pr-2 text-slate-400 text-xs">${escapeHtml(i.category||'')}</td><td class="py-1.5 pr-2 text-slate-500 text-xs font-mono">${escapeHtml(i.location||'')}</td><td class="py-1.5 pr-2 text-slate-700">${escapeHtml(i.issue||'')}<div class="text-slate-400 mt-0.5"><span class="font-semibold">Fix:</span> ${escapeHtml(i.fix||'')}</div></td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)} <span class="text-slate-400 font-normal">(${issues.length})</span></div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-left pr-2">severity</th><th class="text-left pr-2">category</th><th class="text-left pr-2">location</th><th class="text-left">issue / fix</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+  function revisionTable(title,revisions){const rows=revisions.map(r=>`<tr><td class="py-1 pr-2 text-slate-700 align-top w-40">${escapeHtml(r.section_title||'')}</td><td class="py-1 pr-2 text-slate-500 align-top">${(r.issues||[]).map(escapeHtml).join('<br>')}</td><td class="py-1 text-slate-700 align-top">${escapeHtml(r.instruction||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-left pr-2">section</th><th class="text-left pr-2">issues</th><th class="text-left">instruction</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+
+  function startElapsedTimer() {
+    State.startTime = Date.now();
+    if (State.elapsedTimer) clearInterval(State.elapsedTimer);
+    State.elapsedTimer = setInterval(() => { $('elapsed').textContent = ((Date.now()-State.startTime)/1000).toFixed(1)+'s'; }, 100);
+  }
+  function stopElapsedTimer() { if (State.elapsedTimer) { clearInterval(State.elapsedTimer); State.elapsedTimer = null; } }
+
+  function openStream(jobId) {
+    if (State.eventSource) State.eventSource.close();
+    const es = new EventSource(`/jobs/${jobId}/stream`);
+    State.eventSource = es;
+    es.onmessage = ev => { try { handleEvent(JSON.parse(ev.data)); } catch {} };
+    es.onerror = () => es.close();
+  }
+
+  function handleEvent(event) {
+    const { type, stage, message, data } = event;
+    const name = stage || type;
+    if (type === 'stage_started') {
+      State.stages.set(name, { status:'running', message:message||'', data:{}, started_at:Date.now(), completed_at:null });
+    } else if (type === 'stage_completed') {
+      const existing = State.stages.get(name) || { started_at:Date.now() };
+      State.stages.set(name, { ...existing, status:'completed', data:data||{}, completed_at:Date.now() });
+    } else if (type === 'complete') {
+      State.stages.set('complete', { status:'completed', message:'Article ready', data:{ output_dir:data.output_dir }, started_at:Date.now(), completed_at:Date.now() });
+      State.articles = data.articles;
+      onComplete(data.output_dir);
+    } else if (type === 'error') {
+      State.stages.set(name, { status:'error', message:message||'Failed', error:message, data:data||{}, started_at:Date.now(), completed_at:Date.now() });
+      stopElapsedTimer(); $('stop-btn').disabled = true;
+    } else if (type === 'cancelled') {
+      State.stages.set(name, { status:'cancelled', message:'Cancelled', data:{}, started_at:Date.now(), completed_at:Date.now() });
+      stopElapsedTimer(); onCancelled();
+    }
+    renderStages();
+  }
+
+  function renderArticleMarkdown(containerId, markdown) {
+    const container = $(containerId);
+    container.innerHTML = marked.parse(markdown || '');
+    container.querySelectorAll('pre code.language-mermaid').forEach(code => {
+      const div = document.createElement('div');
+      div.className = 'mermaid'; div.textContent = code.textContent;
+      code.parentNode.replaceWith(div);
+    });
+    try { mermaid.run({ querySelector: `#${containerId} .mermaid` }); } catch {}
+  }
+
+  function renderArticle(level) {
+    if (!State.articles || !State.articles[level]) { $('article').innerHTML = `<p class="text-slate-400">No ${level} article available.</p>`; return; }
+    renderArticleMarkdown('article', State.articles[level].markdown || '');
+  }
+
+  function onComplete(outputDir) {
+    stopElapsedTimer();
+    $('output-dir').textContent = outputDir ? `saved to ${outputDir}` : '';
+    showView('result'); $('stop-btn').disabled = true;
+    const availableLevels = State.articles ? Object.keys(State.articles) : [];
+    const selector = $('level-selector');
+    selector.innerHTML = '';
+    for (const lvl of availableLevels) {
+      const opt = document.createElement('option');
+      opt.value = lvl; opt.textContent = lvl.charAt(0).toUpperCase() + lvl.slice(1);
+      selector.appendChild(opt);
+    }
+    selector.disabled = availableLevels.length <= 1;
+    const initial = availableLevels.includes($('explanation_level').value) ? $('explanation_level').value : availableLevels[0];
+    if (initial) { selector.value = initial; renderArticle(initial); }
+  }
+  function onCancelled() { $('stop-btn').disabled = true; }
+
+  async function loadHistory() {
+    showView('history');
+    $('history-loading').classList.remove('hidden');
+    $('history-empty').classList.add('hidden');
+    $('history-list').innerHTML = '';
+    try {
+      const r = await fetch('/articles');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const articles = await r.json();
+      $('history-loading').classList.add('hidden');
+      if (articles.length === 0) { $('history-empty').classList.remove('hidden'); return; }
+      for (const a of articles) $('history-list').appendChild(renderHistoryCard(a));
+    } catch (err) { $('history-loading').textContent = 'Failed to load: ' + err.message; }
+  }
+
+  function renderHistoryCard(a) {
+    const card = document.createElement('button');
+    card.className = 'history-card text-left bg-white border border-slate-200 rounded-xl p-5 hover:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full';
+    card.innerHTML = `
+      <div class="flex items-start justify-between gap-3 mb-2">
+        <h3 class="font-bold text-slate-900 line-clamp-2 leading-snug text-sm">${escapeHtml(a.title||'Untitled')}</h3>
+        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100 flex-shrink-0">${escapeHtml(a.level)}</span>
+      </div>
+      <p class="text-xs text-slate-400 line-clamp-2 mb-3 leading-relaxed">${escapeHtml(a.topic||'')}</p>
+      <div class="flex items-center justify-between text-xs text-slate-300">
+        <span>${escapeHtml(formatTimestamp(a.generated_at))}</span>
+        <span class="font-mono bg-slate-50 px-1.5 py-0.5 rounded text-slate-400">${a.available_levels.length} level${a.available_levels.length>1?'s':''}</span>
+      </div>`;
+    card.addEventListener('click', () => loadPastArticle(a.id));
+    return card;
+  }
+
+  async function loadPastArticle(id, level = null) {
+    showView('past-article');
+    $('past-article').innerHTML = '<p class="text-slate-400">Loading…</p>';
+    try {
+      const r = await fetch(level ? `/articles/${id}?level=${level}` : `/articles/${id}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const a = await r.json();
+      State.pastArticle = a;
+      $('past-article-meta').textContent = formatTimestamp(a.generated_at);
+      const sel = $('past-level-selector');
+      sel.innerHTML = '';
+      for (const lvl of a.available_levels) {
+        const opt = document.createElement('option');
+        opt.value = lvl; opt.textContent = lvl.charAt(0).toUpperCase()+lvl.slice(1);
+        if (lvl === a.level) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      sel.disabled = a.available_levels.length <= 1;
+      $('past-level-wrap').style.visibility = a.available_levels.length > 1 ? 'visible' : 'hidden';
+      renderArticleMarkdown('past-article', a.markdown);
+    } catch (err) { $('past-article').innerHTML = `<p class="text-red-500">Failed: ${escapeHtml(err.message)}</p>`; }
+  }
+
+  let _pendingKeyUpdates = {};
+  async function loadSettings() {
+    showView('settings');
+    $('settings-keys').innerHTML = '<p class="py-8 text-sm text-slate-400 text-center">Loading…</p>';
+    $('settings-save-status').textContent = ''; $('provider-save-status').textContent = '';
+    _pendingKeyUpdates = {};
+    try {
+      const r = await fetch('/settings');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      State.keyStatus = data;
+      renderProviderCard(data); renderSettingsKeys(data.keys);
+    } catch (err) { $('settings-keys').innerHTML = `<p class="py-8 text-sm text-red-500 text-center">Failed: ${escapeHtml(err.message)}</p>`; }
+  }
+
+  function renderSettingsKeys(keys) {
+    const container = $('settings-keys');
+    container.innerHTML = '';
+    for (const k of keys) {
+      const row = document.createElement('div');
+      row.className = 'key-row';
+      const isBool = k.key === 'USE_JINA_READER';
+      row.innerHTML = `
+        <div class="key-status ${k.present ? 'present' : 'missing'}" title="${k.present ? 'Present' : 'Not set'}"></div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <code class="text-xs font-mono font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">${escapeHtml(k.key)}</code>
+            ${k.present && k.masked_value ? `<span class="text-xs text-slate-400 font-mono">${escapeHtml(k.masked_value)}</span>` : ''}
+            ${!k.present ? `<span class="text-xs text-amber-600 font-semibold">not set</span>` : ''}
+          </div>
+          <p class="text-xs text-slate-400 mb-2 leading-relaxed">${escapeHtml(k.description)}</p>
+          ${isBool
+            ? `<select data-key="${escapeHtml(k.key)}" class="settings-input text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white font-family:inherit"><option value="" ${!k.present?'selected':''}>— keep current —</option><option value="true" ${k.masked_value==='true'?'selected':''}>true</option><option value="false" ${k.masked_value==='false'?'selected':''}>false</option></select>`
+            : `<input data-key="${escapeHtml(k.key)}" type="password" autocomplete="off" spellcheck="false" placeholder="${k.present?'Enter new value to update':'Paste your API key here'}" class="settings-input w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono bg-white" />`
+          }
+        </div>`;
+      container.appendChild(row);
+    }
+    container.querySelectorAll('.settings-input').forEach(input => {
+      input.addEventListener('input', () => { const k = input.dataset.key; if (input.value) _pendingKeyUpdates[k]=input.value; else delete _pendingKeyUpdates[k]; });
+      if (input.tagName === 'SELECT') input.addEventListener('change', () => { const k = input.dataset.key; if (input.value) _pendingKeyUpdates[k]=input.value; else delete _pendingKeyUpdates[k]; });
+    });
+  }
+
+  $('provider-card').addEventListener('click', async (e) => {
+    const btn = e.target.closest('#provider-save-btn'); if (!btn) return;
+    const selected = document.querySelector('input[name="llm_provider"]:checked'); if (!selected) return;
+    btn.disabled = true; $('provider-save-status').textContent = 'Saving…';
+    try {
+      const r = await fetch('/settings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ updates:{ LLM_PROVIDER:selected.value } }) });
+      if (!r.ok) { const d = await r.json().catch(()=>({detail:r.statusText})); throw new Error(d.detail||r.statusText); }
+      $('provider-save-status').textContent = `✓ Saved: ${selected.value}`;
+      await refreshKeyStatus();
+    } catch (err) { $('provider-save-status').textContent = '✗ '+err.message; }
+    finally { btn.disabled = false; }
+  });
+
+  $('settings-save-btn').addEventListener('click', async () => {
+    if (Object.keys(_pendingKeyUpdates).length === 0) { $('settings-save-status').textContent = 'Nothing to save.'; return; }
+    $('settings-save-btn').disabled = true; $('settings-save-status').textContent = 'Saving…';
+    try {
+      const r = await fetch('/settings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ updates:_pendingKeyUpdates }) });
+      if (!r.ok) { const d = await r.json().catch(()=>({detail:r.statusText})); throw new Error(d.detail||r.statusText); }
+      $('settings-save-status').textContent = '✓ Saved successfully';
+      await loadSettings(); await refreshKeyStatus();
+    } catch (err) { $('settings-save-status').textContent = '✗ '+err.message; }
+    finally { $('settings-save-btn').disabled = false; }
+  });
+
+  async function submitGenerate(request) {
+    State.pendingRequest = request;
+    const res = await fetch('/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(request) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    if (body.clarification_required) showClarification(body);
+    else startExecution(body.job_id);
+  }
+
+  function showClarification(payload) {
+    showView('clarification');
+    $('clarification-default').textContent = payload.default_if_skipped ? `If skipped: ${payload.default_if_skipped}` : '';
+    const form = $('clarification-form');
+    form.innerHTML = '';
+    payload.questions.forEach(q => {
+      const wrap = document.createElement('div'); wrap.className = 'space-y-2';
+      const label = document.createElement('label'); label.className = 'block text-sm font-semibold text-slate-700'; label.textContent = q.question;
+      wrap.appendChild(label);
+      if (q.options && q.options.length > 0) {
+        q.options.forEach(opt => {
+          const rw = document.createElement('label');
+          rw.className = 'flex items-center gap-2.5 text-sm cursor-pointer hover:bg-blue-50 rounded-lg px-3 py-1.5 transition-colors';
+          rw.innerHTML = `<input type="radio" name="q_${q.id}" value="${escapeHtml(opt)}" class="h-4 w-4 accent-blue-600" /> ${escapeHtml(opt)}`;
+          wrap.appendChild(rw);
+        });
+        const ow = document.createElement('label');
+        ow.className = 'flex items-center gap-2.5 text-sm px-3 py-1.5';
+        ow.innerHTML = `<input type="radio" name="q_${q.id}" value="__other__" class="h-4 w-4 accent-blue-600 flex-shrink-0" /><span class="text-slate-500">Other:</span><input type="text" name="q_${q.id}_other" class="flex-1 px-2.5 py-1 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />`;
+        wrap.appendChild(ow);
+      } else {
+        const input = document.createElement('input');
+        input.type = 'text'; input.name = `q_${q.id}`;
+        input.className = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
+        input.placeholder = 'Type your answer (optional)';
+        wrap.appendChild(input);
+      }
+      wrap.dataset.qid = q.id; wrap.dataset.qtype = q.options && q.options.length > 0 ? 'choice' : 'text';
+      form.appendChild(wrap);
+    });
+  }
+
+  function collectAnswers() {
+    const answers = {};
+    document.querySelectorAll('#clarification-form > div[data-qid]').forEach(div => {
+      const qid = div.dataset.qid;
+      if (div.dataset.qtype === 'choice') {
+        const sel = div.querySelector(`input[name="q_${qid}"]:checked`); if (!sel) return;
+        if (sel.value === '__other__') { const o = div.querySelector(`input[name="q_${qid}_other"]`); if (o && o.value.trim()) answers[qid] = o.value.trim(); }
+        else answers[qid] = sel.value;
+      } else { const i = div.querySelector(`input[name="q_${qid}"]`); if (i && i.value.trim()) answers[qid] = i.value.trim(); }
+    });
+    return answers;
+  }
+
+  function startExecution(jobId) {
+    showView('execution'); State.currentJobId = jobId; State.stages = new Map();
+    renderStages(); $('stop-btn').disabled = false; startElapsedTimer(); openStream(jobId);
+  }
+
+  function resetToConfig() {
+    if (State.eventSource) State.eventSource.close();
+    stopElapsedTimer(); State.currentJobId = null; State.stages = new Map();
+    State.articles = null; State.pastArticle = null;
+    $('article').innerHTML = ''; $('output-dir').textContent = '';
+    showView('config');
+  }
+
+  $('generate-form').addEventListener('submit', async e => {
+    e.preventDefault(); $('generate-btn').disabled = true;
+    try { await submitGenerate(buildRequest()); }
+    catch (err) { alert('Failed to start generation: ' + err.message); }
+    finally { $('generate-btn').disabled = false; }
+  });
+  $('answer-btn').addEventListener('click', async () => { try { await submitGenerate({ ...State.pendingRequest, clarification_answers: collectAnswers() }); } catch (err) { alert('Failed: '+err.message); } });
+  $('skip-clarification-btn').addEventListener('click', async () => { try { await submitGenerate({ ...State.pendingRequest, skip_clarification: true }); } catch (err) { alert('Failed: '+err.message); } });
+  $('stop-btn').addEventListener('click', async () => {
+    if (!State.currentJobId) return; $('stop-btn').disabled = true;
+    try { const r = await fetch(`/jobs/${State.currentJobId}`, { method:'DELETE' }); if (!r.ok) throw new Error(`HTTP ${r.status}`); }
+    catch (err) { alert('Failed to cancel: '+err.message); $('stop-btn').disabled = false; }
+  });
+  $('result-back-btn').addEventListener('click', resetToConfig);
+  $('past-back-btn').addEventListener('click', loadHistory);
+  $('history-refresh-btn').addEventListener('click', loadHistory);
+  $('nav-new').addEventListener('click', e => { e.preventDefault(); resetToConfig(); });
+  $('nav-history').addEventListener('click', e => { e.preventDefault(); loadHistory(); });
+  $('nav-settings').addEventListener('click', e => { e.preventDefault(); loadSettings(); });
+  $('brand-link').addEventListener('click', e => { e.preventDefault(); resetToConfig(); });
+  $('level-selector').addEventListener('change', e => renderArticle(e.target.value));
+  $('past-level-selector').addEventListener('change', e => { if (State.pastArticle) loadPastArticle(State.pastArticle.id, e.target.value); });
+
+  showView('config'); checkHealth(); refreshKeyStatus();
+</script>
+</body>
+</html>
