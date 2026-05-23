@@ -138,6 +138,22 @@ Output is written to `./output/<timestamp>__<slug>/` and contains:
 
 ---
 
+## Claude Code Skill
+
+A standalone version of the pipeline is available as a Claude Code skill — no server, no API keys, and no installation required beyond Claude Code itself.
+
+**Download:** [generate-article.skill](generate-article.skill)
+
+**Install:** Drag the `.skill` file into any Claude Code chat window, or go to Settings → Skills → Install from file.
+
+**Use it:**
+> "Write an article about how Kafka handles backpressure"
+> "Generate a technical article on Redis caching patterns"
+
+Claude Code runs the full pipeline automatically — web research, planning, drafting, editorial review, and voice polish — and writes the finished article as a markdown file in your current directory.
+
+---
+
 ## Architecture
 
 Scrivio is a FastAPI server (`api/server.py`) that accepts article requests, runs the pipeline in a background asyncio task, and streams progress events to the browser over SSE. The UI (`ui/index.html`) is a single-page app served as a static file.
