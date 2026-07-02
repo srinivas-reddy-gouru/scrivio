@@ -6,12 +6,14 @@ import uuid
 from pathlib import Path
 
 from pipeline.model_config import get_model
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import RenderAsset, VisualIntent
 
 
-_SYSTEM_PROMPT = (
-    Path(__file__).resolve().parents[1] / "pipeline" / "prompts" / "spec_generator_v1.txt"
-).read_text(encoding="utf-8")
+# One prompt per renderer role: Mermaid specs and VHS tapes are different
+# jobs with different parser constraints, so each gets its own prompt.
+_DIAGRAM_PROMPT = load_prompt("diagram_spec_v2.txt")
+_VHS_PROMPT = load_prompt("vhs_tape_v2.txt")
 
 
 # Characters that break Mermaid's flowchart parser when present in a node
@@ -226,14 +228,17 @@ async def generate_spec(intent: VisualIntent, client, preset: str = "balanced") 
     interface — either ``anthropic.AsyncAnthropic`` directly, or the
     ``OpenAIAnthropicAdapter`` shim that wraps an OpenAI client.
     """
+    system = _VHS_PROMPT if intent.format == "vhs" else _DIAGRAM_PROMPT
     response = await client.messages.create(
         model=get_model("diagram", preset),
         max_tokens=1024,
-        system=_SYSTEM_PROMPT,
+        system=system,
         messages=[{"role": "user", "content": intent.model_dump_json()}],
     )
     spec = next((b.text for b in response.content if b.type == "text"), "") or ""
     spec = _strip_markdown_fences(spec)
+    if intent.format == "vhs":
+        return spec
     # Defensive sanitization: even if the prompt tells the LLM to quote
     # labels with parens, occasional misses still happen — this catches them.
     return sanitize_mermaid_spec(spec)

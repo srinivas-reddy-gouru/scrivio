@@ -132,7 +132,7 @@ def test_run_editor_review_invokes_anthropic_with_tool_use() -> None:
 
 def test_run_editor_review_passes_user_topic_and_extra_context() -> None:
     """The editor must see the user's original topic + extra_context so it can
-    perform the priority-0 request-alignment check defined in editor_v1.txt."""
+    perform the priority-0 request-alignment check defined in editor_v2.txt."""
     plan, draft, _ = _build_plan_and_draft()
     # Override the request so the assertions are unambiguous.
     plan = plan.model_copy(

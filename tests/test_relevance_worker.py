@@ -239,13 +239,13 @@ def test_generate_article_regenerates_brief_when_relevance_check_fails(
         request=request, title="t", markdown="md",
     )
 
-    async def stub_collect(req, brief, client, debug_info=None):
+    async def stub_collect(req, brief, client, official_domains=frozenset(), debug_info=None):
         return [span]
 
     async def stub_run_planner(req, spans, client, brief=None):
         return empty_plan
 
-    async def stub_fill_gaps(plan, spans, client):
+    async def stub_fill_gaps(plan, spans, client, **kwargs):
         return spans
 
     async def stub_verify(plan, spans, client):
@@ -261,11 +261,12 @@ def test_generate_article_regenerates_brief_when_relevance_check_fails(
         from pipeline.schemas.models import EditorReport
         return EditorReport(approved=True, overall_assessment="ok")
 
-    async def stub_compile(draft, client, assets=None, levels=None):
-        return {"intermediate": sample_article}
+    async def stub_polish(draft, plan, client, assets=None, **kwargs):
+        return sample_article
 
-    async def stub_humanize(article, plan, client):
-        return article
+    async def stub_critic(markdown, plan, client):
+        from pipeline.schemas.models import CriticVerdict
+        return CriticVerdict(approved=True, issues=[], overall_assessment="ok")
 
     monkeypatch.setattr(main, "_collect_evidence_spans", stub_collect)
     monkeypatch.setattr(main, "run_planner", stub_run_planner)
@@ -274,8 +275,8 @@ def test_generate_article_regenerates_brief_when_relevance_check_fails(
     monkeypatch.setattr(main, "draft_all_sections", stub_draft)
     monkeypatch.setattr(main, "_generate_assets", stub_assets)
     monkeypatch.setattr(main, "run_editor_review", stub_editor)
-    monkeypatch.setattr(main, "compile_all_levels", stub_compile)
-    monkeypatch.setattr(main, "humanize_article", stub_humanize)
+    monkeypatch.setattr(main, "polish_draft_to_article", stub_polish)
+    monkeypatch.setattr(main, "critique_article", stub_critic)
 
     # Use an isolated cache directory so prior test runs can't cache-hit.
     monkeypatch.setenv("ARTICLE_CACHE", "0")
@@ -340,10 +341,12 @@ def test_generate_article_does_not_regenerate_brief_when_aligned(
     monkeypatch.setattr(main, "_generate_assets", lambda *a, **kw: _wrap([]))
     monkeypatch.setattr(main, "run_editor_review", lambda *a, **kw:
                         _wrap(EditorReport(approved=True, overall_assessment="ok")))
-    monkeypatch.setattr(main, "compile_all_levels",
-                        lambda *a, **kw: _wrap({"intermediate": article}))
-    monkeypatch.setattr(main, "humanize_article",
+    monkeypatch.setattr(main, "polish_draft_to_article",
                         lambda *a, **kw: _wrap(article))
+    from pipeline.schemas.models import CriticVerdict
+    monkeypatch.setattr(main, "critique_article",
+                        lambda *a, **kw: _wrap(CriticVerdict(
+                            approved=True, issues=[], overall_assessment="ok")))
     monkeypatch.setenv("ARTICLE_CACHE", "0")
 
     asyncio.run(main.generate_article(request))

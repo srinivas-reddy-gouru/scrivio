@@ -24,6 +24,7 @@ ROLES = (
     "critic",
     "closing",      # tiny Haiku call to close a truncated article
     "diagram",      # Mermaid spec generation — structured, not prose
+    "sources",      # topic → official-docs domain resolution (tiny JSON call)
 )
 
 # Model aliases — update these when Anthropic releases new models.
@@ -45,6 +46,7 @@ _PRESETS: dict[str, dict[str, str]] = {
         "critic":    _SONNET,   # gating; needs careful judgment
         "closing":   _HAIKU,    # 150-250 words of recovery prose
         "diagram":   _HAIKU,    # structured spec, not prose — Haiku is fine
+        "sources":   _HAIKU,    # short factual lookup — Haiku is fine
     },
     "best": {
         "brief":     _SONNET,
@@ -56,6 +58,7 @@ _PRESETS: dict[str, dict[str, str]] = {
         "critic":    _SONNET,
         "closing":   _SONNET,
         "diagram":   _SONNET,
+        "sources":   _SONNET,
     },
     "fast": {
         "brief":     _HAIKU,    # acceptable quality loss for speed
@@ -67,6 +70,7 @@ _PRESETS: dict[str, dict[str, str]] = {
         "critic":    _HAIKU,
         "closing":   _HAIKU,
         "diagram":   _HAIKU,
+        "sources":   _HAIKU,
     },
 }
 

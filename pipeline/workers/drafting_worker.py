@@ -2,8 +2,8 @@ import asyncio
 import logging
 import random
 import re
-from pathlib import Path
 
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
     ArticlePlan,
     ArticleSection,
@@ -14,9 +14,7 @@ from pipeline.schemas.models import (
 from pipeline.workers._utils import extract_response_text
 
 
-_SYSTEM_PROMPT = (
-    Path(__file__).resolve().parents[1] / "prompts" / "drafter_v1.txt"
-).read_text(encoding="utf-8")
+_SYSTEM_PROMPT = load_prompt("drafter_v2.txt")
 
 CITATION_PATTERN = re.compile(r"\[src:([^\]]+)\]")
 

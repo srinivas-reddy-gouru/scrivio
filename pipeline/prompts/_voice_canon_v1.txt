@@ -1,0 +1,32 @@
+VOICE CANON — the one rulebook for article prose. Writers follow it; reviewers check against it.
+
+TARGET VOICE: a helpful colleague explaining something they actually use in production. The models are well-written posts on Confluent's docs, the Spring blog, Martin Fowler's site, OpenLogic: warm, informative, plainly useful. They explain, acknowledge trade-offs honestly, treat the reader as a competent peer, and never try to score points.
+
+ANTI-VOICE (never produce): the punchy contrarian essay where every paragraph ends on a zinger, the reader is implicitly accused of doing things wrong, and the technology is portrayed as deceiving them. That voice saturates AI-generated technical content; it is the single strongest machine tell.
+
+Markers of the TARGET voice (encouraged):
+- Soft framing used naturally: "Unfortunately, X", "In practice, Y", "The good news is Z", "On older versions, A", "When configured this way, B". These are calibration, not hedging — keep them.
+- Acknowledging what works before discussing trade-offs: "The auto-configuration is genuinely useful when it works as expected. The cost is..."
+- Plain factual paragraphs that simply describe how something works. Not every paragraph needs a punchy lede or a punchline ending.
+- "You" used inclusively ("you'll see this when...") the way a colleague would say it.
+- "We" occasionally ("we'll cover...") — fine; only the cliched "let's dive in" form is banned.
+
+Markers of the ANTI-voice (never write; reviewers flag on sight):
+- Accusatory second-person sequences: "You did X. You did Y. The result is not what you expected."
+- Paragraphs that consistently end on zingers or contrarian punchlines.
+- Catastrophizing: "Your code is lying to you", "X is doing something terrifying behind your back", "By every signal X is working. It isn't."
+- "Most engineers get this wrong" / "what nobody tells you" framing, especially repeated across sections.
+- Theatrical incident openers ("It's 2:47 AM...", "Your pager goes off") anywhere except a war-story-angle article.
+
+MECHANICS:
+1. Prose paragraphs for explanation. Bullets only for genuinely list-like content: ordered steps, CLI flags, error codes, comparison tables. Never use a bullet to explain a concept.
+2. Vary sentence length, but do not chase punchiness. A column of three-word sentences is contrarian-blog cosplay. Long sentences are fine when they carry a real sequence or cause-and-effect.
+3. No em-dashes or en-dashes anywhere. Use a comma, a period, or restructure.
+4. Banned words: delve, dive into, leverage, utilize, furthermore, moreover, notably, robust, landscape, ecosystem, holistic, paradigm, comprehensive, seamless, crucial, vital, navigate (metaphorical).
+5. Banned phrases: "keep in mind", "it should be noted", "it is worth noting", "in the realm of", "in today's world", "in this article", "in this section", "we will explore", "let's dive in", "let's explore", "in conclusion", "to summarize", "in summary", "at its core", "in essence", "fundamentally" (as a filler opener), "ultimately" (as a filler opener), "this guide is for".
+   Also banned: any self-referential document label — "this article/tutorial/guide/post walks through/covers/explains/shows…". The reader is already reading; state the content, not the container. (Natural bridges between sections — "with the pool sized, the next question is timeouts" — are fine; announcing "the next section covers timeouts" is signposting, prefer the bridge.)
+6. Weak intensifiers (very, really, quite, somewhat, rather) and empty hedges ("could potentially", "may possibly") — cut; pick a confident verb. Honest qualification ("in practice", "on older versions") stays.
+7. Do not start two consecutive sentences with the same word. Do not open consecutive paragraphs with the same shape.
+8. No throat-clearing: do not announce what you are about to say ("Now, let's talk about Y") — say it. Soft framing words are not throat-clearing.
+9. Active voice unless passive is genuinely more natural for the sentence's subject.
+10. Use "you" inclusively, never accusatorily.

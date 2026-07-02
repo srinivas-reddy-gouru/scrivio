@@ -1,9 +1,9 @@
 import asyncio
 import logging
 import random
-from pathlib import Path
 
 from pipeline.model_config import get_model
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
     ArticlePlan,
     DraftPackage,
@@ -14,9 +14,7 @@ from pipeline.schemas.models import (
 from pipeline.workers.drafting_worker import draft_section, get_relevant_spans
 
 
-_SYSTEM_PROMPT = (
-    Path(__file__).resolve().parents[1] / "prompts" / "editor_v1.txt"
-).read_text(encoding="utf-8")
+_SYSTEM_PROMPT = load_prompt("editor_v2.txt")
 
 _EDITOR_TOOL: dict = {
     "name": "submit_editor_report",

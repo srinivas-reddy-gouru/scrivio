@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import os
 from datetime import datetime
 from urllib.parse import urlparse
@@ -43,6 +44,19 @@ _HEADERS = {
 # 4xx errors are client-side: the URL doesn't exist, we're blocked, etc.
 _PERMANENT_STATUSES = frozenset({400, 401, 403, 404, 410, 451})
 
+# ── Trust tiers ─────────────────────────────────────────────────────────────
+# Citation precedence the pipeline enforces (highest wins fetch budget and
+# planner evidence slots):
+#   1.0   official docs for THIS topic (dynamic, from source_resolver)
+#   0.9   curated always-trustworthy domains (academic, vendor docs, refs)
+#   0.8   URLs that look like documentation (docs.* hosts, /docs paths, …)
+#   0.7   github.com (source code and issue threads)
+#   0.65  blog platforms (useful colour, weaker authority)
+#   0.6   unknown HTTPS
+#   0.45  Q&A forums — deliberately BELOW unknown articles: answers are
+#         unreviewed and the user wants docs > articles > Stack Overflow
+#   0.35  plain HTTP
+
 _HIGH_TRUST_DOMAINS = frozenset({
     # Academic / standards bodies
     "arxiv.org", "dl.acm.org", "ieee.org", "nature.com", "science.org",
@@ -69,9 +83,27 @@ _HIGH_TRUST_DOMAINS = frozenset({
 })
 
 _MEDIUM_TRUST_DOMAINS = frozenset({
-    "github.com", "stackoverflow.com", "medium.com", "dev.to",
-    "hashnode.dev", "substack.com",
+    "github.com",
 })
+
+_BLOG_PLATFORM_DOMAINS = frozenset({
+    "medium.com", "dev.to", "hashnode.dev", "substack.com",
+})
+
+_QA_FORUM_DOMAINS = frozenset({
+    "stackoverflow.com", "stackexchange.com", "serverfault.com",
+    "superuser.com", "reddit.com", "quora.com", "news.ycombinator.com",
+})
+
+# Heuristic markers of official-documentation URLs on domains we've never
+# seen before. Covers the long tail the curated list can't: docs.<vendor>,
+# <project>.readthedocs.io, <vendor>.com/docs/…
+_DOCS_HOST_PREFIXES = ("docs.", "doc.", "developer.", "developers.", "wiki.")
+_DOCS_HOST_SUFFIXES = (".readthedocs.io", ".github.io")
+_DOCS_PATH_PREFIXES = (
+    "/docs", "/documentation", "/reference", "/manual", "/javadoc",
+    "/apidocs", "/api-reference", "/guide", "/guides",
+)
 
 # Jina AI Reader converts any URL to clean plain text, including JS-rendered
 # pages. Free, no API key needed. Set USE_JINA_READER=true to activate.
@@ -122,16 +154,29 @@ async def fetch_page(url: str) -> str:
     return response.text
 
 
+# Circuit breaker for keyless Jina calls. Jina Reader returns 401 without an
+# API key; once we see that, every further keyless attempt this run is wasted
+# latency and log noise — fail fast instead.
+_jina_auth_failed = False
+
+
 async def fetch_page_jina(url: str) -> str:
     """Fetch via Jina AI Reader — handles JS-rendered pages.
 
-    Free tier: no API key needed. For higher rate limits set JINA_API_KEY.
-    Activate by setting USE_JINA_READER=true in your environment.
+    Requires JINA_API_KEY (Jina returns 401 for keyless requests).
+    Used as the fallback fetcher; set USE_JINA_READER=true to try it first.
     """
+    global _jina_auth_failed
+    jina_key = os.environ.get("JINA_API_KEY")
+    if _jina_auth_failed and not jina_key:
+        raise FetchError(
+            f"Jina Reader unauthorized earlier this run (no JINA_API_KEY) — skipping {url}",
+            status_code=401,
+        )
+
     jina_url = f"{_JINA_BASE}{url}"
     headers = dict(_HEADERS)
     headers["Accept"] = "text/plain"
-    jina_key = os.environ.get("JINA_API_KEY")
     if jina_key:
         headers["Authorization"] = f"Bearer {jina_key}"
 
@@ -145,6 +190,13 @@ async def fetch_page_jina(url: str) -> str:
             raise FetchError(f"Jina fetch failed for {url}: {exc}") from exc
 
     if response.status_code != 200:
+        if response.status_code == 401 and not jina_key:
+            _jina_auth_failed = True
+            logging.info(
+                "Jina Reader requires an API key (got 401 keyless). "
+                "Set JINA_API_KEY in Settings to enable the fallback fetcher; "
+                "skipping Jina for the rest of this run."
+            )
         raise FetchError(
             f"Jina fetch failed for {url} with status {response.status_code}",
             status_code=response.status_code,
@@ -199,20 +251,47 @@ async def fetch_with_retry(url: str, max_attempts: int = 2) -> tuple[str, str]:
     raise last_exc
 
 
+# Control characters (except tab/newline/CR) are illegal in XML; some pages
+# embed them and crash readability's lxml cleaner. Strip before parsing.
+_XML_ILLEGAL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+# When readability distills a large page to less than this, it almost
+# certainly latched onto the wrong node (GitHub wiki pages: 282KB of HTML
+# → 43 chars of "You can't perform that action at this time."). Re-extract
+# from the whole document instead of silently losing the source.
+_MIN_PLAUSIBLE_EXTRACTION_CHARS = 400
+
+
+def _strip_and_text(soup: BeautifulSoup) -> str:
+    for tag in soup(["nav", "footer", "script", "style", "header", "aside"]):
+        tag.decompose()
+    return soup.get_text(separator="\n", strip=True)
+
+
 def remove_boilerplate(html: str) -> str:
     """Extract main content from raw HTML, stripping nav/footer/scripts."""
+    html = _XML_ILLEGAL_CHARS.sub("", html)
     try:
         from readability import Document
 
         content_html = Document(html).summary()
-        soup = BeautifulSoup(content_html, "html.parser")
+        text = _strip_and_text(BeautifulSoup(content_html, "html.parser"))
     except Exception:
-        soup = BeautifulSoup(html, "html.parser")
+        return _strip_and_text(BeautifulSoup(html, "html.parser"))
 
-    for tag in soup(["nav", "footer", "script", "style", "header", "aside"]):
-        tag.decompose()
+    # Plausibility guard: a tiny distillation of a large page means
+    # readability picked a hidden notice/error div, not the article.
+    if (
+        len(text) < _MIN_PLAUSIBLE_EXTRACTION_CHARS
+        and len(html) > 10 * _MIN_PLAUSIBLE_EXTRACTION_CHARS
+    ):
+        logging.info(
+            "readability produced %d chars from %d chars of HTML — "
+            "falling back to whole-document extraction.", len(text), len(html),
+        )
+        return _strip_and_text(BeautifulSoup(html, "html.parser"))
 
-    return soup.get_text(separator="\n", strip=True)
+    return text
 
 
 def injection_filter(text: str) -> str:
@@ -236,23 +315,51 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> list[str
     return splitter.split_text(text)
 
 
-def score_url(url: str) -> float:
+def _domain_in(domain: str, domains) -> bool:
+    return any(domain == d or domain.endswith(f".{d}") for d in domains)
+
+
+def _looks_like_docs(domain: str, path: str) -> bool:
+    """Heuristic: does this URL look like official documentation?"""
+    if domain.startswith(_DOCS_HOST_PREFIXES):
+        return True
+    if domain.endswith(_DOCS_HOST_SUFFIXES):
+        return True
+    return path.startswith(_DOCS_PATH_PREFIXES)
+
+
+def score_url(url: str, official_domains: frozenset[str] = frozenset()) -> float:
+    """Trust-score a URL. *official_domains* is the per-topic set resolved by
+    source_resolver — those are the article's source of truth and outrank
+    everything, including the curated list."""
     try:
-        domain = urlparse(url).netloc.lower().removeprefix("www.")
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower().removeprefix("www.")
+        path = parsed.path.lower()
     except Exception:
         return 0.5
 
-    if any(domain == d or domain.endswith(f".{d}") for d in _HIGH_TRUST_DOMAINS):
+    if official_domains and _domain_in(domain, official_domains):
         return 1.0
-    if any(domain == d or domain.endswith(f".{d}") for d in _MEDIUM_TRUST_DOMAINS):
-        return 0.75
+    if _domain_in(domain, _HIGH_TRUST_DOMAINS):
+        return 0.9
+    # Q&A forums before the docs heuristic so forum paths can't sneak up a tier.
+    if _domain_in(domain, _QA_FORUM_DOMAINS):
+        return 0.45
+    if _looks_like_docs(domain, path):
+        return 0.8
+    if _domain_in(domain, _MEDIUM_TRUST_DOMAINS):
+        return 0.7
+    if _domain_in(domain, _BLOG_PLATFORM_DOMAINS):
+        return 0.65
     return 0.6 if url.startswith("https://") else 0.35
 
 
 def build_evidence_spans(
-    url, title, chunks, published_at=None
+    url, title, chunks, published_at=None,
+    official_domains: frozenset[str] = frozenset(),
 ) -> list[EvidenceSpan]:
-    trust_score = score_url(url)
+    trust_score = score_url(url, official_domains)
     parsed_published_at = _parse_published_at(published_at)
 
     return [
@@ -268,7 +375,10 @@ def build_evidence_spans(
     ]
 
 
-async def process_search_result(result: SearchResult) -> list[EvidenceSpan]:
+async def process_search_result(
+    result: SearchResult,
+    official_domains: frozenset[str] = frozenset(),
+) -> list[EvidenceSpan]:
     try:
         raw, strategy = await fetch_with_retry(result.url)
     except FetchError as exc:
@@ -286,6 +396,7 @@ async def process_search_result(result: SearchResult) -> list[EvidenceSpan]:
         result.title,
         chunks,
         published_at=result.published_at,
+        official_domains=official_domains,
     )
 
 

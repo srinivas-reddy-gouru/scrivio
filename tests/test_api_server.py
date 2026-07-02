@@ -390,7 +390,8 @@ def test_delete_job_endpoint_returns_200_and_proper_shape(monkeypatch) -> None:
 
 def _write_article(output_root: Path, dir_name: str, *, topic: str, level: str = "intermediate",
                    title: str = "Test article", markdown: str = "# Test\n\nBody.",
-                   generated_at: str = "2026-05-21T00:00:00") -> Path:
+                   generated_at: str = "2026-05-21T00:00:00",
+                   rerun_of: str | None = None) -> Path:
     """Test helper: simulate what api.server._persist_job writes to disk."""
     article_dir = output_root / dir_name
     article_dir.mkdir(parents=True, exist_ok=True)
@@ -402,6 +403,7 @@ def _write_article(output_root: Path, dir_name: str, *, topic: str, level: str =
         "request": {
             "topic": topic,
             "explanation_level": level,
+            "rerun_of": rerun_of,
         },
         "verification_reports": [],
         "assets": [],
@@ -560,3 +562,61 @@ def test_delete_job_returns_false_for_already_finished_job(monkeypatch) -> None:
     response = client.delete(f"/jobs/{job_id}")
     assert response.status_code == 200
     assert response.json()["cancelled"] is False
+
+
+# ── Re-run lineage grouping ──────────────────────────────────────────
+
+def test_list_articles_groups_reruns_into_one_lineage(monkeypatch, tmp_path) -> None:
+    """A re-run must fold into its original's card: one library entry,
+    version = run count, full version list oldest→newest."""
+    import time
+    monkeypatch.setattr(server, "OUTPUT_ROOT", tmp_path)
+    _write_article(tmp_path, "run1__aaa", topic="Kafka", title="Kafka v1",
+                   generated_at="2026-07-01T10:00:00")
+    time.sleep(0.05)
+    _write_article(tmp_path, "run2__bbb", topic="Kafka", title="Kafka v2",
+                   generated_at="2026-07-01T11:00:00", rerun_of="run1__aaa")
+    time.sleep(0.05)
+    _write_article(tmp_path, "other__ccc", topic="Redis", title="Redis article",
+                   generated_at="2026-07-01T12:00:00")
+
+    body = TestClient(server.app).get("/articles").json()
+    assert len(body) == 2  # lineage collapsed + unrelated article
+    lineage = next(a for a in body if a["topic"] == "Kafka")
+    assert lineage["id"] == "run2__bbb"       # newest run represents
+    assert lineage["version"] == 2
+    assert [v["id"] for v in lineage["versions"]] == ["run1__aaa", "run2__bbb"]
+    assert [v["version"] for v in lineage["versions"]] == [1, 2]
+
+
+def test_list_articles_orphaned_rerun_pointer_degrades_gracefully(monkeypatch, tmp_path) -> None:
+    """If the original was deleted, the re-run is its own root — never hidden."""
+    monkeypatch.setattr(server, "OUTPUT_ROOT", tmp_path)
+    _write_article(tmp_path, "orphan__abc", topic="Kafka", title="Orphaned re-run",
+                   rerun_of="deleted__zzz")
+
+    body = TestClient(server.app).get("/articles").json()
+    assert len(body) == 1
+    assert body[0]["id"] == "orphan__abc"
+    assert body[0]["version"] == 1
+
+
+def test_get_article_returns_request_and_versions(monkeypatch, tmp_path) -> None:
+    """The detail payload must carry the original request (for Re-run
+    prefill) and the lineage so the UI can offer older versions."""
+    import time
+    monkeypatch.setattr(server, "OUTPUT_ROOT", tmp_path)
+    _write_article(tmp_path, "run1__aaa", topic="Kafka", title="Kafka v1")
+    time.sleep(0.05)
+    _write_article(tmp_path, "run2__bbb", topic="Kafka streams", title="Kafka v2",
+                   rerun_of="run1__aaa")
+
+    client = TestClient(server.app)
+    v1 = client.get("/articles/run1__aaa").json()
+    assert v1["request"]["topic"] == "Kafka"
+    assert v1["version"] == 1
+    assert len(v1["versions"]) == 2
+
+    v2 = client.get("/articles/run2__bbb").json()
+    assert v2["request"]["rerun_of"] == "run1__aaa"
+    assert v2["version"] == 2

@@ -18,7 +18,10 @@ Conversions handled:
                      → OpenAI ``{"type":"function","function":{"name":"X"}}``
   • Response       — OpenAI ``choices[0].message`` wrapped to look like
                      ``SimpleNamespace(content=[...], stop_reason=...)``
-  • Model mapping  — "sonnet" in name → gpt-4o; "haiku" in name → gpt-4o-mini
+  • Model mapping  — "haiku" in name → light OpenAI model; everything else
+                     (sonnet/opus) → strong OpenAI model. Defaults live in
+                     _DEFAULT_STRONG/_DEFAULT_LIGHT; override with the
+                     OPENAI_STRONG_MODEL / OPENAI_LIGHT_MODEL env vars.
   • stop_reason    — OpenAI "length" → Anthropic "max_tokens"
                      OpenAI "tool_calls" → Anthropic "tool_use"
                      everything else → "end_turn"
@@ -31,20 +34,56 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from types import SimpleNamespace
 
 
 # ── Model mapping ──────────────────────────────────────────────────────────
 # The adapter receives the Anthropic model string from model_config.get_model()
-# and maps it to the closest OpenAI equivalent.
+# and maps it to the closest OpenAI equivalent by tier:
+#   sonnet/opus (writing-quality roles) → strong model
+#   haiku (light routing roles)         → light model
+# Override the defaults with OPENAI_STRONG_MODEL / OPENAI_LIGHT_MODEL when
+# newer OpenAI models ship — no code change needed.
+
+_DEFAULT_STRONG = "gpt-5.4"
+_DEFAULT_LIGHT = "gpt-5.4-mini"
+
+# GPT-5-family and o-series models reason before answering. For article prose
+# a little thinking helps and a lot just burns latency and tokens, so default
+# to "low"; override with OPENAI_REASONING_EFFORT (none/minimal/low/medium/high).
+_REASONING_MODEL_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+# Reasoning tokens count against max_completion_tokens. Callers size
+# max_tokens for the VISIBLE output (Anthropic semantics), so give reasoning
+# models headroom on top — otherwise a 1024-token brief call can come back
+# empty because the budget was spent thinking.
+_REASONING_HEADROOM_TOKENS = 4096
+
 
 def _map_model(anthropic_model: str) -> str:
     """Map an Anthropic model name to the nearest OpenAI equivalent."""
     name = anthropic_model.lower()
     if "haiku" in name:
-        return "gpt-4o-mini"
-    # sonnet, opus, or any unrecognised Claude model → full GPT-4o
-    return "gpt-4o"
+        return os.environ.get("OPENAI_LIGHT_MODEL", _DEFAULT_LIGHT)
+    # sonnet, opus, or any unrecognised Claude model → strong tier
+    return os.environ.get("OPENAI_STRONG_MODEL", _DEFAULT_STRONG)
+
+
+def _completion_kwargs(model: str, max_tokens: int, *, with_tools: bool = False) -> dict:
+    """Token budget + reasoning knobs appropriate for *model*.
+
+    gpt-5.4 rejects reasoning_effort combined with function tools on
+    /v1/chat/completions ("use /v1/responses instead"), so tool calls omit
+    the knob and run at the model's default effort — structured extraction
+    doesn't need tuned reasoning anyway. Text generations keep it.
+    """
+    if model.startswith(_REASONING_MODEL_PREFIXES):
+        kwargs = {"max_completion_tokens": max_tokens + _REASONING_HEADROOM_TOKENS}
+        if not with_tools:
+            kwargs["reasoning_effort"] = os.environ.get("OPENAI_REASONING_EFFORT", "low")
+        return kwargs
+    return {"max_completion_tokens": max_tokens}
 
 
 # ── Adapter classes ────────────────────────────────────────────────────────
@@ -90,10 +129,10 @@ class _OpenAIMessages:
 
         response = await self._client.chat.completions.create(
             model=model,
-            max_tokens=max_tokens,
             messages=messages,
             tools=oai_tools,
             tool_choice=oai_choice,
+            **_completion_kwargs(model, max_tokens, with_tools=True),
         )
         choice = response.choices[0]
         finish = choice.finish_reason
@@ -122,8 +161,8 @@ class _OpenAIMessages:
     async def _call_text(self, model, max_tokens, messages):
         response = await self._client.chat.completions.create(
             model=model,
-            max_tokens=max_tokens,
             messages=messages,
+            **_completion_kwargs(model, max_tokens),
         )
         choice = response.choices[0]
         text = choice.message.content or ""

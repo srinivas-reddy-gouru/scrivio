@@ -1,7 +1,7 @@
 import asyncio
 import logging
-from pathlib import Path
 
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
     ArticlePlan,
     Claim,
@@ -12,9 +12,7 @@ from pipeline.workers.extraction_worker import process_search_result
 from pipeline.workers.search_worker import multi_search
 
 
-_SYSTEM_PROMPT = (
-    Path(__file__).resolve().parents[1] / "prompts" / "verifier_v1.txt"
-).read_text(encoding="utf-8")
+_SYSTEM_PROMPT = load_prompt("verifier_v2.txt")
 
 
 # gpt-4o-mini gives us 200K TPM (vs gpt-4o's 30K) — plenty of headroom for

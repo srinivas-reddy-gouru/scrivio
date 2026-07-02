@@ -1,6 +1,6 @@
 import logging
-from pathlib import Path
 
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
     ArticlePlan,
     CriticIssue,
@@ -22,9 +22,7 @@ from pipeline.workers.compiler_worker import _embed_diagrams
 _MAX_OUTPUT_TOKENS = 16_000
 
 
-_SYSTEM_PROMPT = (
-    Path(__file__).resolve().parents[1] / "prompts" / "humanizer_v1.txt"
-).read_text(encoding="utf-8")
+_SYSTEM_PROMPT = load_prompt("polisher_v2.txt")
 
 
 def _trim_to_last_clean_paragraph(text: str) -> str:

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, UUID4
 ExplanationLevel = Literal["basic", "intermediate", "advanced"]
 ArticleAngle = Literal["tutorial", "deep-dive", "comparison", "war-story", "contrarian", "explainer"]
 ModelPreset = Literal["balanced", "best", "fast"]
+LLMProvider = Literal["auto", "anthropic", "openai"]
 
 
 class ArticleRequest(BaseModel):
@@ -22,6 +23,12 @@ class ArticleRequest(BaseModel):
     # "best"     = Sonnet everywhere.
     # "fast"     = Haiku everywhere except the core drafter + polish.
     model_preset: ModelPreset = "balanced"
+    # Per-request provider pin. "auto" (default) keeps the key-based
+    # resolution (single key → that provider; both keys → LLM_PROVIDER env
+    # preference). "anthropic"/"openai" forces that provider for the writing
+    # stages when its key is present; if the key is missing the pin is
+    # ignored and resolution falls back to auto.
+    llm_provider: LLMProvider = "auto"
     web_search: bool = True
     max_source_age_days: int = 365
     include_gifs: bool = False
@@ -39,6 +46,11 @@ class ArticleRequest(BaseModel):
     # broad-topic default angle. Used by clients that want "just generate
     # something reasonable, don't ask me."
     skip_clarification: bool = False
+    # Set when this request was started from an existing article's "Re-run"
+    # action: the id (output directory name) of the article it re-runs.
+    # Persisted in meta.json, letting the library group runs of the same
+    # article into a version chain instead of listing near-duplicates.
+    rerun_of: str | None = None
 
 
 # ── Clarification flow models ────────────────────────────────────────

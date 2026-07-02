@@ -1,6 +1,6 @@
 import re
-from pathlib import Path
 
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
     DraftPackage,
     ExplanationLevel,
@@ -10,9 +10,7 @@ from pipeline.schemas.models import (
 from pipeline.workers._utils import extract_response_text
 
 
-_SYSTEM_PROMPT_TEMPLATE = (
-    Path(__file__).resolve().parents[1] / "prompts" / "compiler_v1.txt"
-).read_text(encoding="utf-8")
+_SYSTEM_PROMPT_TEMPLATE = load_prompt("compiler_v2.txt")
 
 CITATION_PATTERN = re.compile(r"\[src:([^\]]+)\]")
 DIAGRAM_PLACEHOLDER_PATTERN = re.compile(r"<!-- DIAGRAM:([^\s-][^\s]*) -->")

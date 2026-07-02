@@ -5,15 +5,13 @@ the brief once with `missing_aspects` injected into extra_context. Cheap early
 gate that prevents the expensive search/plan/draft stages from compounding
 brief drift.
 """
-from pathlib import Path
 
 from pipeline.model_config import get_model
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import ArticleRequest, RelevanceCheck, StoryBrief
 
 
-_SYSTEM_PROMPT = (
-    Path(__file__).resolve().parents[1] / "prompts" / "relevance_checker_v1.txt"
-).read_text(encoding="utf-8")
+_SYSTEM_PROMPT = load_prompt("relevance_checker_v2.txt")
 
 
 _RELEVANCE_TOOL: dict = {

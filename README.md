@@ -6,9 +6,15 @@ Scrivio is a multi-stage AI pipeline that turns a topic or question into a sourc
 
 ---
 
-## Screenshot
+## Screenshots
 
-![Scrivio UI](docs/screenshot.png)
+Dark mode:
+
+![Scrivio UI — dark mode](docs/screenshot-dark.png)
+
+Light mode:
+
+![Scrivio UI — light mode](docs/screenshot-light.png)
 
 ---
 
@@ -16,22 +22,23 @@ Scrivio is a multi-stage AI pipeline that turns a topic or question into a sourc
 
 You type a topic. Scrivio handles the rest:
 
-- **Researches** the web for real, recent sources (not training data)
+- **Resolves the source of truth** — identifies the official documentation domains for your topic (Kafka → kafka.apache.org, Java → docs.oracle.com) and prioritises them over blogs and Q&A forums
+- **Researches** the web for real, recent sources (not training data), with a dedicated docs-first search pass
 - **Plans** a section-by-section article structure aligned to your audience and depth level
 - **Drafts** every section with inline citations tied to fetched evidence
 - **Generates Mermaid diagrams** for architecture, flows, and sequence interactions
-- **Verifies** each factual claim against the source it was drawn from
+- **Verifies** each factual claim against the source it was drawn from — before drafting
 - **Edits** the draft for thesis alignment, voice, and structural issues (tables, transitions)
 - **Polishes** the voice so it reads like a helpful colleague, not a generated document
-- **Compiles** the final article with numbered references and resolved citations
+- **Resolves citations** into numbered references with a Sources section
 
-Three quality presets let you trade speed for output quality. The model names are the Anthropic defaults; in OpenAI mode each one maps to its nearest GPT equivalent (Sonnet to GPT-4o, Haiku to GPT-4o-mini), so the preset still controls the speed/quality trade-off either way. See [Model Providers](#model-providers) for how the provider is selected.
+Three quality presets let you trade speed for output quality. Presets are provider-agnostic — "light" and "strong" are tiers that map to Haiku/Sonnet on Anthropic, or to the equivalent GPT models on OpenAI (see [Model Providers](#model-providers)):
 
-| Preset   | Routing model        | Writing model    | Best for                          |
-| -------- | -------------------- | ---------------- | --------------------------------- |
-| Fast     | Haiku / GPT-4o-mini  | Sonnet / GPT-4o  | Quick drafts, prototyping         |
-| Balanced | Haiku / GPT-4o-mini  | Sonnet / GPT-4o  | Default, best cost/quality ratio  |
-| Best     | Sonnet / GPT-4o      | Sonnet / GPT-4o  | Production-quality articles       |
+| Preset   | Routing stages | Writing stages | Best for                          |
+| -------- | -------------- | -------------- | --------------------------------- |
+| Fast     | Light model    | Strong model   | Quick drafts, prototyping         |
+| Balanced | Light model    | Strong model   | Default — best cost/quality ratio |
+| Best     | Strong model   | Strong model   | Production-quality articles       |
 
 ---
 
@@ -39,15 +46,14 @@ Three quality presets let you trade speed for output quality. The model names ar
 
 ### API Keys
 
-Scrivio needs **one LLM provider key** to run. It auto-selects the provider from whichever key is present (see [Model Providers](#model-providers) below).
+**One LLM key is enough.** Scrivio auto-selects its provider from whichever key is present; with only `OPENAI_API_KEY` set, every writing stage runs on GPT models through a built-in adapter (see [Model Providers](#model-providers)).
 
-| Key                 | Purpose                                                                                          | Required                                 |
-| ------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| `ANTHROPIC_API_KEY` | Runs the full pipeline on Claude (brief, planning, drafting, editing, critique, polish, diagrams)  | One LLM key required (see note)          |
-| `OPENAI_API_KEY`    | Runs the full pipeline on GPT-4o / GPT-4o-mini, and powers the claim-verification agent           | One LLM key required (see note)          |
-| `TAVILY_API_KEY`    | Live web search                                                                                  | Optional, only for live web search mode  |
-
-> **Note:** You need **at least one** of `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`. With only one set, that provider runs everything. With both set, the writing pipeline defaults to Anthropic (override with `LLM_PROVIDER=openai`). The verification stage currently always uses OpenAI, so a pure Anthropic-only setup runs without a separate verifier pass.
+| Key                 | Purpose                                                                                                            | Required                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| `ANTHROPIC_API_KEY` | Claude models for the writing pipeline                                                                             | One of the two LLM keys           |
+| `OPENAI_API_KEY`    | GPT models — full pipeline when it's the only key; always used for search-query generation and claim verification  | One of the two LLM keys           |
+| `TAVILY_API_KEY`    | Live web search (Brave `BRAVE_SEARCH_API_KEY` or Exa `EXA_API_KEY` also work)                                      | Yes, if using live web search     |
+| `JINA_API_KEY`      | Jina Reader — fallback fetcher for pages that block scrapers (Medium, Baeldung, …); Jina returns 401 without a key | Optional, improves source breadth |
 
 ### System Dependencies
 
@@ -81,18 +87,24 @@ cp .env.example .env
 
 ### `.env` file
 
-At least one of the two LLM keys is required. Set `ANTHROPIC_API_KEY` alone to run everything on Claude, set `OPENAI_API_KEY` alone to run everything on GPT-4o, or set both to use Claude by default (override with `LLM_PROVIDER=openai`). The search key is optional and only needed for live web search mode.
-
 ```env
-# At least ONE of the two LLM keys below is required.
+# At least ONE of these two LLM keys is required:
 ANTHROPIC_API_KEY=your_anthropic_key_here
 OPENAI_API_KEY=your_openai_key_here
 
-# Optional, only needed for live web search mode.
+# Optional — live web search for real citations:
 TAVILY_API_KEY=your_tavily_key_here
 
-# Optional, when both LLM keys are set, choose the writer: anthropic (default) or openai.
-LLM_PROVIDER=anthropic
+# Optional — fallback fetcher for scraper-blocking sites:
+# JINA_API_KEY=your_jina_key_here
+
+# Optional — only when both LLM keys are set, pick the default writer:
+# LLM_PROVIDER=anthropic
+
+# Optional — model overrides for OpenAI runs (defaults: gpt-5.4 / gpt-5.4-mini):
+# OPENAI_STRONG_MODEL=gpt-5.4
+# OPENAI_LIGHT_MODEL=gpt-5.4-mini
+# OPENAI_REASONING_EFFORT=low   # none | minimal | low | medium | high
 ```
 
 ---
@@ -104,24 +116,31 @@ LLM_PROVIDER=anthropic
 Start the server and open the browser:
 
 ```bash
-uvicorn api.server:app --host 0.0.0.0 --port 8899
+python -m uvicorn api.server:app --host 0.0.0.0 --port 8899
 ```
 
 Then open **http://localhost:8899** in your browser.
 
-**UI controls:**
+The UI is a composer-style studio: a large prompt box up top, and the configuration underneath as a deck of control cards. Everything you set is echoed live as a chip trail inside the composer, so you always see exactly what you're about to run. `Cmd/Ctrl+Enter` submits from the prompt box.
 
-| Field            | Description                                                                              |
-| ---------------- | ---------------------------------------------------------------------------------------- |
-| Topic            | Free-text: a keyword, question, or concept (e.g. "How does Kafka handle backpressure?")  |
-| Depth Level      | Basic / Intermediate / Advanced, controls assumed prior knowledge                        |
-| Audience         | Who the article is for (e.g. "software engineer", "tech lead")                            |
-| Quality Preset   | Fast / Balanced / Best, trades cost for output quality                                   |
-| Knowledge Source | Live web search (needs Tavily key) or LLM-only (no search key needed)                     |
-| Diagrams         | Toggle Mermaid diagram generation on or off                                              |
-| Advanced options | Extra context, must-cover topics, source age limit                                       |
+**Configuration deck:**
 
-The progress panel streams each pipeline stage in real time. The finished article appears when the pipeline completes.
+| Card          | Description                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Prompt box    | Free-text — a keyword, question, or concept (e.g. "How does Kafka handle backpressure?")                           |
+| Depth         | Basic / Intermediate / Advanced segmented control — each choice shows a one-line hint of what it means             |
+| Model quality | Fast / Balanced / Best — trades cost for output quality                                                            |
+| Provider      | Auto / Claude / GPT — pin this article's writing provider; options without a configured key are disabled           |
+| Research      | Live web (docs-first search, needs a search key) or Model only (no search key needed)                              |
+| Audience      | Who the article is for (e.g. "software engineer", "tech lead")                                                     |
+| Diagrams      | Toggle Mermaid diagram generation on or off                                                                        |
+| Steering      | Drawer with extra context, must-cover topics, and a skip-clarification switch — its trigger summarises what's set  |
+
+**Theme:** the sun/moon button in the header switches between dark (ink-teal studio) and light (paper-cream) modes. The choice persists across sessions; first-time visitors get their OS preference. `?theme=dark|light` in the URL forces a mode for shareable links.
+
+**During generation** the execution view shows the full pipeline roadmap up front: every stage with its own symbol, a chip naming the model that executes it, a live progress bar, and per-stage timers. Each stage has an ⓘ info panel explaining what it does, plus an expandable debug panel with run data (search queries, fetched URLs with trust scores, verifier verdicts, critic issues). Stages served from the disk cache show a ⚡ cached chip. If a run fails, the error is pinned to the failing stage with a **Resume** button — completed stages replay from cache, so a retry picks up where it stopped instead of re-running everything.
+
+**Library:** every generated article is browsable, and each has a **Re-run** button that routes back to the composer with all original settings prefilled for editing. Re-runs stack as version chains — one library card per article showing `↻ v2`, with a version dropdown in the article view to read any earlier run.
 
 ### Command Line
 
@@ -143,7 +162,7 @@ python main.py \
 python main.py --topic "Redis caching patterns" --out ./my-articles
 ```
 
-Output is written to `./output/<timestamp>__<slug>/` and contains:
+Output is written to `./output/<timestamp>__<slug>__<job-id>/` and contains:
 
 - `intermediate.md`: the finished article at the requested depth level
 - `meta.json`: request parameters, verification reports, and pipeline debug info
@@ -159,6 +178,7 @@ A standalone version of the pipeline is available as a Claude Code skill: no ser
 **Install:** Drag the `.skill` file into any Claude Code chat window, or go to Settings → Skills → Install from file.
 
 **Use it:**
+
 > "Write an article about how Kafka handles backpressure"
 > "Generate a technical article on Redis caching patterns"
 
@@ -175,74 +195,88 @@ Browser (ui/index.html)
     │
     │  POST /generate  (start job)
     │  GET  /jobs/{id}/stream  (SSE progress)
-    │  GET  /jobs/{id}/result  (final article)
+    │  GET  /articles  (library, grouped into re-run version chains)
     ▼
 FastAPI server (api/server.py)
     │
     ▼
 Pipeline orchestrator (main.py -> generate_article())
     │
-    ├── Search worker        (Tavily web search)
-    ├── Extraction worker    (fetch + chunk web pages)
-    ├── Brief worker         (Claude Sonnet)
-    ├── Relevance worker     (Claude Haiku, alignment gate)
-    ├── Planning worker      (Claude Sonnet)
-    ├── Drafting worker      (Claude Sonnet, parallel section drafts)
-    ├── Mermaid worker       (Claude Haiku -> npx @mermaid-js/mermaid-cli)
-    ├── Verification worker  (GPT-4o-mini, claim-by-claim fact check)
-    ├── Editor worker        (Claude Sonnet, review + targeted revision)
-    ├── Critic worker        (Claude Sonnet, final quality gate)
-    ├── Humanisation worker  (Claude Sonnet, voice polish)
-    └── Compiler worker      (citation resolution + final assembly)
+    ├── Source resolver      (light model — topic → official-docs domains)
+    ├── Search worker        (Tavily / Brave / Exa, docs-first pass + general pass)
+    ├── Extraction worker    (fetch + chunk web pages, tiered trust scoring)
+    ├── Brief worker         (strong model — thesis, angle, hook)
+    ├── Relevance worker     (light model — brief↔request alignment gate)
+    ├── Planning worker      (strong model — sections, claims, visual intents)
+    ├── Verification worker  (OpenAI — claim-by-claim fact check, before drafting)
+    ├── Drafting worker      (strong model — parallel section drafts)
+    ├── Mermaid worker       (light model → npx @mermaid-js/mermaid-cli)
+    ├── Editor worker        (strong model — review + targeted revision)
+    ├── Polisher             (strong model — combined level-adapt + voice polish)
+    ├── Critic worker        (strong model — final quality gate, 1 refine loop)
+    └── Citation utils       (marker → numbered reference resolution)
 ```
 
-**Model assignments** are centrally managed in `pipeline/model_config.py`. Every worker calls `get_model(role, preset)` instead of hard-coding a model string, so the quality preset slider in the UI controls the entire pipeline. The model names above are the Anthropic defaults; provider selection is described in [Model Providers](#model-providers).
+**Model assignments** are centrally managed in `pipeline/model_config.py`. Every worker calls `get_model(role, preset)` instead of hard-coding a model string, so the quality preset in the UI controls the entire pipeline. At run start the server emits a `pipeline_info` event naming the exact model for each stage, which the UI displays as chips on the pipeline roadmap.
+
+**Prompts** live in `pipeline/prompts/` as version-tagged text files, assembled by `pipeline/prompt_loader.py`. Shared fragments (`_voice_canon_v1.txt` for voice rules and banned phrases, `_preserve_markers_v1.txt` for citation/diagram marker preservation) are injected via `{{include:...}}` directives so every writing and reviewing agent works from one rulebook.
+
+**Caching:** expensive stage outputs (brief, search, planning, verification, drafting, editor, polish) are disk-cached by input hash under `.cache/article_pipeline/`. Re-running an identical request fast-forwards through cached stages — this is what powers Resume-after-failure and cheap re-runs.
+
+### Doc-first citations
+
+Citations follow a strict precedence: **official docs > articles > Q&A forums**. Before searching, a small model resolves the topic's official documentation domains (with a static seed map as fallback; shared hosts like github.com or medium.com can never be blessed as "official"). Those domains get a dedicated domain-restricted search pass, score highest in trust ranking, and win the planner's evidence slots — capped at half the fetch budget so articles still cite diverse sources.
+
+Trust tiers (`score_url`): official topic docs `1.0` → curated high-trust list `0.9` → docs-looking URLs on unknown domains `0.8` → GitHub `0.7` → blog platforms `0.65` → unknown HTTPS `0.6` → Stack Overflow / Reddit / Q&A forums `0.45` → plain HTTP `0.35`.
 
 ---
 
 ## Model Providers
 
-Scrivio is provider-flexible. It picks its LLM provider automatically from the keys in your environment, with no code change required.
+Scrivio is provider-flexible. It picks its LLM provider automatically from the keys in your environment, and any single article can pin a provider from the composer's Provider card.
 
-| Keys present              | Pipeline runs on                                          | Verifier         |
-| ------------------------- | --------------------------------------------------------- | ---------------- |
-| `ANTHROPIC_API_KEY` only  | Claude (Sonnet + Haiku)                                   | GPT-4o-mini (1)  |
-| `OPENAI_API_KEY` only     | GPT-4o + GPT-4o-mini                                       | GPT-4o-mini      |
-| Both                      | Anthropic by default; `LLM_PROVIDER=openai` to switch     | GPT-4o-mini      |
-| Neither                   | Mock client (placeholder text)                            | n/a              |
+| Keys present             | Writing pipeline runs on                                | Verifier        |
+| ------------------------ | ------------------------------------------------------- | --------------- |
+| `ANTHROPIC_API_KEY` only | Claude (Sonnet + Haiku)                                 | mocked (1)      |
+| `OPENAI_API_KEY` only    | GPT (defaults: gpt-5.4 + gpt-5.4-mini)                  | GPT-4o-mini     |
+| Both                     | Anthropic by default; `LLM_PROVIDER=openai` to switch   | GPT-4o-mini     |
+| Neither                  | Mock client (placeholder text)                          | mocked          |
 
-(1) Verification requires `OPENAI_API_KEY`. In an Anthropic-only setup, the verification stage is skipped.
+(1) Claim verification and search-query generation always run on OpenAI. Without `OPENAI_API_KEY` they fall back to a mock, so claims pass through unverified — an Anthropic-only setup still generates articles, but without the cross-model fact-check.
 
-Under the hood, every worker calls `client.messages.create(...)` against the Anthropic interface. When OpenAI is selected, `pipeline/providers/openai_adapter.py` wraps the OpenAI client in a shim that presents the same interface and maps model names (`*sonnet*` to `gpt-4o`, `*haiku*` to `gpt-4o-mini`), so no worker needs provider-specific branches. Provider selection itself lives in `main.py` (`_resolve_provider()` and `_anthropic_client()`), and `main.generate_article()`, used by both the CLI and the FastAPI server, threads the selected client through every writing stage.
+**Selection order:** a per-request pin (`llm_provider` in the request, set from the UI's Provider card) wins when its key is present; otherwise the key-based auto rules above apply. A pin whose key is missing falls back to auto with a warning — a stale saved request can never break generation.
 
-> **Note:** the alternate Temporal orchestrator in `pipeline/orchestrator/article_workflow.py` still constructs `anthropic.AsyncAnthropic()` directly and does not yet honor provider auto-selection. It is not used by the default CLI or server path; if you switch to it, OpenAI-only mode will not apply until those calls are routed through `_anthropic_client()`.
+Under the hood, every worker calls `client.messages.create(...)` against the Anthropic interface. When OpenAI is selected, `pipeline/providers/openai_adapter.py` wraps the OpenAI client in a shim that presents the same interface: system prompts, forced tool-choice, and stop reasons are translated, model names map by tier (Sonnet/Opus → `OPENAI_STRONG_MODEL`, Haiku → `OPENAI_LIGHT_MODEL`), and reasoning models get token-budget headroom plus a tunable `OPENAI_REASONING_EFFORT`. No worker has provider-specific branches. Provider selection lives in `main.py` (`_resolve_provider()` / `_anthropic_client()`).
+
+> **Note:** the alternate Temporal orchestrator in `pipeline/orchestrator/article_workflow.py` still constructs `anthropic.AsyncAnthropic()` directly and does not honor provider auto-selection. It is not used by the default CLI or server path; if you switch to it, OpenAI-only mode will not apply until those calls are routed through `_anthropic_client()`.
 
 ---
 
 ## Pipeline: Stage by Stage
 
-The Model column lists the Anthropic defaults. In OpenAI mode, Sonnet maps to GPT-4o and Haiku to GPT-4o-mini; the verification stage always uses GPT-4o-mini.
+| #   | Stage                    | Model          | What it does                                                                                                                                                                                                                                                                                        |
+| --- | ------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Clarification**        | Sonnet         | Asks 2-3 follow-up questions when the topic is ambiguous or very broad. Skipped for narrow, specific topics.                                                                                                                                                                                        |
+| 2   | **Topic classification** | Haiku          | Classifies the topic as broad or narrow to decide whether clarification is worth asking.                                                                                                                                                                                                            |
+| 3   | **Brief**                | Sonnet         | Writes a story brief: thesis, angle (explainer / tutorial / deep-dive / comparison / war-story), reader pain point, hook seed, and suggested title.                                                                                                                                                 |
+| 4   | **Relevance check**      | Haiku          | Validates that the brief's thesis and angle match the user's request. Catches brief drift (e.g. a war-story angle on a "What is X" question) before the expensive stages run.                                                                                                                       |
+| 5   | **Official sources**     | Haiku          | Resolves the topic's official documentation domains (Kafka → kafka.apache.org, Java → docs.oracle.com) via a static seed map plus a small model call. These domains drive the docs-first search pass and outrank all other sources in trust scoring.                                                |
+| 6   | **Search**               | — (search API) | Runs a docs-first pass restricted to the official domains plus general targeted queries. Results are ranked by trust tier before fetching; official docs win the budget (capped at half for diversity). If fewer than 15 evidence chunks or 4 useful sources survive, a fallback search runs.       |
+| 7   | **Extraction**           | —              | Fetches each search result URL, strips boilerplate, splits content into overlapping chunks, and scores chunks for relevance. Implausibly small extractions trigger whole-document re-extraction.                                                                                                    |
+| 8   | **Planning**             | Sonnet         | Produces a section-by-section article plan. Each section gets a title, goal, key claims to make, and a pointer to which evidence spans to draw from.                                                                                                                                                |
+| 9   | **Gap-fill search**      | — (search API) | Detects sections with thin evidence coverage and runs additional targeted searches for those sections specifically.                                                                                                                                                                                 |
+| 10  | **Verification**         | GPT (OpenAI)   | Runs BEFORE drafting (a journalist fact-checks before writing). Checks every planned claim against its cited evidence span. Drops or downgrades claims that are unsupported or irrelevant.                                                                                                          |
+| 11  | **Drafting**             | Sonnet         | Drafts every section in parallel, injecting the relevant evidence spans and citing each claim with a UUID marker. Each section receives a summary of previous sections to maintain flow.                                                                                                            |
+| 12  | **Diagram spec**         | Haiku          | Generates Mermaid diagram specifications for sections that requested a visual (architecture diagrams, sequence diagrams, flow charts).                                                                                                                                                              |
+| 13  | **Diagram rendering**    | — (npx)        | Renders each Mermaid spec to SVG via `@mermaid-js/mermaid-cli` and runs QA checks on the output.                                                                                                                                                                                                    |
+| 14  | **Editor review**        | Sonnet         | Reviews the assembled draft for: request alignment, thesis drift, hook quality, voice patterns (em dashes, filler phrases), vague claims, cold transitions, repetition (including within a section), and structural improvement opportunities (comparison tables).                                  |
+| 15  | **Editor revision**      | Sonnet         | Re-drafts only the sections flagged by the editor, merging revision instructions with any structural hints (e.g. "add a comparison table with columns X, Y, Z").                                                                                                                                    |
+| 16  | **Polisher**             | Sonnet         | One combined pass replacing the old compile+humanize sequence: adapts the draft to the requested depth level AND rewrites for natural voice. If the critic flags blocking issues, it runs once more with the critic's issue list as targeted fixes.                                                 |
+| 17  | **Critic**               | Sonnet         | Final quality gate on the polished article. Checks title patterns, opening framing, citation completeness, diagram accuracy, internal consistency (duplicated statements, worked-example drift), voice, structure, and code fidelity. Issues are `blocking`, `moderate`, or `minor`.                |
+| 18  | **Citation resolution**  | —              | Replaces `[src:UUID]` inline markers with numbered references (`[1]`, `[2]`, …) and builds the Sources section at the end of the article.                                                                                                                                                           |
+| 19  | **Assembly**             | —              | Builds the final `PublishedArticle` at the requested explanation level, embeds rendered diagrams, and writes the output markdown and `meta.json` to disk.                                                                                                                                           |
 
-| #   | Stage                    | Model       | What it does                                                                                                                                                                                                                                                                 |
-| --- | ------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Clarification**        | Sonnet      | Asks 2-3 follow-up questions when the topic is ambiguous or very broad. Skipped for narrow, specific topics.                                                                                                                                                                 |
-| 2   | **Topic classification** | Haiku       | Classifies the topic as broad or narrow to decide whether clarification is worth asking.                                                                                                                                                                                     |
-| 3   | **Brief**                | Sonnet      | Writes a story brief: thesis, angle (explainer / tutorial / deep-dive / comparison / war-story), reader pain point, hook seed, and suggested title.                                                                                                                          |
-| 4   | **Relevance check**      | Haiku       | Validates that the brief's thesis and angle match the user's request. Catches brief drift (e.g. a war-story angle on a "What is X" question) before the expensive stages run.                                                                                                |
-| 5   | **Search**               | Tavily      | Runs multiple targeted search queries derived from the topic and must-cover list. If fewer than 15 evidence chunks or 3 useful sources are returned, a fallback search runs automatically.                                                                                   |
-| 6   | **Extraction**           | n/a         | Fetches each search result URL, strips boilerplate, splits content into overlapping chunks, and scores chunks for relevance.                                                                                                                                                 |
-| 7   | **Planning**             | Sonnet      | Produces a section-by-section article plan. Each section gets a title, goal, key claims to make, and a pointer to which evidence spans to draw from.                                                                                                                         |
-| 8   | **Gap-fill search**      | Tavily      | Detects sections with thin evidence coverage and runs additional targeted searches for those sections specifically.                                                                                                                                                          |
-| 9   | **Drafting**             | Sonnet      | Drafts every section in parallel, injecting the relevant evidence spans and citing each claim with a UUID marker. Each section receives a summary of previous sections to maintain flow.                                                                                     |
-| 10  | **Diagram spec**         | Haiku       | Generates Mermaid diagram specifications for sections that requested a visual (architecture diagrams, sequence diagrams, flow charts).                                                                                                                                       |
-| 11  | **Diagram rendering**    | npx         | Renders each Mermaid spec to SVG via `@mermaid-js/mermaid-cli` and runs QA checks on the output.                                                                                                                                                                             |
-| 12  | **Verification**         | GPT-4o-mini | Checks every inline claim against its cited evidence span. Drops or downgrades claims that are unsupported or irrelevant.                                                                                                                                                    |
-| 13  | **Editor review**        | Sonnet      | Reviews the assembled draft for: request alignment, thesis drift, hook quality, voice patterns (em dashes, filler phrases), vague claims, cold transitions, scenario repetition, and structural improvement opportunities (comparison tables).                               |
-| 14  | **Editor revision**      | Sonnet      | Re-drafts only the sections flagged by the editor, merging revision instructions with any structural hints (e.g. "add a comparison table with columns X, Y, Z").                                                                                                             |
-| 15  | **Critic**               | Sonnet      | Final quality gate. Checks title patterns, opening framing, citation completeness, diagram accuracy, internal consistency, voice, structure, and code block fidelity. Issues are `blocking`, `moderate`, or `minor`. The article only proceeds if no blocking issues remain. |
-| 16  | **Humanizer / Polish**   | Sonnet      | Rewrites passages flagged by the critic, removes AI-voice patterns, and runs a final em-dash scrub across the article.                                                                                                                                                       |
-| 17  | **Citation resolution**  | n/a         | Replaces `[src:UUID]` inline markers with numbered references (`[1]`, `[2]`, ...) and builds the Sources section at the end of the article.                                                                                                                                  |
-| 18  | **Compiler**             | n/a         | Assembles the final `PublishedArticle` object across all explanation levels (basic / intermediate / advanced). Writes the output markdown and `meta.json` to disk.                                                                                                           |
+> The Model column shows the balanced-preset Anthropic assignment. Presets map roles to light/strong tiers; with an OpenAI writer the adapter maps those tiers to the equivalent GPT models. Search-query generation and verification always run on OpenAI when its key is present.
 
 ### How the editor and structural hints work
 
@@ -262,25 +296,35 @@ The editor runs two passes:
 ```
 scrivio/
 ├── api/
-│   ├── server.py          # FastAPI app: endpoints, SSE streaming, job management
-│   └── jobs.py            # In-memory job store
+│   ├── server.py              # FastAPI app: endpoints, SSE streaming, job management
+│   └── jobs.py                # In-memory job store
 ├── pipeline/
-│   ├── model_config.py    # Central model-selection (Fast / Balanced / Best presets)
-│   ├── cache.py           # Stage-level disk cache (avoids re-running expensive stages)
+│   ├── model_config.py        # Central model-selection (Fast / Balanced / Best presets)
+│   ├── cache.py               # Stage-level disk cache (resume + cheap re-runs)
+│   ├── prompt_loader.py       # Prompt assembly — expands {{include:...}} shared fragments
 │   ├── providers/
-│   │   └── openai_adapter.py  # OpenAI-to-Anthropic shim for provider flexibility
+│   │   └── openai_adapter.py  # OpenAI→Anthropic shim: full pipeline on an OpenAI-only key
 │   ├── schemas/
-│   │   └── models.py      # Pydantic models for every pipeline object
-│   ├── prompts/           # System prompts for each agent (plain text, version-tagged)
-│   │   ├── brief_v1.txt
-│   │   ├── relevance_checker_v1.txt
-│   │   ├── planner_v1.txt
-│   │   ├── drafter_v1.txt
-│   │   ├── editor_v1.txt
-│   │   ├── critic_v1.txt
-│   │   ├── humanizer_v1.txt
-│   │   └── verifier_v1.txt
-│   └── workers/           # One file per pipeline stage
+│   │   └── models.py          # Pydantic models for every pipeline object
+│   ├── prompts/               # System prompts for each agent (plain text, version-tagged)
+│   │   ├── _voice_canon_v1.txt        # shared fragment: voice rules + banned lists
+│   │   ├── _preserve_markers_v1.txt   # shared fragment: citation/diagram marker rules
+│   │   ├── brief_v2.txt
+│   │   ├── relevance_checker_v2.txt
+│   │   ├── planner_v2.txt
+│   │   ├── drafter_v2.txt
+│   │   ├── editor_v2.txt
+│   │   ├── critic_v2.txt
+│   │   ├── polisher_v2.txt            # combined level-adapter + copyeditor pass
+│   │   ├── compiler_v2.txt
+│   │   ├── diagram_spec_v2.txt
+│   │   ├── vhs_tape_v2.txt
+│   │   ├── verifier_v2.txt
+│   │   ├── clarification_v1.txt
+│   │   └── clarification_questions_v1.txt
+│   └── workers/               # One file per pipeline stage
+│       ├── source_resolver.py # topic → official-docs domains (doc-first citations)
+│       ├── topic_classifier.py
 │       ├── brief_worker.py
 │       ├── relevance_worker.py
 │       ├── search_worker.py
@@ -294,12 +338,12 @@ scrivio/
 │       ├── citation_utils.py
 │       └── compiler_worker.py
 ├── render/
-│   ├── mermaid_worker.py  # Mermaid spec generation + SVG rendering via npx
-│   └── vhs_worker.py      # Terminal GIF rendering via VHS
+│   ├── mermaid_worker.py      # Mermaid spec generation + SVG rendering via npx
+│   └── vhs_worker.py          # Terminal GIF rendering via VHS
 ├── ui/
-│   └── index.html         # Single-page app (Tailwind CSS, vanilla JS, SSE client)
-├── tests/                 # pytest test suite (192 tests)
-├── main.py                # Pipeline orchestrator + CLI entry point
+│   └── index.html             # Single-page app (Tailwind CSS, vanilla JS, SSE client)
+├── tests/                     # pytest test suite (219 tests)
+├── main.py                    # Pipeline orchestrator + CLI entry point
 ├── requirements.txt
 └── .env.example
 ```
@@ -328,7 +372,7 @@ The [`examples/`](examples/) folder contains five real articles generated by Scr
 pytest tests/ -v
 ```
 
-All 192 tests run without API keys; workers are tested with mocked responses.
+All 219 tests run without API keys — the suite forces mock LLM clients for every test, so it can never spend API credits.
 
 ---
 
@@ -343,7 +387,7 @@ output/
     └── meta.json         # Request params, verification reports, asset metadata
 ```
 
-The markdown file is self-contained and ready to paste into any blog platform, Notion, or documentation site that renders Markdown and Mermaid.
+The markdown file is self-contained and ready to paste into any blog platform, Notion, or documentation site that renders Markdown and Mermaid. Re-runs record their lineage in `meta.json` (`request.rerun_of`), which the library uses to group versions.
 
 ---
 

@@ -15,15 +15,13 @@ Distinct from:
 The critic is the missing layer that reads the article AS THE READER
 will see it and applies the polish-layer judgement no other agent does.
 """
-from pathlib import Path
 
 from pipeline.model_config import get_model
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import ArticlePlan, CriticVerdict
 
 
-_SYSTEM_PROMPT = (
-    Path(__file__).resolve().parents[1] / "prompts" / "critic_v1.txt"
-).read_text(encoding="utf-8")
+_SYSTEM_PROMPT = load_prompt("critic_v2.txt")
 
 
 _CRITIC_TOOL: dict = {

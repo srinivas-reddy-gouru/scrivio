@@ -1,11 +1,11 @@
 import logging
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from pipeline.model_config import get_model
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
     ArticlePlan,
     ArticleRequest,
@@ -17,9 +17,7 @@ from pipeline.schemas.models import (
 )
 
 
-_SYSTEM_PROMPT = (
-    Path(__file__).resolve().parents[1] / "prompts" / "planner_v1.txt"
-).read_text(encoding="utf-8")
+_SYSTEM_PROMPT = load_prompt("planner_v2.txt")
 
 
 class PlannerError(Exception):

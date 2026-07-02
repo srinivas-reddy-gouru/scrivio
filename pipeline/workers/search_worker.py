@@ -51,12 +51,24 @@ class SearchResult(BaseModel):
     published_at: str | None = None
 
 
-async def search_brave(query: str, max_results: int = 8) -> list[SearchResult]:
+def _brave_domain_query(query: str, include_domains: list[str] | None) -> str:
+    """Brave has no domain-filter parameter — express the restriction with
+    site: operators in the query string. Capped at 3 domains: Brave's
+    operators are experimental and long OR chains reduce recall."""
+    if not include_domains:
+        return query
+    sites = " OR ".join(f"site:{d}" for d in include_domains[:3])
+    return f"{query} ({sites})" if len(include_domains) > 1 else f"{query} site:{include_domains[0]}"
+
+
+async def search_brave(
+    query: str, max_results: int = 8, include_domains: list[str] | None = None
+) -> list[SearchResult]:
     async with httpx.AsyncClient() as client:
         response = await client.get(
             "https://api.search.brave.com/res/v1/web/search",
             headers={"X-Subscription-Token": os.environ["BRAVE_SEARCH_API_KEY"]},
-            params={"q": query, "count": max_results},
+            params={"q": _brave_domain_query(query, include_domains), "count": max_results},
             timeout=15,
         )
 
@@ -77,17 +89,22 @@ async def search_brave(query: str, max_results: int = 8) -> list[SearchResult]:
     ]
 
 
-async def search_exa(query: str, max_results: int = 8) -> list[SearchResult]:
+async def search_exa(
+    query: str, max_results: int = 8, include_domains: list[str] | None = None
+) -> list[SearchResult]:
+    payload: dict = {
+        "query": query,
+        "numResults": max_results,
+        "useAutoprompt": True,
+        "type": "neural",
+    }
+    if include_domains:
+        payload["includeDomains"] = include_domains
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://api.exa.ai/search",
             headers={"x-api-key": os.environ["EXA_API_KEY"]},
-            json={
-                "query": query,
-                "numResults": max_results,
-                "useAutoprompt": True,
-                "type": "neural",
-            },
+            json=payload,
             timeout=15,
         )
 
@@ -108,20 +125,25 @@ async def search_exa(query: str, max_results: int = 8) -> list[SearchResult]:
     ]
 
 
-async def search_tavily(query: str, max_results: int = 8) -> list[SearchResult]:
+async def search_tavily(
+    query: str, max_results: int = 8, include_domains: list[str] | None = None
+) -> list[SearchResult]:
     """Tavily Search — free tier: 1000 queries/month, no credit card required.
     Sign up at app.tavily.com and set TAVILY_API_KEY.
     """
+    payload: dict = {
+        "api_key": os.environ["TAVILY_API_KEY"],
+        "query": query,
+        "max_results": max_results,
+        "search_depth": "advanced",
+        "include_answer": False,
+    }
+    if include_domains:
+        payload["include_domains"] = include_domains
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://api.tavily.com/search",
-            json={
-                "api_key": os.environ["TAVILY_API_KEY"],
-                "query": query,
-                "max_results": max_results,
-                "search_depth": "advanced",
-                "include_answer": False,
-            },
+            json=payload,
             timeout=20,
         )
 
@@ -148,13 +170,19 @@ _PROVIDERS: dict[str, tuple[str, object]] = {
 
 
 async def multi_search(
-    queries: list[str], provider: str | None = None
+    queries: list[str],
+    provider: str | None = None,
+    include_domains: list[str] | None = None,
 ) -> list[SearchResult]:
     """Run queries against available search providers.
 
     Passing provider="brave", "exa", or "tavily" forces a specific provider.
     When provider is None (default), all providers with configured API keys
     are used and results are merged and deduplicated by URL.
+
+    include_domains restricts results to the given domains — used by the
+    docs-first pass to pull evidence from official documentation sites.
+    (Tavily/Exa support it natively; Brave gets site: operators in the query.)
 
     For local testing with no paid keys, set TAVILY_API_KEY (free tier at
     app.tavily.com) or EXA_API_KEY (free credits on sign-up).
@@ -176,7 +204,9 @@ async def multi_search(
     if not search_fns:
         return []
 
-    tasks = [fn(q) for fn in search_fns for q in queries]
+    tasks = [
+        fn(q, include_domains=include_domains) for fn in search_fns for q in queries
+    ]
     grouped = await asyncio.gather(*tasks, return_exceptions=True)
 
     results_by_canonical: dict[str, SearchResult] = {}

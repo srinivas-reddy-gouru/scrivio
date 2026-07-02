@@ -4,497 +4,683 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Scrivio — AI Article Studio</title>
+<script>
+  /* Set the theme before first paint to avoid a flash of the wrong mode.
+     Priority: ?theme= URL param (shareable / screenshots) > saved choice > OS preference. */
+  (function () {
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t !== 'light' && t !== 'dark') t = localStorage.getItem('scrivio-theme');
+    if (t !== 'light' && t !== 'dark') {
+      t = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --bg: #0f1616;
+    --surface: rgba(255,255,255,0.035);
+    --surface-2: rgba(255,255,255,0.06);
+    --stroke: rgba(255,255,255,0.09);
+    --stroke-strong: rgba(255,255,255,0.16);
+    --text: #eaeeea;
+    --text-dim: #93a5a3;
+    --text-faint: #5c6c6b;
+    --violet: #20b8cd;
+    --cyan: #22d3ee;
+    --grad: linear-gradient(135deg, #0fb5aa 0%, #20b8cd 55%, #4cc9f0 100%);
+    /* Themed component tokens */
+    --panel: rgba(14,24,24,0.88);       /* composer + stage icons */
+    --inset: rgba(0,0,0,0.3);           /* inputs, segmented tracks, debug panels */
+    --header-bg: rgba(12,19,19,0.74);
+    --track-off: rgba(255,255,255,0.12);
+    --accent-text: #6ee7df;             /* accent that stays readable on --bg */
+    --link: #5eead4;
+    --card-hover-shadow: 0 14px 40px rgba(0,0,0,0.45), 0 0 24px rgba(32,184,205,0.16);
+    --glow-opacity: 0.35;
+    --glow-opacity-focus: 0.6;
+  }
+  html[data-theme="light"] {
+    --bg: #fbfaf4;
+    --surface: rgba(255,255,255,0.8);
+    --surface-2: rgba(23,46,44,0.06);
+    --stroke: rgba(23,46,44,0.11);
+    --stroke-strong: rgba(23,46,44,0.2);
+    --text: #1c2a29;
+    --text-dim: #566867;
+    --text-faint: #93a3a0;
+    --panel: rgba(255,255,255,0.94);
+    --inset: rgba(23,46,44,0.05);
+    --header-bg: rgba(251,250,244,0.82);
+    --track-off: rgba(23,46,44,0.16);
+    --accent-text: #0f766e;
+    --cyan: #0d9488;
+    --link: #0e7490;
+    --card-hover-shadow: 0 14px 36px rgba(23,46,44,0.14), 0 0 24px rgba(32,184,205,0.14);
+    --glow-opacity: 0.18;
+    --glow-opacity-focus: 0.32;
+  }
   *, *::before, *::after { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  html[data-theme="light"] { color-scheme: light; }
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    background: #f0f6ff;
-    color: #1e293b;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
     min-height: 100vh;
+    overflow-x: hidden;
+  }
+  /* ── Ambient background: gradient orbs + grid ── */
+  .backdrop {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(600px 400px at 12% -8%, rgba(32,184,205,0.24), transparent 60%),
+      radial-gradient(700px 460px at 88% -12%, rgba(76,201,240,0.15), transparent 60%),
+      radial-gradient(800px 600px at 50% 115%, rgba(45,212,191,0.14), transparent 65%);
+    animation: aurora 16s ease-in-out infinite;
+  }
+  @keyframes aurora {
+    0%, 100% { filter: hue-rotate(0deg) saturate(1); }
+    50%      { filter: hue-rotate(-14deg) saturate(1.25); }
+  }
+  .backdrop::after {
+    content: ''; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 30%, transparent 75%);
+  }
+  html[data-theme="light"] .backdrop {
+    background:
+      radial-gradient(600px 400px at 12% -8%, rgba(32,184,205,0.16), transparent 60%),
+      radial-gradient(700px 460px at 88% -12%, rgba(76,201,240,0.12), transparent 60%),
+      radial-gradient(800px 600px at 50% 115%, rgba(45,212,191,0.10), transparent 65%);
+  }
+  html[data-theme="light"] .backdrop::after {
+    background-image:
+      linear-gradient(rgba(23,46,44,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(23,46,44,0.04) 1px, transparent 1px);
   }
 
-  /* ── Header — white + indigo ────────────────── */
-  .site-header {
-    background: #fff;
-    border-bottom: 1px solid #d2e3fc;
-    position: sticky; top: 0; z-index: 40;
-  }
-  .brand-text {
-    background: linear-gradient(135deg, #1967d2, #1a73e8);
+  .font-display { font-family: 'Space Grotesk', 'Inter', sans-serif; }
+  .font-mono-ui { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  .grad-text {
+    background: var(--grad); background-size: 200% 200%;
     -webkit-background-clip: text; background-clip: text; color: transparent;
-    font-weight: 800;
+    animation: gradShift 7s ease infinite;
   }
 
-  /* ── Nav links (JS toggles .active) ─────────── */
+  /* ── Header ── */
+  .site-header {
+    position: sticky; top: 0; z-index: 40;
+    background: var(--header-bg);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--stroke);
+  }
   .nav-link {
-    display: inline-flex; align-items: center; gap: 0.375rem;
-    padding: 0.375rem 0.875rem; border-radius: 9999px;
-    font-size: 0.8125rem; font-weight: 500; color: #64748b;
-    transition: background 0.15s ease, color 0.15s ease;
-    cursor: pointer; border: none; background: transparent; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.4rem 0.95rem; border-radius: 9999px;
+    font-size: 0.8125rem; font-weight: 500; color: var(--text-dim);
+    transition: all 0.16s ease;
+    cursor: pointer; border: 1px solid transparent; background: transparent; font-family: inherit;
   }
-  .nav-link:hover { background: #e8f0fe; color: #1967d2; }
-  .nav-link.active { background: #e8f0fe; color: #1967d2; font-weight: 600; }
-
-  /* ── Main form card ──────────────────────────── */
-  .form-card {
-    background: #fff; border-radius: 1.25rem; overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.04), 0 16px 48px rgba(66,133,244,0.12);
-    border: 1px solid #d2e3fc;
+  .nav-link:hover { color: var(--text); background: var(--surface-2); }
+  .nav-link.active {
+    color: #fff; background: var(--surface-2);
+    border-color: var(--stroke-strong); font-weight: 600;
+    box-shadow: 0 0 18px rgba(32,184,205,0.18);
   }
 
-  /* ── Card gradient banner (integrated branding) */
-  .card-banner {
-    background: linear-gradient(135deg, #4285F4 0%, #1a73e8 60%, #0d62e0 100%);
-    padding: 1.75rem 2rem 1.5rem;
-    position: relative; overflow: hidden;
-  }
-  .card-banner::after {
-    content: '';
-    position: absolute; inset: 0;
-    background-image: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-    background-size: 24px 24px;
-    pointer-events: none;
-  }
-  .banner-chip {
-    display: inline-flex; align-items: center; gap: 0.375rem;
-    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25);
-    border-radius: 9999px; padding: 0.2rem 0.75rem;
-    font-size: 0.7rem; font-weight: 600; color: rgba(255,255,255,0.9);
-    letter-spacing: 0.02em;
-  }
-
-  /* ── Generic card (settings / result / history) */
+  /* ── Glass card ── */
   .card {
-    background: #fff; border-radius: 1rem;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.04), 0 8px 24px rgba(66,133,244,0.07);
-    border: 1px solid #d2e3fc;
+    background: var(--surface);
+    border: 1px solid var(--stroke);
+    border-radius: 1.1rem;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   }
 
-  /* ── Field label ─────────────────────────────── */
-  .field-label {
-    display: block; font-size: 0.7rem; font-weight: 700;
-    color: #1a73e8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem;
+  /* ── Composer (hero prompt box) ── */
+  .composer {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--stroke-strong);
+    border-radius: 1.35rem;
+    transition: border-color 0.2s, box-shadow 0.25s;
   }
+  .composer::before {
+    content: ''; position: absolute; inset: -1px; z-index: -1;
+    border-radius: 1.4rem; background: var(--grad);
+    opacity: var(--glow-opacity); filter: blur(18px);
+    transition: opacity 0.25s;
+  }
+  .composer:focus-within { border-color: rgba(32,184,205,0.55); }
+  .composer:focus-within::before { opacity: var(--glow-opacity-focus); }
+  .composer textarea {
+    width: 100%; background: transparent; border: none; outline: none; resize: none;
+    color: var(--text); font-size: 1.15rem; font-weight: 500; line-height: 1.55;
+    font-family: inherit; padding: 1.4rem 1.5rem 0.5rem;
+  }
+  .composer textarea::placeholder { color: var(--text-faint); font-weight: 400; }
 
-  /* ── Inputs ─────────────────────────────────── */
-  .q-input {
-    width: 100%; padding: 0.625rem 0.875rem;
-    border: 1.5px solid #d2e3fc; border-radius: 0.5rem;
-    background: #f8fbff; color: #1e293b; font-size: 0.9375rem; font-family: inherit;
-    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
-    outline: none;
-  }
-  .q-input:focus { border-color: #4285F4; box-shadow: 0 0 0 3px rgba(66,133,244,0.12); background: #fff; }
-  .q-input::placeholder { color: #aecbfa; }
-  .q-input-select {
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234285F4' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 0.75rem center; padding-right: 2.5rem;
-  }
-
-  /* ── Primary button (used in JS innerHTML too) ─ */
+  /* ── Generate button ── */
   .btn-primary {
+    position: relative;
     display: inline-flex; align-items: center; gap: 0.5rem;
-    background: linear-gradient(135deg, #4285F4, #1a73e8);
-    color: #fff; font-weight: 600; font-size: 0.9375rem;
-    padding: 0.6875rem 1.625rem; border-radius: 0.625rem;
+    background: var(--grad); background-size: 180% 180%;
+    animation: gradShift 7s ease infinite;
+    color: #06282c; font-weight: 700; font-size: 0.9rem; letter-spacing: 0.01em;
+    padding: 0.65rem 1.5rem; border-radius: 0.8rem;
     border: none; cursor: pointer; font-family: inherit;
-    box-shadow: 0 4px 14px rgba(66,133,244,0.35);
-    transition: transform 0.12s, box-shadow 0.15s, opacity 0.15s;
+    box-shadow: 0 4px 20px rgba(13,148,136,0.45), 0 1px 3px rgba(0,0,0,0.4);
+    transition: transform 0.13s, box-shadow 0.2s, opacity 0.15s, filter 0.15s;
   }
-  .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(66,133,244,0.45); }
+  .btn-primary:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.08); box-shadow: 0 8px 30px rgba(13,148,136,0.55); }
   .btn-primary:active:not(:disabled) { transform: translateY(0); }
   .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
 
   .btn-outline {
-    display: inline-flex; align-items: center; gap: 0.375rem;
-    background: #fff; color: #4285F4; font-weight: 500; font-size: 0.875rem;
-    padding: 0.5625rem 1.125rem; border-radius: 0.5rem;
-    border: 1.5px solid #aecbfa; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: var(--surface); color: var(--text-dim); font-weight: 500; font-size: 0.85rem;
+    padding: 0.55rem 1.1rem; border-radius: 0.7rem;
+    border: 1px solid var(--stroke-strong); cursor: pointer;
     transition: all 0.15s; font-family: inherit;
   }
-  .btn-outline:hover { background: #e8f0fe; border-color: #8ab4f8; }
+  .btn-outline:hover { color: var(--text); background: var(--surface-2); border-color: rgba(255,255,255,0.25); }
 
   .btn-danger {
-    display: inline-flex; align-items: center; gap: 0.375rem;
-    background: #ef4444; color: #fff; font-weight: 600; font-size: 0.875rem;
-    padding: 0.5rem 1rem; border-radius: 0.5rem;
-    border: none; cursor: pointer; font-family: inherit; transition: background 0.15s;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: rgba(239,68,68,0.15); color: #fca5a5; font-weight: 600; font-size: 0.85rem;
+    padding: 0.5rem 1rem; border-radius: 0.7rem;
+    border: 1px solid rgba(239,68,68,0.35); cursor: pointer; font-family: inherit; transition: all 0.15s;
   }
-  .btn-danger:hover { background: #dc2626; }
-  .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-danger:hover:not(:disabled) { background: rgba(239,68,68,0.28); color: #fecaca; }
+  .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  /* ── Toggle (JS toggles .on) ─────────────────── */
+  /* ── Control cards (configuration deck) ── */
+  .ctl-card {
+    background: var(--surface);
+    border: 1px solid var(--stroke);
+    border-radius: 1rem; padding: 1rem 1.1rem;
+    transition: border-color 0.18s, background 0.18s, transform 0.18s;
+  }
+  .ctl-card:hover { border-color: var(--stroke-strong); }
+  .ctl-label {
+    display: flex; align-items: center; gap: 0.45rem;
+    font-size: 0.66rem; font-weight: 700; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.65rem;
+  }
+  .ctl-label svg { width: 0.85rem; height: 0.85rem; color: var(--violet); }
+  .ctl-hint { font-size: 0.72rem; color: var(--text-faint); margin-top: 0.55rem; line-height: 1.45; min-height: 1em; }
+
+  /* ── Segmented control ── */
+  .seg {
+    display: flex; gap: 0.25rem; padding: 0.25rem;
+    background: var(--inset);
+    border: 1px solid var(--stroke); border-radius: 0.7rem;
+  }
+  .seg-btn {
+    flex: 1; padding: 0.42rem 0.5rem; border-radius: 0.5rem;
+    font-size: 0.8rem; font-weight: 550; color: var(--text-dim); text-align: center;
+    border: none; background: transparent; cursor: pointer; font-family: inherit;
+    transition: all 0.16s; white-space: nowrap;
+  }
+  .seg-btn:hover:not(.on):not(:disabled) { color: var(--text); background: var(--surface-2); }
+  .seg-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .seg-btn.on {
+    color: #06282c; background: var(--grad); background-size: 180% 180%;
+    box-shadow: 0 2px 10px rgba(13,148,136,0.4);
+    font-weight: 650;
+  }
+
+  /* ── Toggle switch ── */
   .toggle-track {
     position: relative; display: inline-flex; align-items: center;
-    width: 2.75rem; height: 1.5rem; border-radius: 9999px;
-    background: #aecbfa; transition: background 0.2s; cursor: pointer; flex-shrink: 0;
+    width: 2.6rem; height: 1.45rem; border-radius: 9999px;
+    background: var(--track-off); border: 1px solid var(--stroke);
+    transition: background 0.2s; cursor: pointer; flex-shrink: 0;
   }
-  .toggle-track.on { background: linear-gradient(135deg, #4285F4, #1a73e8); }
+  .toggle-track.on { background: var(--grad); border-color: transparent; box-shadow: 0 0 14px rgba(13,148,136,0.45); }
   .toggle-thumb {
-    position: absolute; left: 3px; width: 1.125rem; height: 1.125rem;
+    position: absolute; left: 3px; width: 1.05rem; height: 1.05rem;
     border-radius: 9999px; background: #fff;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
     transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1);
   }
-  .toggle-track.on .toggle-thumb { transform: translateX(1.25rem); }
+  .toggle-track.on .toggle-thumb { transform: translateX(1.15rem); }
 
-  /* ── Feature toggle card (JS toggles .active) ── */
-  .feature-toggle {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0.875rem 1rem; border-radius: 0.75rem;
-    border: 1.5px solid #d2e3fc; background: #f8fbff;
-    cursor: pointer; gap: 0.75rem;
-    transition: border-color 0.15s, background 0.15s;
+  /* ── Inputs ── */
+  .q-input {
+    width: 100%; padding: 0.6rem 0.85rem;
+    border: 1px solid var(--stroke); border-radius: 0.65rem;
+    background: var(--inset); color: var(--text); font-size: 0.875rem; font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    outline: none;
   }
-  .feature-toggle:hover { border-color: #8ab4f8; background: #f0f6ff; }
-  .feature-toggle.active { border-color: #4285F4; background: #e8f0fe; }
+  .q-input:focus { border-color: rgba(32,184,205,0.6); box-shadow: 0 0 0 3px rgba(32,184,205,0.15); }
+  .q-input::placeholder { color: var(--text-faint); }
+  select.q-input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2320b8cd' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.7rem center; padding-right: 2.3rem; }
 
-  /* ── Source option cards (JS toggles .selected) */
-  .source-option {
-    display: flex; align-items: flex-start; gap: 0.75rem;
-    padding: 0.75rem 0.875rem; border-radius: 0.625rem;
-    border: 1.5px solid #d2e3fc; background: #f8fbff;
-    cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  /* ── Summary readout ── */
+  .summary-line {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+    font-size: 0.78rem; color: var(--text-dim);
   }
-  .source-option:not(.selected):hover { border-color: #8ab4f8; background: #f0f6ff; }
-  .source-option.selected { border-color: #4285F4 !important; background: #e8f0fe !important; }
-
-  /* ── Provider option cards ───────────────────── */
-  .provider-option { transition: border-color 0.15s, background 0.15s; }
-  .provider-option.selected { border-color: #4285F4 !important; background: #e8f0fe !important; }
-  .provider-option:not(.selected):hover { border-color: #aecbfa; background: #f0f6ff; }
-
-  /* ── Quality preset pills (JS toggles .selected) */
-  .preset-pills { display: flex; gap: 0.375rem; flex-wrap: wrap; }
-  .preset-pill {
-    padding: 0.3125rem 0.8125rem; border-radius: 9999px;
-    font-size: 0.8125rem; font-weight: 500;
-    border: 1.5px solid #d2e3fc; background: #fff; color: #64748b;
-    cursor: pointer; transition: all 0.15s; white-space: nowrap; font-family: inherit;
+  .summary-chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.18rem 0.6rem; border-radius: 9999px;
+    background: var(--surface-2); border: 1px solid var(--stroke);
+    font-size: 0.72rem; font-weight: 550; color: var(--text-dim);
+    white-space: nowrap;
   }
-  .preset-pill:hover { border-color: #8ab4f8; background: #e8f0fe; color: #1967d2; }
-  .preset-pill.selected {
-    border-color: transparent; background: linear-gradient(135deg, #4285F4, #1a73e8);
-    color: #fff; box-shadow: 0 2px 8px rgba(66,133,244,0.3);
+  .summary-chip .dot { width: 5px; height: 5px; border-radius: 9999px; background: var(--cyan); }
+
+  /* ── Status chips (provider / search) ── */
+  .status-chip {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    padding: 0.3rem 0.8rem; border-radius: 9999px;
+    background: var(--surface); border: 1px solid var(--stroke);
+    font-size: 0.72rem; font-weight: 550; color: var(--text-dim);
   }
 
-  /* ── Divider label ───────────────────────────── */
-  .divider-label {
-    display: flex; align-items: center; gap: 0.75rem;
-    font-size: 0.65rem; font-weight: 700; color: #8ab4f8;
-    text-transform: uppercase; letter-spacing: 0.1em;
-  }
-  .divider-label::before, .divider-label::after { content: ''; flex: 1; height: 1px; background: #d2e3fc; }
-
-  /* ── Status bar ──────────────────────────────── */
-  .status-bar {
-    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
-    padding: 0.5rem 0.875rem; background: #f0f6ff;
-    border: 1px solid #d2e3fc; border-radius: 0.625rem;
-    font-size: 0.75rem; color: #64748b;
-  }
-
-  /* ── Stage timeline ──────────────────────────── */
-  .stage-row { position: relative; padding-left: 2.5rem; }
+  /* ── Stage timeline (pipeline roadmap) ── */
+  .stage-row { position: relative; padding-left: 2.6rem; padding-bottom: 1.15rem; }
+  .stage-row:last-child { padding-bottom: 0; }
   .stage-row::before {
     content: ''; position: absolute;
-    left: 0.875rem; top: 1.75rem; bottom: -0.5rem;
-    width: 2px; background: linear-gradient(to bottom, #aecbfa, #d2e3fc);
+    left: 0.92rem; top: 1.9rem; bottom: -0.1rem;
+    width: 2px; background: var(--stroke);
+    transition: background 0.4s;
   }
+  .stage-row.done::before { background: linear-gradient(to bottom, rgba(32,184,205,0.55), rgba(32,184,205,0.25)); }
   .stage-row:last-child::before { display: none; }
-  .stage-row { animation: slideIn 0.3s ease-out; }
+  .stage-icon {
+    position: absolute; left: 0; top: 0.1rem;
+    display: flex; align-items: center; justify-content: center;
+    width: 1.9rem; height: 1.9rem; border-radius: 9999px;
+    background: var(--panel); border: 1px solid var(--stroke-strong);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  /* Per-stage identity symbol; colour communicates status. */
+  .stage-icon .stage-symbol { width: 0.95rem; height: 0.95rem; color: var(--text-faint); transition: color 0.3s; }
+  .stage-row.running   .stage-icon .stage-symbol { color: var(--accent-text); }
+  .stage-row.completed .stage-icon .stage-symbol { color: #34d399; }
+  .stage-row.error     .stage-icon .stage-symbol { color: #f87171; }
+  .stage-row.cancelled .stage-icon .stage-symbol { color: var(--text-faint); }
+  /* Mini status badge pinned to the icon's corner. */
+  .stage-badge {
+    position: absolute; right: -4px; bottom: -4px;
+    display: flex; align-items: center; justify-content: center;
+    width: 0.95rem; height: 0.95rem; border-radius: 9999px;
+    background: var(--panel); border: 1px solid var(--stroke-strong);
+  }
+  .stage-badge svg { width: 0.6rem; height: 0.6rem; }
+  .stage-row.pending { opacity: 0.5; }
+  .stage-row.running .stage-icon {
+    border-color: rgba(32,184,205,0.7);
+    box-shadow: 0 0 0 4px rgba(32,184,205,0.12), 0 0 18px rgba(32,184,205,0.35);
+  }
+  /* Orbiting ring marks the stage currently running. */
+  .stage-row.running .stage-icon::after {
+    content: ''; position: absolute; inset: -4px; border-radius: 9999px;
+    border: 2px dashed rgba(32,184,205,0.55);
+    animation: spin 3.5s linear infinite;
+  }
+  .stage-row.running {
+    animation: none;
+  }
+  .stage-row.running .stage-body {
+    background: linear-gradient(90deg, rgba(32,184,205,0.09), transparent 70%);
+    border-radius: 0.6rem;
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+  .stage-body { padding: 0.15rem 0.5rem 0.15rem 0.35rem; margin-left: -0.35rem; }
+  .cached-chip {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.05rem 0.5rem; border-radius: 9999px;
+    font-size: 0.65rem; font-weight: 650;
+    color: var(--accent-text); background: rgba(32,184,205,0.1);
+    border: 1px solid rgba(32,184,205,0.3);
+  }
+  /* Which model executes this stage (from the pipeline_info event). */
+  .model-chip {
+    display: inline-flex; align-items: center;
+    padding: 0.05rem 0.5rem; border-radius: 0.375rem;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.63rem; color: var(--text-dim);
+    background: var(--inset); border: 1px solid var(--stroke);
+    white-space: nowrap;
+  }
+  .stage-info {
+    display: inline-flex; align-items: center; align-self: center;
+    background: transparent; border: none; padding: 0; cursor: pointer;
+    color: var(--text-faint); transition: color 0.15s;
+  }
+  .stage-info:hover { color: var(--accent-text); }
+  .stage-info svg { width: 0.8rem; height: 0.8rem; }
 
-  /* ── History card (JS sets className) ───────── */
-  .history-card { transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; }
-  .history-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(66,133,244,0.13); border-color: #aecbfa !important; }
-
-  /* ── Settings key row ────────────────────────── */
-  .key-row { display: flex; align-items: flex-start; gap: 1rem; padding: 1.125rem 0; border-bottom: 1px solid #f1f5f9; }
-  .key-row:last-child { border-bottom: none; }
-  .key-status { width: 0.5rem; height: 0.5rem; border-radius: 9999px; margin-top: 0.35rem; flex-shrink: 0; }
-  .key-status.present { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.15); }
-  .key-status.missing { background: #e2e8f0; }
-
-  /* ── Execution header ────────────────────────── */
-  .exec-header {
-    background: linear-gradient(135deg, #4285F4, #1a73e8);
-    border-radius: 1rem 1rem 0 0; padding: 1.5rem; color: #fff;
+  /* ── Overall progress bar ── */
+  .progress-track {
+    height: 6px; border-radius: 9999px; overflow: hidden;
+    background: var(--inset); border: 1px solid var(--stroke);
+  }
+  .progress-fill {
+    height: 100%; border-radius: 9999px;
+    background: var(--grad); background-size: 200% 100%;
+    animation: gradShift 3s linear infinite;
+    transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 0 12px rgba(32,184,205,0.5);
   }
 
-  /* ── Prose (article) ─────────────────────────── */
-  .prose { color: #1e293b; line-height: 1.8; max-width: 70ch; margin: 0 auto; }
-  .prose h1 { font-size: 2rem; font-weight: 800; margin: 1rem 0 1.5rem; letter-spacing: -0.03em; color: #0f172a; }
-  .prose h2 { font-size: 1.45rem; font-weight: 700; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid #f1f5f9; color: #0d47a1; }
-  .prose h3 { font-size: 1.2rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: #1565c0; }
+  /* ── Error banner ── */
+  .error-banner {
+    display: flex; align-items: flex-start; gap: 0.8rem;
+    padding: 1rem 1.2rem; border-radius: 0.85rem;
+    background: rgba(239,68,68,0.09); border: 1px solid rgba(239,68,68,0.35);
+  }
+  .debug-panel {
+    margin-top: 0.5rem; padding: 0.8rem 1rem;
+    background: var(--inset); border: 1px solid var(--stroke);
+    border-radius: 0.7rem; font-size: 0.75rem; color: var(--text-dim);
+  }
+  .debug-panel table { width: 100%; font-size: 0.72rem; }
+  .debug-panel a { color: var(--link); }
+  .debug-panel a:hover { text-decoration: underline; }
+
+  /* ── History cards ── */
+  .history-card {
+    text-align: left; width: 100%;
+    background: var(--surface); border: 1px solid var(--stroke); border-radius: 1rem;
+    padding: 1.2rem;
+    transition: transform 0.16s, border-color 0.16s, box-shadow 0.2s;
+    cursor: pointer;
+  }
+  .history-card:hover {
+    transform: translateY(-3px); border-color: rgba(32,184,205,0.45);
+    box-shadow: var(--card-hover-shadow);
+  }
+
+  /* ── Settings ── */
+  .key-row { display: flex; align-items: flex-start; gap: 1rem; padding: 1.1rem 0; border-bottom: 1px solid var(--stroke); }
+  .key-row:last-child { border-bottom: none; }
+  .key-status { width: 0.5rem; height: 0.5rem; border-radius: 9999px; margin-top: 0.4rem; flex-shrink: 0; }
+  .key-status.present { background: #34d399; box-shadow: 0 0 8px rgba(52,211,153,0.7); }
+  .key-status.missing { background: var(--track-off); }
+
+  /* ── Paper article surface ── */
+  .paper {
+    background: #fbfaf4; color: #1e2a29;
+    border-radius: 1rem; border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 24px 70px rgba(0,0,0,0.5);
+  }
+  .prose { color: #24312f; line-height: 1.8; max-width: 70ch; margin: 0 auto; }
+  .prose h1 { font-family: 'Space Grotesk', sans-serif; font-size: 2rem; font-weight: 700; margin: 1rem 0 1.5rem; letter-spacing: -0.02em; color: #101d1c; }
+  .prose h2 { font-family: 'Space Grotesk', sans-serif; font-size: 1.4rem; font-weight: 650; margin: 2.4rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid #e6e3d8; color: #1e2a29; }
+  .prose h3 { font-size: 1.15rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: #33443f; }
   .prose p { margin: 0.875rem 0; }
-  .prose code { background: #e8f0fe; padding: 0.15rem 0.4rem; border-radius: 0.3rem; font-size: 0.875em; color: #1967d2; }
-  .prose pre { background: #0f172a; color: #e2e8f0; padding: 1.125rem 1.375rem; border-radius: 0.75rem; overflow-x: auto; margin: 1.25rem 0; font-size: 0.875rem; line-height: 1.65; }
+  .prose code { background: #e9f2ee; padding: 0.14rem 0.4rem; border-radius: 0.3rem; font-size: 0.86em; color: #0f766e; font-family: 'JetBrains Mono', monospace; }
+  .prose pre { background: #101d1c; color: #dfe3ee; padding: 1.1rem 1.35rem; border-radius: 0.8rem; overflow-x: auto; margin: 1.25rem 0; font-size: 0.85rem; line-height: 1.65; }
   .prose pre code { background: transparent; padding: 0; color: inherit; }
-  .prose a { color: #4285F4; text-decoration: underline; text-underline-offset: 2px; }
-  .prose a:hover { color: #1967d2; }
-  .prose blockquote { border-left: 3px solid #8ab4f8; padding: 0.75rem 1rem; color: #64748b; margin: 1rem 0; font-style: italic; background: #e8f0fe; border-radius: 0 0.5rem 0.5rem 0; }
+  .prose a { color: #0e7490; text-decoration: underline; text-underline-offset: 2px; }
+  .prose blockquote { border-left: 3px solid #5eead4; padding: 0.7rem 1rem; color: #4e6360; margin: 1rem 0; font-style: italic; background: #ecf7f2; border-radius: 0 0.5rem 0.5rem 0; }
   .prose ul, .prose ol { margin: 0.875rem 0; padding-left: 1.5rem; }
   .prose li { margin: 0.4rem 0; }
-  .prose strong { font-weight: 700; color: #0f172a; }
+  .prose strong { font-weight: 700; color: #101d1c; }
   .prose table { border-collapse: collapse; margin: 1.25rem 0; width: 100%; font-size: 0.9em; }
-  .prose th, .prose td { border: 1px solid #d2e3fc; padding: 0.5rem 0.75rem; text-align: left; }
-  .prose th { background: #f0f6ff; font-weight: 600; }
-  .prose .mermaid { background: #fff; padding: 1.5rem; border-radius: 0.875rem; border: 1px solid #d2e3fc; margin: 1.75rem 0; text-align: center; }
+  .prose th, .prose td { border: 1px solid #ddd9d0; padding: 0.5rem 0.75rem; text-align: left; }
+  .prose th { background: #f2f0ea; font-weight: 600; }
+  .prose .mermaid { background: #fff; padding: 1.5rem; border-radius: 0.875rem; border: 1px solid #e6e2da; margin: 1.75rem 0; text-align: center; }
 
   pre.debug { white-space: pre-wrap; word-break: break-word; }
-  .empty-state svg { color: #aecbfa; }
   details[open] .details-chevron { transform: rotate(90deg); }
   .details-chevron { transition: transform 0.2s ease; }
 
-  /* ── Animations ──────────────────────────────── */
   @keyframes slideIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
-  @keyframes spin    { to { transform: rotate(360deg); } }
-  @keyframes fadeUp  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .spinner  { animation: spin 0.85s linear infinite; }
-  .view-fade { animation: fadeUp 0.2s ease-out; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulseGlow { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+  @keyframes gradShift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+  .spinner { animation: spin 0.85s linear infinite; }
+  .view-fade { animation: fadeUp 0.28s ease-out; }
+  .pulse { animation: pulseGlow 1.6s ease-in-out infinite; }
 </style>
 </head>
 <body>
+<div class="backdrop"></div>
 
-<!-- ══════════════════════════════════════
-     HEADER  — white + indigo accents
-══════════════════════════════════════ -->
+<!-- ══════════ HEADER ══════════ -->
 <header class="site-header">
   <div class="max-w-5xl mx-auto px-5 py-3 flex items-center justify-between gap-4">
-
     <div class="flex items-center gap-6">
-      <!-- Brand -->
-      <a href="#" id="brand-link" class="flex items-center gap-2 select-none">
+      <a href="#" id="brand-link" class="flex items-center gap-2.5 select-none">
         <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none">
           <defs>
             <linearGradient id="qg" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#4285F4"/>
-              <stop offset="100%" stop-color="#1a73e8"/>
+              <stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#22d3ee"/>
             </linearGradient>
           </defs>
           <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" stroke="url(#qg)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
           <line x1="16" y1="8" x2="2" y2="22" stroke="url(#qg)" stroke-width="1.75" stroke-linecap="round"/>
         </svg>
-        <span class="brand-text text-lg tracking-tight">Scrivio</span>
+        <span class="font-display grad-text text-lg font-700 tracking-tight" style="font-weight:700">Scrivio</span>
       </a>
-
-      <!-- Nav -->
-      <nav class="flex items-center gap-0.5">
+      <nav class="flex items-center gap-1">
         <button id="nav-new" class="nav-link">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New article
+          <span class="hidden sm:inline">Compose</span>
         </button>
         <button id="nav-history" class="nav-link">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          History
+          <span class="hidden sm:inline">Library</span>
         </button>
         <button id="nav-settings" class="nav-link">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          Settings
+          <span class="hidden sm:inline">Settings</span>
         </button>
       </nav>
     </div>
-
-    <!-- Server status -->
-    <div id="server-health" class="flex items-center gap-1.5">
-      <span id="server-dot" class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-      <span id="server-text" class="text-xs text-slate-400">checking</span>
+    <div class="flex items-center gap-3">
+      <button id="theme-toggle" class="nav-link" title="Switch light / dark mode" aria-label="Switch theme">
+        <svg id="theme-icon-sun" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>
+        <svg id="theme-icon-moon" class="w-4 h-4 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <div id="server-health" class="flex items-center gap-1.5">
+        <span id="server-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+        <span id="server-text" class="text-xs text-slate-500">checking</span>
+      </div>
     </div>
   </div>
 </header>
 
+<!-- ══════════ MAIN ══════════ -->
+<main class="max-w-5xl mx-auto px-5 py-10">
 
-<!-- ══════════════════════════════════════
-     MAIN
-══════════════════════════════════════ -->
-<main class="max-w-5xl mx-auto px-5 py-8">
-
-  <!-- ── New article ───────────────────────────── -->
+  <!-- ── Compose ── -->
   <section id="config-panel" class="view view-fade">
-    <div class="form-card">
+    <div class="text-center mb-8 mt-2">
+      <h1 class="font-display text-3xl sm:text-4xl font-bold tracking-tight leading-tight">
+        What should we <span class="grad-text">write</span> today?
+      </h1>
+      <p class="text-sm mt-3" style="color:var(--text-dim)">
+        Research-backed technical articles — sourced, verified, drafted and polished by a multi-agent pipeline.
+      </p>
+    </div>
 
-      <!-- Gradient banner — branding integrated into the card -->
-      <div class="card-banner relative">
-        <div class="relative z-10">
-          <div class="flex flex-wrap gap-2 mb-3">
-            <span class="banner-chip">✦ AI-powered writing</span>
-            <span class="banner-chip">✦ Web-sourced citations</span>
-            <span class="banner-chip">✦ Mermaid diagrams</span>
-          </div>
-          <h1 class="text-xl sm:text-2xl font-extrabold text-white leading-snug">
-            Research, draft and polish expert articles in minutes.
-          </h1>
-          <p class="text-sm text-blue-100 mt-1.5 max-w-xl">
-            Multi-stage AI pipeline: live web research, claim verification, structured drafting and voice polishing.
-          </p>
+    <form id="generate-form">
+      <!-- Re-run banner: set when the composer was prefilled from an
+           existing article; generating creates the next version. -->
+      <div id="rerun-notice" class="hidden mb-3 status-chip" style="color:var(--accent-text);border-color:rgba(32,184,205,0.35);background:rgba(32,184,205,0.08)">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        <span id="rerun-notice-text" class="min-w-0 truncate"></span>
+        <button type="button" id="rerun-cancel" class="ml-1 font-semibold hover:underline flex-shrink-0" style="color:var(--text-dim)">✕ start fresh</button>
+      </div>
+
+      <!-- Composer -->
+      <div class="composer mb-3">
+        <textarea id="topic" rows="3" required
+          placeholder="Describe a topic or ask a question… e.g. “How does Kafka handle backpressure?”"></textarea>
+        <div class="flex items-center justify-between gap-3 px-4 pb-3.5 pt-1 flex-wrap">
+          <div id="config-summary" class="summary-line min-w-0"></div>
+          <button type="submit" id="generate-btn" class="btn-primary flex-shrink-0">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Generate
+          </button>
         </div>
       </div>
 
-      <!-- White form body -->
-      <form id="generate-form" class="p-6 sm:p-8 space-y-5">
+      <!-- Environment status chips -->
+      <div class="flex items-center gap-2 flex-wrap mb-8">
+        <span id="status-provider" class="status-chip"><span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>detecting…</span>
+        <span id="status-search" class="status-chip"></span>
+        <span id="source-warning" class="hidden status-chip" style="color:#fbbf24;border-color:rgba(251,191,36,0.35);background:rgba(251,191,36,0.08)"></span>
+      </div>
 
-        <!-- Topic -->
-        <div>
-          <label class="field-label" for="topic">Topic</label>
-          <input id="topic" type="text" required autocomplete="off"
-            placeholder="e.g. Spring Boot, or 'How does Kafka handle backpressure?'"
-            class="q-input text-base font-medium" />
+      <!-- Configuration deck -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        <!-- Depth -->
+        <div class="ctl-card">
+          <div class="ctl-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20M5 20V8.5L12 4l7 4.5V20"/><path d="M9 20v-6h6v6"/></svg>
+            Depth
+          </div>
+          <div class="seg" id="seg-level">
+            <button type="button" class="seg-btn" data-value="basic">Basic</button>
+            <button type="button" class="seg-btn on" data-value="intermediate">Intermediate</button>
+            <button type="button" class="seg-btn" data-value="advanced">Advanced</button>
+          </div>
+          <div class="ctl-hint" id="level-hint"></div>
+          <input type="hidden" id="explanation_level" value="intermediate" />
         </div>
 
-        <!-- Level / Audience / Preset -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-          <div>
-            <label class="field-label" for="explanation_level">Depth level</label>
-            <select id="explanation_level" class="q-input q-input-select">
-              <option value="basic">Basic</option>
-              <option value="intermediate" selected>Intermediate</option>
-              <option value="advanced">Advanced</option>
-            </select>
+        <!-- Quality -->
+        <div class="ctl-card">
+          <div class="ctl-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            Model quality
           </div>
-          <div>
-            <label class="field-label" for="audience_role">Audience</label>
-            <input id="audience_role" type="text" value="software engineer" class="q-input" />
+          <div class="seg" id="seg-preset">
+            <button type="button" class="seg-btn" data-value="fast">Fast</button>
+            <button type="button" class="seg-btn on" data-value="balanced">Balanced</button>
+            <button type="button" class="seg-btn" data-value="best">Best</button>
           </div>
-          <div>
-            <label class="field-label">Quality preset</label>
-            <div class="preset-pills mt-0.5" id="preset-pills">
-              <button type="button" class="preset-pill" data-preset="fast">⚡ Fast</button>
-              <button type="button" class="preset-pill selected" data-preset="balanced">⚖️ Balanced</button>
-              <button type="button" class="preset-pill" data-preset="best">✨ Best</button>
-            </div>
-            <input type="hidden" id="model_preset" value="balanced" />
-          </div>
+          <div class="ctl-hint" id="preset-callout-text"></div>
+          <input type="hidden" id="model_preset" value="balanced" />
         </div>
 
-        <div class="divider-label">Options</div>
-
-        <!-- Source mode + Diagrams -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-
-          <!-- Source -->
-          <div class="flex flex-col">
-            <label class="field-label">Knowledge source</label>
-            <div class="flex flex-col gap-2 flex-1">
-              <label id="source-live" class="source-option selected" onclick="selectSource('live', this)">
-                <input type="radio" name="source_mode" value="live" checked class="mt-0.5 h-4 w-4 text-blue-600 shrink-0 accent-blue-600" />
-                <div>
-                  <div class="text-sm font-semibold text-blue-800 flex items-center gap-1.5">
-                    <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                    Live web search
-                  </div>
-                  <div class="text-xs text-blue-500 mt-0.5">Fetches real sources — needs <span class="font-mono font-semibold">TAVILY_API_KEY</span></div>
-                </div>
-              </label>
-              <label id="source-llm" class="source-option" onclick="selectSource('llm', this)">
-                <input type="radio" name="source_mode" value="llm" class="mt-0.5 h-4 w-4 shrink-0 accent-blue-600" />
-                <div>
-                  <div class="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                    <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-1.14z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-1.14z"/></svg>
-                    LLM knowledge only
-                  </div>
-                  <div class="text-xs text-slate-400 mt-0.5">Model's training data — no search key needed</div>
-                </div>
-              </label>
-              <p id="source-warning" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1"></p>
-            </div>
-            <input type="hidden" id="web_search" value="true" />
+        <!-- Provider -->
+        <div class="ctl-card">
+          <div class="ctl-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+            Provider
           </div>
-
-          <!-- Diagrams -->
-          <div class="flex flex-col">
-            <label class="field-label">Diagrams</label>
-            <div class="feature-toggle active flex-1"
-              id="toggle-include-diagrams"
-              onclick="toggleFeature('include_diagrams', this)"
-              style="align-items:flex-start;padding-top:1rem;">
-              <div class="flex items-start gap-2.5">
-                <div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                  <svg class="w-3.5 h-3.5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                    <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-                  </svg>
-                </div>
-                <div>
-                  <div class="text-sm font-semibold text-slate-800">Mermaid diagrams</div>
-                  <div class="text-xs text-slate-400 mt-0.5 leading-relaxed">Auto-generates architecture &amp; flow diagrams. Works with your configured LLM key.</div>
-                </div>
-              </div>
-              <div class="toggle-track on flex-shrink-0" id="track-include_diagrams">
-                <div class="toggle-thumb"></div>
-              </div>
-              <input type="hidden" id="include_diagrams" value="true" />
-            </div>
+          <div class="seg" id="seg-provider">
+            <button type="button" class="seg-btn on" data-value="auto">Auto</button>
+            <button type="button" class="seg-btn" data-value="anthropic">Claude</button>
+            <button type="button" class="seg-btn" data-value="openai">GPT</button>
           </div>
+          <div class="ctl-hint" id="provider-hint"></div>
+          <input type="hidden" id="llm_provider" value="auto" />
         </div>
 
-        <!-- Advanced -->
-        <details class="border border-blue-100 rounded-xl overflow-hidden">
-          <summary class="cursor-pointer select-none flex items-center gap-2 font-semibold text-blue-500 px-4 py-3 bg-blue-50/60 hover:bg-blue-50 transition-colors list-none text-sm">
-            <svg class="w-3.5 h-3.5 details-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-            Advanced options
-          </summary>
-          <div class="p-4 space-y-4 bg-white">
-            <div>
-              <label class="field-label" for="extra_context">Extra context</label>
-              <textarea id="extra_context" rows="2"
-                placeholder="e.g. cover bean lifecycle, dependency injection, and auto-configuration"
-                class="q-input resize-none"></textarea>
-            </div>
-            <div>
-              <label class="field-label" for="must_cover">Must cover <span class="normal-case font-normal text-slate-400">(comma-separated)</span></label>
-              <input id="must_cover" type="text" placeholder="e.g. bean lifecycle, dependency injection" class="q-input" />
-            </div>
-            <label class="flex items-center gap-2.5 cursor-pointer text-sm text-slate-600 hover:text-slate-800">
-              <input id="skip_clarification" type="checkbox" class="h-4 w-4 rounded accent-blue-600" />
-              Skip clarification questions — use default angle for broad topics
-            </label>
+        <!-- Research -->
+        <div class="ctl-card">
+          <div class="ctl-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Research
           </div>
-        </details>
+          <div class="seg" id="seg-research">
+            <button type="button" class="seg-btn on" data-value="true">Live web</button>
+            <button type="button" class="seg-btn" data-value="false">Model only</button>
+          </div>
+          <div class="ctl-hint" id="research-hint"></div>
+          <input type="hidden" id="web_search" value="true" />
+        </div>
 
-        <!-- Generate row -->
-        <div class="flex flex-wrap items-center gap-3 pt-1">
-          <button type="submit" id="generate-btn" class="btn-primary">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            Generate article
+        <!-- Audience -->
+        <div class="ctl-card">
+          <div class="ctl-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Audience
+          </div>
+          <input id="audience_role" type="text" value="software engineer" class="q-input" />
+          <div class="ctl-hint">Who the article speaks to — shapes vocabulary and examples.</div>
+        </div>
+
+        <!-- Diagrams -->
+        <div class="ctl-card">
+          <div class="ctl-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+            Diagrams
+          </div>
+          <div class="flex items-center justify-between gap-3 mt-1.5">
+            <span class="text-sm" style="color:var(--text-dim)">Mermaid architecture &amp; flow diagrams</span>
+            <div class="toggle-track on" id="track-include_diagrams" onclick="toggleFeature('include_diagrams', this)">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+          <div class="ctl-hint">Rendered where the planner decides a visual genuinely helps.</div>
+          <input type="hidden" id="include_diagrams" value="true" />
+        </div>
+
+        <!-- Advanced steering -->
+        <div class="ctl-card">
+          <div class="ctl-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            Steering
+          </div>
+          <button type="button" id="steering-open" class="w-full text-left q-input flex items-center justify-between" style="cursor:pointer">
+            <span id="steering-summary" style="color:var(--text-faint)">None — add must-cover topics…</span>
+            <svg class="w-3.5 h-3.5 flex-shrink-0" style="color:var(--text-faint)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
-          <div id="config-status-bar" class="status-bar flex-1 min-w-0">
-            <span id="status-provider" class="flex items-center gap-1.5 font-medium">
-              <span class="w-2 h-2 rounded-full bg-slate-300 flex-shrink-0"></span>detecting…
-            </span>
-            <span class="text-slate-200 hidden sm:inline">|</span>
-            <span id="status-search" class="flex items-center gap-1"></span>
-            <span class="text-slate-200 hidden sm:inline">|</span>
-            <span id="preset-callout-text" class="text-slate-400 text-xs truncate"></span>
-          </div>
+          <div class="ctl-hint">Pin sub-topics the article must cover, add context, skip questions.</div>
         </div>
+      </div>
 
-      </form>
-    </div>
+      <!-- Steering drawer -->
+      <div id="steering-drawer" class="hidden card mt-4 p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="font-display font-semibold text-sm">Steering</h3>
+          <button type="button" id="steering-close" class="text-xs" style="color:var(--text-dim)">close ✕</button>
+        </div>
+        <div>
+          <div class="ctl-label" style="margin-bottom:0.4rem">Extra context</div>
+          <textarea id="extra_context" rows="2" placeholder="e.g. cover bean lifecycle, dependency injection, and auto-configuration" class="q-input resize-none"></textarea>
+        </div>
+        <div>
+          <div class="ctl-label" style="margin-bottom:0.4rem">Must cover <span class="normal-case font-normal" style="color:var(--text-faint);letter-spacing:0">(comma-separated)</span></div>
+          <input id="must_cover" type="text" placeholder="e.g. bean lifecycle, dependency injection" class="q-input" />
+        </div>
+        <label class="flex items-center gap-2.5 cursor-pointer text-sm" style="color:var(--text-dim)">
+          <input id="skip_clarification" type="checkbox" class="h-4 w-4 rounded accent-teal-500" />
+          Skip clarification questions — use the default angle for broad topics
+        </label>
+      </div>
+    </form>
   </section>
 
-
-  <!-- ── Clarification ─────────────────────────── -->
+  <!-- ── Clarification ── -->
   <section id="clarification-panel" class="view hidden max-w-2xl mx-auto">
     <div class="card overflow-hidden">
-      <div class="bg-amber-50 border-b border-amber-100 px-6 py-5 flex items-start gap-3">
-        <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-          <svg class="w-4 h-4 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div class="px-6 py-5 flex items-start gap-3" style="border-bottom:1px solid var(--stroke);background:rgba(32,184,205,0.07)">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(32,184,205,0.18);border:1px solid rgba(32,184,205,0.3)">
+          <svg class="w-4 h-4" style="color:var(--accent-text)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         </div>
         <div>
-          <h2 class="font-bold text-slate-900">A few quick questions</h2>
-          <p class="text-sm text-slate-500 mt-0.5" id="clarification-default"></p>
+          <h2 class="font-display font-bold">Let's aim this precisely</h2>
+          <p class="text-sm mt-0.5" style="color:var(--text-dim)" id="clarification-default"></p>
         </div>
       </div>
       <div class="px-6 py-5">
         <form id="clarification-form" class="space-y-5"></form>
-        <div class="flex gap-3 pt-5 border-t border-slate-100 mt-5">
+        <div class="flex gap-3 pt-5 mt-5" style="border-top:1px solid var(--stroke)">
           <button type="button" id="answer-btn" class="btn-primary">Submit answers</button>
           <button type="button" id="skip-clarification-btn" class="btn-outline">Skip — use default</button>
         </div>
@@ -502,62 +688,84 @@
     </div>
   </section>
 
-
-  <!-- ── Execution ─────────────────────────────── -->
+  <!-- ── Execution ── -->
   <section id="execution-panel" class="view hidden max-w-2xl mx-auto">
     <div class="card overflow-hidden">
-      <div class="exec-header flex items-start justify-between gap-4">
-        <div>
-          <div class="flex items-center gap-2 mb-1">
-            <svg class="spinner w-4 h-4 text-blue-200" fill="none" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="40 60" stroke-linecap="round"/>
-            </svg>
-            <h2 class="font-bold text-white">Generating your article…</h2>
+      <div class="px-6 py-5" style="border-bottom:1px solid var(--stroke);background:linear-gradient(135deg,rgba(32,184,205,0.14),rgba(34,211,238,0.07))">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2.5 mb-1">
+              <svg id="exec-spinner" class="spinner w-4 h-4 flex-shrink-0" style="color:var(--accent-text)" fill="none" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="40 60" stroke-linecap="round"/>
+              </svg>
+              <h2 id="exec-title" class="font-display font-bold">Writing your article…</h2>
+            </div>
+            <p class="text-sm pl-6" style="color:var(--text-dim)" id="execution-subtitle">Warming up the pipeline</p>
           </div>
-          <p class="text-sm text-blue-200 pl-6" id="execution-subtitle">Warming up the pipeline</p>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span id="elapsed" class="text-sm font-mono-ui px-2.5 py-1 rounded-md" style="color:var(--accent-text);background:rgba(255,255,255,0.06);border:1px solid var(--stroke)">0.0s</span>
+            <button type="button" id="stop-btn" class="btn-danger text-sm">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+              Stop
+            </button>
+          </div>
         </div>
-        <div class="flex items-center gap-2 flex-shrink-0">
-          <span id="elapsed" class="text-sm text-blue-200 font-mono bg-white/10 px-2.5 py-1 rounded-md">0.0s</span>
-          <button type="button" id="stop-btn" class="btn-danger text-sm">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
-            Stop
-          </button>
+        <div class="flex items-center gap-3 mt-4">
+          <div class="progress-track flex-1"><div id="progress-fill" class="progress-fill" style="width:0%"></div></div>
+          <span id="progress-label" class="text-xs font-mono-ui flex-shrink-0" style="color:var(--text-dim)">0/10</span>
         </div>
       </div>
-      <div class="px-6 py-5 space-y-1" id="stages"></div>
+
+      <!-- Error banner: shown when the run fails. Completed stages are cached
+           on disk, so Resume fast-forwards through them. -->
+      <div id="exec-error" class="hidden px-6 pt-5">
+        <div class="error-banner">
+          <svg class="w-5 h-5 flex-shrink-0 mt-0.5" style="color:#f87171" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div class="min-w-0">
+            <div class="font-semibold text-sm" style="color:#fca5a5">Generation failed</div>
+            <p id="exec-error-message" class="text-xs mt-1 leading-relaxed break-words" style="color:var(--text-dim)"></p>
+            <p class="text-xs mt-2" style="color:var(--text-faint)">Completed stages are cached — Resume picks up from where it failed instead of re-running everything.</p>
+            <div class="flex gap-2.5 mt-3">
+              <button type="button" id="retry-btn" class="btn-primary text-sm">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Resume
+              </button>
+              <button type="button" id="exec-back-btn" class="btn-outline text-sm">Edit request</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-6 py-6" id="stages"></div>
     </div>
   </section>
 
-
-  <!-- ── Result ────────────────────────────────── -->
+  <!-- ── Result ── -->
   <section id="result-panel" class="view hidden">
-    <div class="card overflow-hidden">
-      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
-        <div class="flex items-center gap-3">
-          <button type="button" id="result-back-btn" class="btn-outline text-sm">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-            Back
-          </button>
-          <span class="text-xs text-slate-400 font-mono" id="output-dir"></span>
-        </div>
-        <div class="flex items-center gap-2">
-          <label class="text-xs font-semibold text-blue-600 uppercase tracking-wider">Level</label>
-          <select id="level-selector" class="q-input q-input-select py-1.5 text-sm" style="width:auto;"></select>
-        </div>
+    <div class="flex items-center justify-between flex-wrap gap-3 mb-5">
+      <div class="flex items-center gap-3">
+        <button type="button" id="result-back-btn" class="btn-outline text-sm">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          New article
+        </button>
+        <span class="text-xs font-mono-ui" style="color:var(--text-faint)" id="output-dir"></span>
       </div>
-      <div class="px-6 py-8">
-        <article id="article" class="prose"></article>
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-semibold uppercase tracking-wider" style="color:var(--text-dim)">Level</label>
+        <select id="level-selector" class="q-input py-1.5 text-sm" style="width:auto;"></select>
       </div>
+    </div>
+    <div class="paper px-6 sm:px-10 py-10">
+      <article id="article" class="prose"></article>
     </div>
   </section>
 
-
-  <!-- ── History ───────────────────────────────── -->
+  <!-- ── Library ── -->
   <section id="history-panel" class="view hidden">
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-2xl font-extrabold text-slate-900">Article history</h2>
-        <p class="text-sm text-slate-400 mt-0.5">Click any article to read it.</p>
+        <h2 class="font-display text-2xl font-bold">Library</h2>
+        <p class="text-sm mt-0.5" style="color:var(--text-dim)">Every article you've generated.</p>
       </div>
       <button type="button" id="history-refresh-btn" class="btn-outline">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -565,110 +773,115 @@
       </button>
     </div>
     <div id="history-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-    <div id="history-empty" class="empty-state hidden text-center py-20">
-      <svg class="w-14 h-14 mx-auto mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
-      <h3 class="text-lg font-semibold text-slate-400">No articles yet</h3>
-      <p class="text-sm text-slate-400 mt-1">Generate your first article to see it here.</p>
+    <div id="history-empty" class="hidden text-center py-20">
+      <svg class="w-14 h-14 mx-auto mb-4" style="color:var(--text-faint)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+      <h3 class="text-lg font-semibold" style="color:var(--text-dim)">No articles yet</h3>
+      <p class="text-sm mt-1" style="color:var(--text-faint)">Generate your first article to see it here.</p>
     </div>
-    <div id="history-loading" class="text-center py-20 text-sm text-slate-400">Loading…</div>
+    <div id="history-loading" class="text-center py-20 text-sm" style="color:var(--text-dim)">Loading…</div>
   </section>
 
-
-  <!-- ── Past article ───────────────────────────── -->
+  <!-- ── Past article ── -->
   <section id="past-article-panel" class="view hidden">
-    <div class="card overflow-hidden">
-      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
-        <div class="flex items-center gap-3">
-          <button type="button" id="past-back-btn" class="btn-outline text-sm">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-            History
-          </button>
-          <span class="text-xs text-slate-400 font-mono" id="past-article-meta"></span>
+    <div class="flex items-center justify-between flex-wrap gap-3 mb-5">
+      <div class="flex items-center gap-3">
+        <button type="button" id="past-back-btn" class="btn-outline text-sm">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          Library
+        </button>
+        <span class="text-xs font-mono-ui" style="color:var(--text-faint)" id="past-article-meta"></span>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="hidden items-center gap-2" id="past-version-wrap" style="display:none">
+          <label class="text-xs font-semibold uppercase tracking-wider" style="color:var(--text-dim)">Version</label>
+          <select id="past-version-selector" class="q-input py-1.5 text-sm" style="width:auto;"></select>
         </div>
         <div class="flex items-center gap-2" id="past-level-wrap">
-          <label class="text-xs font-semibold text-blue-600 uppercase tracking-wider">Level</label>
-          <select id="past-level-selector" class="q-input q-input-select py-1.5 text-sm" style="width:auto;"></select>
+          <label class="text-xs font-semibold uppercase tracking-wider" style="color:var(--text-dim)">Level</label>
+          <select id="past-level-selector" class="q-input py-1.5 text-sm" style="width:auto;"></select>
         </div>
+        <button type="button" id="rerun-btn" class="btn-primary text-sm">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Re-run
+        </button>
       </div>
-      <div class="px-6 py-8">
-        <article id="past-article" class="prose"></article>
-      </div>
+    </div>
+    <div class="paper px-6 sm:px-10 py-10">
+      <article id="past-article" class="prose"></article>
     </div>
   </section>
 
-
-  <!-- ── Settings ──────────────────────────────── -->
+  <!-- ── Settings ── -->
   <section id="settings-panel" class="view hidden max-w-2xl mx-auto">
     <div class="mb-6">
-      <h2 class="text-2xl font-extrabold text-slate-900">Settings</h2>
-      <p class="text-sm text-slate-400 mt-1">Stored in your <code class="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-mono">.env</code> file — changes take effect immediately.</p>
+      <h2 class="font-display text-2xl font-bold">Settings</h2>
+      <p class="text-sm mt-1" style="color:var(--text-dim)">Stored in your <code class="text-xs font-mono-ui px-1.5 py-0.5 rounded" style="background:var(--surface-2);color:var(--accent-text)">.env</code> file — changes take effect immediately.</p>
     </div>
 
     <!-- Provider -->
     <div class="card mb-4 overflow-hidden" id="provider-card">
-      <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
-        <div class="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center">
-          <svg class="w-3 h-3 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      <div class="px-5 py-4 flex items-center gap-2.5" style="border-bottom:1px solid var(--stroke)">
+        <div class="w-6 h-6 rounded-md flex items-center justify-center" style="background:rgba(32,184,205,0.15)">
+          <svg class="w-3 h-3" style="color:var(--accent-text)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
         </div>
         <div>
-          <h3 class="font-bold text-slate-900 text-sm">LLM provider</h3>
-          <p class="text-xs text-slate-400">Auto-selected from available API keys.</p>
+          <h3 class="font-display font-bold text-sm">LLM provider</h3>
+          <p class="text-xs" style="color:var(--text-faint)">Auto-selected from available API keys.</p>
         </div>
       </div>
-      <div id="provider-card-body" class="px-5 py-4"><p class="text-sm text-slate-400">Loading…</p></div>
+      <div id="provider-card-body" class="px-5 py-4"><p class="text-sm" style="color:var(--text-dim)">Loading…</p></div>
       <div id="provider-pref-row" class="hidden px-5 pb-4">
         <button id="provider-save-btn" class="btn-primary text-sm">Save preference</button>
-        <span id="provider-save-status" class="ml-3 text-sm text-slate-500"></span>
+        <span id="provider-save-status" class="ml-3 text-sm" style="color:var(--text-dim)"></span>
       </div>
     </div>
 
     <!-- API keys -->
     <div class="card mb-4 overflow-hidden">
-      <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
-        <div class="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center">
-          <svg class="w-3 h-3 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+      <div class="px-5 py-4 flex items-center gap-2.5" style="border-bottom:1px solid var(--stroke)">
+        <div class="w-6 h-6 rounded-md flex items-center justify-center" style="background:rgba(32,184,205,0.15)">
+          <svg class="w-3 h-3" style="color:var(--accent-text)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
         </div>
         <div>
-          <h3 class="font-bold text-slate-900 text-sm">API keys</h3>
-          <p class="text-xs text-slate-400">Green dot = present. Last 4 characters shown.</p>
+          <h3 class="font-display font-bold text-sm">API keys</h3>
+          <p class="text-xs" style="color:var(--text-faint)">Green dot = present. Last 4 characters shown.</p>
         </div>
       </div>
-      <div id="settings-keys" class="px-5"><p class="py-8 text-sm text-slate-400 text-center">Loading…</p></div>
+      <div id="settings-keys" class="px-5"><p class="py-8 text-sm text-center" style="color:var(--text-dim)">Loading…</p></div>
       <div class="px-5 pb-4 flex items-center gap-3">
         <button id="settings-save-btn" class="btn-primary text-sm">Save keys</button>
-        <span id="settings-save-status" class="text-sm text-slate-500"></span>
+        <span id="settings-save-status" class="text-sm" style="color:var(--text-dim)"></span>
       </div>
     </div>
 
     <!-- Reference -->
     <div class="card overflow-hidden">
-      <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
-        <div class="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center">
-          <svg class="w-3 h-3 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div class="px-5 py-4 flex items-center gap-2.5" style="border-bottom:1px solid var(--stroke)">
+        <div class="w-6 h-6 rounded-md flex items-center justify-center" style="background:rgba(32,184,205,0.15)">
+          <svg class="w-3 h-3" style="color:var(--accent-text)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         </div>
-        <h3 class="font-bold text-slate-900 text-sm">Which keys do I need?</h3>
+        <h3 class="font-display font-bold text-sm">Which keys do I need?</h3>
       </div>
-      <div class="px-5 py-4 text-sm text-slate-700 space-y-4">
+      <div class="px-5 py-4 text-sm space-y-4" style="color:var(--text-dim)">
         <div>
-          <p class="font-semibold text-slate-800 mb-2">✓ Minimum — to generate an article</p>
-          <div class="pl-4 flex flex-col gap-1 text-slate-500 text-xs">
-            <div><code class="bg-blue-50 text-blue-700 font-mono font-semibold px-1.5 py-0.5 rounded text-xs">ANTHROPIC_API_KEY</code> — Claude (Anthropic)</div>
-            <div><code class="bg-blue-50 text-blue-700 font-mono font-semibold px-1.5 py-0.5 rounded text-xs">OPENAI_API_KEY</code> — GPT-4o (OpenAI)</div>
+          <p class="font-semibold mb-2" style="color:var(--text)">✓ Minimum — one LLM key generates articles</p>
+          <div class="pl-4 flex flex-col gap-1 text-xs">
+            <div><code class="font-mono-ui font-semibold px-1.5 py-0.5 rounded text-xs" style="background:var(--surface-2);color:var(--accent-text)">ANTHROPIC_API_KEY</code> — Claude (Anthropic)</div>
+            <div><code class="font-mono-ui font-semibold px-1.5 py-0.5 rounded text-xs" style="background:var(--surface-2);color:var(--accent-text)">OPENAI_API_KEY</code> — GPT (OpenAI)</div>
           </div>
         </div>
-        <div class="border-t border-slate-100 pt-3">
-          <p class="font-semibold text-slate-800 mb-2">+ Optional — unlocks more features</p>
-          <div class="pl-4 flex flex-col gap-2 text-xs text-slate-500">
-            <div><code class="bg-blue-50 text-blue-700 font-mono font-semibold px-1.5 py-0.5 rounded text-xs">TAVILY_API_KEY</code> — live web search for real citations</div>
-            <div><code class="bg-blue-50 text-blue-700 font-mono font-semibold px-1.5 py-0.5 rounded text-xs">OPENAI_API_KEY</code> — claim verification via GPT-4o-mini</div>
+        <div class="pt-3" style="border-top:1px solid var(--stroke)">
+          <p class="font-semibold mb-2" style="color:var(--text)">+ Optional — unlocks more</p>
+          <div class="pl-4 flex flex-col gap-2 text-xs">
+            <div><code class="font-mono-ui font-semibold px-1.5 py-0.5 rounded text-xs" style="background:var(--surface-2);color:var(--accent-text)">TAVILY_API_KEY</code> — live web search for real citations</div>
           </div>
         </div>
-        <div class="border-t border-slate-100 pt-3">
-          <p class="font-semibold text-slate-800 mb-2">Quality presets</p>
-          <div class="pl-4 flex flex-col gap-1 text-xs text-slate-500">
-            <div><span class="font-semibold text-slate-700">⚡ Fast</span> — Haiku for most stages; Sonnet for drafting + polish. ~40% cheaper.</div>
-            <div><span class="font-semibold text-slate-700">⚖️ Balanced</span> — Haiku for routing, Sonnet for writing. <span class="text-slate-400">(default)</span></div>
-            <div><span class="font-semibold text-slate-700">✨ Best</span> — Sonnet everywhere. Maximum quality.</div>
+        <div class="pt-3" style="border-top:1px solid var(--stroke)">
+          <p class="font-semibold mb-2" style="color:var(--text)">Model quality presets</p>
+          <div class="pl-4 flex flex-col gap-1 text-xs">
+            <div><span class="font-semibold" style="color:var(--text)">Fast</span> — light models for most stages; strong models only where writing quality demands it. ~40% cheaper.</div>
+            <div><span class="font-semibold" style="color:var(--text)">Balanced</span> — light models for routing, strong models for all writing. <span style="color:var(--text-faint)">(default)</span></div>
+            <div><span class="font-semibold" style="color:var(--text)">Best</span> — strong models everywhere. Maximum quality.</div>
           </div>
         </div>
       </div>
@@ -677,19 +890,30 @@
 
 </main>
 
-
-<!-- ══════════════════════════════════════
-     JAVASCRIPT
-══════════════════════════════════════ -->
+<!-- ══════════ JAVASCRIPT ══════════ -->
 <script>
   const State = {
     currentJobId: null, eventSource: null, startTime: null,
     elapsedTimer: null, stages: new Map(), pendingRequest: null,
     articles: null, currentView: 'config', pastArticle: null, keyStatus: null,
+    rerunOf: null, pipelineInfo: null,
   };
 
   mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
   function $(id) { return document.getElementById(id); }
+
+  /* ── Theme toggle ────────────────────────────── */
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('scrivio-theme', theme);
+    // Show the icon of the mode you would switch TO.
+    $('theme-icon-sun').classList.toggle('hidden', theme === 'light');
+    $('theme-icon-moon').classList.toggle('hidden', theme === 'dark');
+  }
+  $('theme-toggle').addEventListener('click', () => {
+    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+  });
+  applyTheme(document.documentElement.dataset.theme || 'dark');
 
   const VIEWS = {
     config:         ['config-panel'],
@@ -718,28 +942,166 @@
     $('nav-settings').classList.toggle('active', view === 'settings');
   }
 
-  function toggleFeature(fieldId, container) {
-    const hidden = $(fieldId), track = $('track-' + fieldId);
+  /* ── Configuration controls ─────────────────── */
+  const LEVEL_HINTS = {
+    basic:        'Every term defined, analogies over jargon, simplified code.',
+    intermediate: 'Technical terms kept, concrete trade-offs, runnable code.',
+    advanced:     'Failure modes, edge cases, performance and ops depth.',
+  };
+  const PRESET_DESCRIPTIONS = {
+    fast:     'Light models for most stages. ~40% cheaper, slightly rougher.',
+    balanced: 'Light models route, strong models write. The sweet spot.',
+    best:     'Strong models everywhere. Maximum quality, slower + pricier.',
+  };
+  const RESEARCH_HINTS = {
+    'true':  'Searches the web, prioritising official docs for citations.',
+    'false': 'Uses the model\'s training knowledge. No live sources.',
+  };
+
+  function bindSegment(segId, hiddenId, onChange) {
+    const seg = $(segId);
+    seg.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        $(hiddenId).value = btn.dataset.value;
+        if (onChange) onChange(btn.dataset.value);
+        updateSummary();
+      });
+    });
+  }
+  bindSegment('seg-level', 'explanation_level', v => { $('level-hint').textContent = LEVEL_HINTS[v] || ''; });
+  bindSegment('seg-preset', 'model_preset', v => { $('preset-callout-text').textContent = PRESET_DESCRIPTIONS[v] || ''; });
+  bindSegment('seg-research', 'web_search', v => {
+    $('research-hint').textContent = RESEARCH_HINTS[v] || '';
+    updateSourceWarning(v === 'true' ? 'live' : 'llm');
+  });
+  bindSegment('seg-provider', 'llm_provider', updateProviderHint);
+  $('level-hint').textContent = LEVEL_HINTS.intermediate;
+  $('preset-callout-text').textContent = PRESET_DESCRIPTIONS.balanced;
+  $('research-hint').textContent = RESEARCH_HINTS['true'];
+
+  /* Provider pin: options for absent keys are disabled; hint explains what
+     will actually run. */
+  const PROVIDER_LABELS = { anthropic: 'Claude (Anthropic)', openai: 'GPT (OpenAI)' };
+  function updateProviderHint() {
+    const ks = State.keyStatus, v = $('llm_provider').value;
+    const hint = $('provider-hint');
+    if (!ks) { hint.textContent = ''; return; }
+    if (v === 'auto') {
+      hint.textContent = ks.resolved_provider === 'none'
+        ? 'No LLM key configured — add one in Settings.'
+        : `Resolves to ${PROVIDER_LABELS[ks.resolved_provider] || ks.resolved_provider} from your keys.`;
+    } else {
+      hint.textContent = `Writing stages pinned to ${PROVIDER_LABELS[v]} for this article.`;
+    }
+  }
+  function updateProviderAvailability() {
+    const ks = State.keyStatus;
+    if (!ks) return;
+    const available = { auto: true, anthropic: ks.has_anthropic, openai: ks.has_openai };
+    $('seg-provider').querySelectorAll('.seg-btn').forEach(btn => {
+      const ok = available[btn.dataset.value];
+      btn.disabled = !ok;
+      btn.title = ok ? '' : 'API key not configured — add it in Settings';
+    });
+    // If the current pin's key disappeared, snap back to auto.
+    const current = $('llm_provider').value;
+    if (!available[current]) {
+      $('llm_provider').value = 'auto';
+      $('seg-provider').querySelectorAll('.seg-btn').forEach(b =>
+        b.classList.toggle('on', b.dataset.value === 'auto'));
+      updateSummary();
+    }
+    updateProviderHint();
+  }
+
+  function toggleFeature(fieldId, track) {
+    const hidden = $(fieldId);
     const isOn = hidden.value === 'true';
     hidden.value = isOn ? 'false' : 'true';
     track.classList.toggle('on', !isOn);
-    container.classList.toggle('active', !isOn);
+    updateSummary();
   }
 
-  function selectSource(mode, container) {
-    $('source-live').classList.toggle('selected', mode === 'live');
-    $('source-llm').classList.toggle('selected', mode === 'llm');
-    $('web_search').value = mode === 'live' ? 'true' : 'false';
-    const radio = container.querySelector('input[type=radio]');
-    if (radio) radio.checked = true;
-    updateSourceWarning(mode);
+  /* Live natural-language summary of the configuration. */
+  function updateSummary() {
+    const chips = [];
+    chips.push($('explanation_level').value);
+    const aud = $('audience_role').value.trim() || 'software engineer';
+    chips.push(aud);
+    chips.push($('model_preset').value + ' models');
+    const prov = $('llm_provider').value;
+    if (prov !== 'auto') chips.push(prov === 'anthropic' ? 'Claude only' : 'GPT only');
+    chips.push($('web_search').value === 'true' ? 'live research' : 'model knowledge');
+    if ($('include_diagrams').value === 'true') chips.push('diagrams');
+    const mc = $('must_cover').value.trim();
+    if (mc) chips.push('must cover: ' + mc.split(',').map(s=>s.trim()).filter(Boolean).length + ' topics');
+    $('config-summary').innerHTML = chips.map(c =>
+      `<span class="summary-chip"><span class="dot"></span>${escapeHtml(c)}</span>`
+    ).join('');
+    const steering = [];
+    if ($('extra_context').value.trim()) steering.push('context');
+    if (mc) steering.push(mc.split(',').map(s=>s.trim()).filter(Boolean).length + ' must-cover');
+    if ($('skip_clarification').checked) steering.push('skip questions');
+    $('steering-summary').textContent = steering.length ? steering.join(' · ') : 'None — add must-cover topics…';
+    $('steering-summary').style.color = steering.length ? 'var(--text)' : 'var(--text-faint)';
   }
+  ['audience_role','extra_context','must_cover'].forEach(id => $(id).addEventListener('input', updateSummary));
+  $('skip_clarification').addEventListener('change', updateSummary);
+
+  $('steering-open').addEventListener('click', () => $('steering-drawer').classList.toggle('hidden'));
+  $('steering-close').addEventListener('click', () => $('steering-drawer').classList.add('hidden'));
+
+  /* ── Re-run: prefill the composer from an existing article ──────── */
+  function setSegmentValue(segId, value) {
+    const seg = $(segId);
+    let btn = seg.querySelector(`.seg-btn[data-value="${value}"]`);
+    if (!btn || btn.disabled) btn = seg.querySelector('.seg-btn'); // first = safe default
+    if (btn && !btn.disabled) btn.click();
+  }
+
+  function prefillCompose(req, rerunOfId, title, nextVersion) {
+    $('topic').value = req.topic || '';
+    $('audience_role').value = req.audience_role || 'software engineer';
+    $('extra_context').value = req.extra_context || '';
+    $('must_cover').value = (req.must_cover || []).join(', ');
+    $('skip_clarification').checked = !!req.skip_clarification;
+    setSegmentValue('seg-level', req.explanation_level || 'intermediate');
+    setSegmentValue('seg-preset', req.model_preset || 'balanced');
+    setSegmentValue('seg-provider', req.llm_provider || 'auto');
+    setSegmentValue('seg-research', String(req.web_search !== false));
+    const wantDiagrams = req.include_diagrams !== false;
+    $('include_diagrams').value = String(wantDiagrams);
+    $('track-include_diagrams').classList.toggle('on', wantDiagrams);
+    if ((req.extra_context || '') || (req.must_cover || []).length || req.skip_clarification) {
+      $('steering-drawer').classList.remove('hidden');
+    }
+    State.rerunOf = rerunOfId;
+    $('rerun-notice-text').textContent =
+      `Re-running “${title}” — Generate creates v${nextVersion}. Adjust anything first.`;
+    $('rerun-notice').classList.remove('hidden');
+    updateSummary();
+    showView('config');
+    $('topic').focus();
+  }
+
+  function clearRerun() {
+    State.rerunOf = null;
+    $('rerun-notice').classList.add('hidden');
+  }
+  $('rerun-cancel').addEventListener('click', clearRerun);
+
+  /* Cmd/Ctrl+Enter submits from the textarea; Enter alone stays multiline. */
+  $('topic').addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); $('generate-form').requestSubmit(); }
+  });
 
   function updateSourceWarning(mode) {
     const ks = State.keyStatus, el = $('source-warning');
     if (!el) return;
     if (mode === 'live' && ks && !ks.has_search) {
-      el.textContent = '⚠ No TAVILY_API_KEY detected — will run without live sources. Add your key in Settings.';
+      el.textContent = '⚠ No TAVILY_API_KEY — will run without live sources. Add it in Settings.';
       el.classList.remove('hidden');
     } else { el.classList.add('hidden'); }
   }
@@ -751,64 +1113,56 @@
       State.keyStatus = await r.json();
       updateFormStatusBar(State.keyStatus);
       updateSourceWarning($('web_search').value === 'true' ? 'live' : 'llm');
+      updateProviderAvailability();
     } catch {}
   }
 
   function updateFormStatusBar(ks) {
     if (!ks) return;
     const provEl = $('status-provider'), srchEl = $('status-search');
-    const provLabel = { anthropic:'🤖 Claude (Anthropic)', openai:'🤖 GPT-4o (OpenAI)', none:'⚠ No LLM key' }[ks.resolved_provider] || '⚠ Unknown';
-    const provColor = ks.resolved_provider === 'none' ? 'bg-red-400' : 'bg-emerald-500';
-    const autoNote  = ks.provider_auto ? ' · auto' : ' · preferred';
-    provEl.innerHTML = `<span class="w-2 h-2 rounded-full ${provColor} flex-shrink-0"></span>${escapeHtml(provLabel)}<span class="text-slate-300">${autoNote}</span>`;
+    const provLabel = { anthropic:'Claude (Anthropic)', openai:'GPT (OpenAI)', none:'No LLM key' }[ks.resolved_provider] || 'Unknown';
+    const provColor = ks.resolved_provider === 'none' ? '#f87171' : '#34d399';
+    const autoNote  = ks.provider_auto ? 'auto' : 'preferred';
+    provEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${provColor};box-shadow:0 0 8px ${provColor}"></span>${escapeHtml(provLabel)}<span style="color:var(--text-faint)">· ${autoNote}</span>`;
     srchEl.innerHTML = ks.has_search
-      ? `<span class="text-emerald-600 font-medium">🌐 Web search ready</span>`
-      : `<span class="text-slate-400">🔒 No search key</span>`;
+      ? `<span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:#34d399;box-shadow:0 0 8px #34d399"></span>Web search ready`
+      : `<span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:rgba(255,255,255,0.2)"></span>No search key`;
   }
 
   function renderProviderCard(ks) {
     const body = $('provider-card-body'), prefRow = $('provider-pref-row');
     if (ks.resolved_provider === 'none') {
-      body.innerHTML = `<div class="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl"><svg class="w-5 h-5 text-red-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div><div class="text-sm font-semibold text-red-800">No LLM key configured</div><div class="text-xs text-red-700 mt-1">Add <span class="font-mono font-semibold">ANTHROPIC_API_KEY</span> or <span class="font-mono font-semibold">OPENAI_API_KEY</span> below.</div></div></div>`;
+      body.innerHTML = `<div class="flex items-start gap-3 p-4 rounded-xl" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3)"><svg class="w-5 h-5 shrink-0 mt-0.5" style="color:#f87171" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div><div class="text-sm font-semibold" style="color:#fca5a5">No LLM key configured</div><div class="text-xs mt-1" style="color:var(--text-dim)">Add <span class="font-mono-ui font-semibold">ANTHROPIC_API_KEY</span> or <span class="font-mono-ui font-semibold">OPENAI_API_KEY</span> below.</div></div></div>`;
       prefRow.classList.add('hidden'); return;
     }
     if (ks.provider_auto) {
       const isAnth = ks.resolved_provider === 'anthropic';
-      const name = isAnth ? 'Claude (Anthropic)' : 'GPT-4o (OpenAI)';
-      const model = isAnth ? 'Sonnet for writing · Haiku for routing' : 'GPT-4o for writing · GPT-4o-mini for routing';
+      const name = isAnth ? 'Claude (Anthropic)' : 'GPT (OpenAI)';
+      const model = isAnth ? 'Sonnet for writing · Haiku for routing' : 'Strong GPT for writing · light GPT for routing';
       const absent = isAnth ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
-      body.innerHTML = `<div class="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-xl"><svg class="w-5 h-5 text-green-600 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg><div><div class="text-sm font-semibold text-green-800">Auto-selected: ${escapeHtml(name)}</div><div class="text-xs text-green-700 mt-1">${escapeHtml(model)}</div><div class="text-xs text-slate-500 mt-2">Add <span class="font-mono font-semibold">${escapeHtml(absent)}</span> to enable the other provider.</div></div></div>`;
+      body.innerHTML = `<div class="flex items-start gap-3 p-4 rounded-xl" style="background:rgba(52,211,153,0.07);border:1px solid rgba(52,211,153,0.25)"><svg class="w-5 h-5 shrink-0 mt-0.5" style="color:#34d399" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg><div><div class="text-sm font-semibold" style="color:#6ee7b7">Auto-selected: ${escapeHtml(name)}</div><div class="text-xs mt-1" style="color:var(--text-dim)">${escapeHtml(model)}</div><div class="text-xs mt-2" style="color:var(--text-faint)">Add <span class="font-mono-ui font-semibold">${escapeHtml(absent)}</span> to enable the other provider.</div></div></div>`;
       prefRow.classList.add('hidden');
     } else {
       const prefAnth = ks.provider_preference === 'anthropic';
-      body.innerHTML = `<p class="text-xs text-slate-500 mb-3">Both keys configured. Choose which provider to use for writing stages.</p><div class="space-y-2"><label id="prov-anthropic" class="provider-option flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer ${prefAnth ? 'border-blue-400 bg-blue-50 selected' : 'border-slate-200 bg-slate-50'}" onclick="selectProvider('anthropic', this)"><input type="radio" name="llm_provider" value="anthropic" ${prefAnth ? 'checked' : ''} class="mt-0.5 h-4 w-4 accent-blue-600 shrink-0" /><div><div class="text-sm font-semibold ${prefAnth ? 'text-blue-900' : 'text-slate-700'}">Anthropic — Claude</div><div class="text-xs ${prefAnth ? 'text-blue-700' : 'text-slate-500'} mt-0.5">Sonnet for writing · Haiku for routing</div></div></label><label id="prov-openai" class="provider-option flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer ${!prefAnth ? 'border-blue-400 bg-blue-50 selected' : 'border-slate-200 bg-slate-50'}" onclick="selectProvider('openai', this)"><input type="radio" name="llm_provider" value="openai" ${!prefAnth ? 'checked' : ''} class="mt-0.5 h-4 w-4 accent-blue-600 shrink-0" /><div><div class="text-sm font-semibold ${!prefAnth ? 'text-blue-900' : 'text-slate-700'}">OpenAI — GPT-4o</div><div class="text-xs ${!prefAnth ? 'text-blue-700' : 'text-slate-500'} mt-0.5">GPT-4o for writing · GPT-4o-mini for routing</div></div></label></div>`;
+      const optStyle = sel => sel
+        ? 'border:1px solid rgba(32,184,205,0.55);background:rgba(32,184,205,0.12)'
+        : 'border:1px solid var(--stroke);background:var(--surface)';
+      body.innerHTML = `<p class="text-xs mb-3" style="color:var(--text-dim)">Both keys configured. Choose which provider writes your articles.</p><div class="space-y-2"><label id="prov-anthropic" class="provider-option flex items-start gap-3 p-3.5 rounded-xl cursor-pointer ${prefAnth?'selected':''}" style="${optStyle(prefAnth)}" onclick="selectProvider('anthropic', this)"><input type="radio" name="llm_provider" value="anthropic" ${prefAnth ? 'checked' : ''} class="mt-0.5 h-4 w-4 accent-teal-500 shrink-0" /><div><div class="text-sm font-semibold" style="color:var(--text)">Anthropic — Claude</div><div class="text-xs mt-0.5" style="color:var(--text-dim)">Sonnet for writing · Haiku for routing</div></div></label><label id="prov-openai" class="provider-option flex items-start gap-3 p-3.5 rounded-xl cursor-pointer ${!prefAnth?'selected':''}" style="${optStyle(!prefAnth)}" onclick="selectProvider('openai', this)"><input type="radio" name="llm_provider" value="openai" ${!prefAnth ? 'checked' : ''} class="mt-0.5 h-4 w-4 accent-teal-500 shrink-0" /><div><div class="text-sm font-semibold" style="color:var(--text)">OpenAI — GPT</div><div class="text-xs mt-0.5" style="color:var(--text-dim)">Strong GPT for writing · light GPT for routing</div></div></label></div>`;
       prefRow.classList.remove('hidden');
     }
   }
 
   function selectProvider(provider, container) {
-    document.querySelectorAll('.provider-option').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('.provider-option').forEach(el => {
+      el.classList.remove('selected');
+      el.style.border = '1px solid var(--stroke)'; el.style.background = 'var(--surface)';
+    });
     container.classList.add('selected');
+    container.style.border = '1px solid rgba(32,184,205,0.55)'; container.style.background = 'rgba(32,184,205,0.12)';
     const radio = container.querySelector('input[type=radio]');
     if (radio) radio.checked = true;
     $('provider-save-status').textContent = '';
   }
-
-  const PRESET_DESCRIPTIONS = {
-    fast:     '⚡ Fast — Haiku for most stages; Sonnet only for drafting + polish. ~40% cheaper.',
-    balanced: '⚖️ Balanced — Haiku for routing, Sonnet for all writing.',
-    best:     '✨ Best — Sonnet everywhere. Maximum quality.',
-  };
-  function updatePresetCallout(preset) { $('preset-callout-text').textContent = PRESET_DESCRIPTIONS[preset] || ''; }
-  document.querySelectorAll('.preset-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      document.querySelectorAll('.preset-pill').forEach(p => p.classList.remove('selected'));
-      pill.classList.add('selected');
-      $('model_preset').value = pill.dataset.preset;
-      updatePresetCallout(pill.dataset.preset);
-    });
-  });
-  updatePresetCallout('balanced');
 
   function buildRequest() {
     const mustCoverRaw = $('must_cover').value.trim();
@@ -817,20 +1171,22 @@
       explanation_level: $('explanation_level').value,
       audience_role:     $('audience_role').value.trim() || 'software engineer',
       model_preset:      $('model_preset').value,
+      llm_provider:      $('llm_provider').value,
       web_search:        $('web_search').value === 'true',
       include_diagrams:  $('include_diagrams').value === 'true',
       extra_context:     $('extra_context').value.trim(),
       must_cover:        mustCoverRaw ? mustCoverRaw.split(',').map(s => s.trim()).filter(Boolean) : [],
       skip_clarification: $('skip_clarification').checked,
+      rerun_of:          State.rerunOf || null,
     };
   }
 
   async function checkHealth() {
     try {
       const r = await fetch('/health');
-      if (r.ok) { $('server-dot').className = 'w-1.5 h-1.5 rounded-full bg-emerald-400'; $('server-text').textContent = 'connected'; }
-      else { $('server-dot').className = 'w-1.5 h-1.5 rounded-full bg-amber-400'; $('server-text').textContent = 'server error'; }
-    } catch { $('server-dot').className = 'w-1.5 h-1.5 rounded-full bg-red-500'; $('server-text').textContent = 'offline'; }
+      if (r.ok) { $('server-dot').className = 'w-1.5 h-1.5 rounded-full'; $('server-dot').style.cssText='background:#34d399;box-shadow:0 0 8px #34d399'; $('server-text').textContent = 'connected'; }
+      else { $('server-dot').style.cssText='background:#fbbf24'; $('server-text').textContent = 'server error'; }
+    } catch { $('server-dot').style.cssText='background:#f87171'; $('server-text').textContent = 'offline'; }
   }
 
   function escapeHtml(s) {
@@ -841,37 +1197,119 @@
     try { const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleString(); } catch { return iso; }
   }
 
-  const STATUS_ICONS = {
-    running:   '<svg class="spinner w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="40 60" stroke-linecap="round"/></svg>',
-    completed: '<svg class="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>',
-    error:     '<svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>',
-    cancelled: '<svg class="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>',
+  /* One identity symbol per stage (SVG line icons, feather-style — no emoji).
+     Colour + the corner badge communicate status; the symbol says WHAT the
+     stage is at a glance. */
+  const _sym = inner =>
+    `<svg class="stage-symbol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+  const STAGE_SYMBOLS = {
+    brief:           _sym('<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'),                                        // flag — the editorial angle is planted here
+    relevance_check: _sym('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>'), // crosshair — on target?
+    search:          _sym('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),                                                                    // magnifier
+    planning:        _sym('<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>'),                       // layout — sections take shape
+    gap_fill:        _sym('<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>'),                                    // plus — patch missing evidence
+    verification:    _sym('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>'),                                                   // shield-check — facts verified
+    drafting:        _sym('<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>'),                                                        // pencil — words go down
+    editor:          _sym('<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>'),                                                        // eye — editorial review
+    polish:          _sym('<path d="M12 3l1.9 5.6L20 10.5l-6.1 1.9L12 18l-1.9-5.6L4 10.5l6.1-1.9z"/>'),                                                                       // four-point star — shine pass
+    critic:          _sym('<circle cx="12" cy="8" r="6"/><path d="M15.5 13l1.5 9-5-3-5 3 1.5-9"/>'),                                                                          // award medal — the quality gate
+    _default:        _sym('<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'),                                                                                            // activity — any dynamic extra stage
   };
+  const STATUS_BADGES = {
+    completed: '<span class="stage-badge"><svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>',
+    error:     '<span class="stage-badge"><svg viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="3.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>',
+    cancelled: '<span class="stage-badge"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" stroke-width="3.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></span>',
+  };
+
+  /* The canonical pipeline roadmap, rendered up-front so the user sees the
+     whole journey — what's done, what's running, what's still ahead.
+     Stage names match the SSE events emitted by main.generate_article. */
+  const PIPELINE = [
+    ['brief',           'Brief',        'Thesis, angle and hook',
+      'An editorial strategist decides what story this article tells: a specific arguable thesis, the storytelling angle (explainer, tutorial, deep-dive, …), the reader’s pain point, and a hook. Every later stage executes this brief.'],
+    ['relevance_check', 'Relevance',    'Does the brief answer your request?',
+      'A cheap alignment gate: would a reader who typed your topic be satisfied by the planned article? If the brief drifted, it is regenerated once with the missing aspects injected — before any expensive work runs.'],
+    ['search',          'Research',     'Docs-first web search for evidence',
+      'Resolves the official documentation domains for your topic, runs a docs-first search pass restricted to them plus general queries, ranks results by source trust (official docs > articles > forums), and fetches the best pages into evidence chunks.'],
+    ['planning',        'Planning',     'Sections, claims, diagram intents',
+      'Turns the brief + evidence into the article skeleton: section-by-section structure, specific factual claims each anchored to a fetched source, and diagram requests where a visual genuinely helps.'],
+    ['gap_fill',        'Gap fill',     'Targeted searches for unproven claims',
+      'Any planned claim without matching evidence triggers a targeted follow-up search so the drafter never writes an unsupported assertion.'],
+    ['verification',    'Verification', 'Fact-checking claims against sources',
+      'Each claim is checked against its cited evidence BEFORE drafting (a journalist fact-checks before writing). Unsupported or off-topic claims are dropped; the article is built only from what survived.'],
+    ['drafting',        'Drafting',     'Writing sections + rendering diagrams',
+      'Sections are written in parallel with inline citations tied to evidence chunks, while Mermaid diagrams render alongside. Each section sees summaries of the previous ones to keep the narrative connected.'],
+    ['editor',          'Editor',       'Review and targeted revisions',
+      'Reads the assembled draft like a managing editor: request alignment, thesis drift, repetition, weak openings, missing comparison tables. Flagged sections are re-drafted individually; the rest pass through untouched.'],
+    ['polish',          'Polish',       'Level adaptation and voice pass',
+      'One combined copyedit pass: adapts vocabulary and code depth to your chosen level, and rewrites machine-sounding prose into a warm practitioner voice while preserving every citation and diagram marker.'],
+    ['critic',          'Critic',       'Final quality gate',
+      'The last gate before shipping. Reviews the polished article as a reader would — title, opening, citations, diagram accuracy, consistency, voice. Blocking issues send it back for one targeted re-polish.'],
+  ];
+  const PIPELINE_IDS = new Set(PIPELINE.map(([id]) => id));
+
+  function _stageElapsed(stage) {
+    if (!stage || !stage.started_at) return '';
+    const end = stage.completed_at || Date.now();
+    return ((end - stage.started_at) / 1000).toFixed(1) + 's';
+  }
 
   function renderStages() {
     const container = $('stages');
     container.innerHTML = '';
-    for (const [name, stage] of State.stages) {
-      const elapsed = stage.completed_at ? ((stage.completed_at - stage.started_at)/1000).toFixed(1)+'s' : stage.started_at ? '...' : '';
-      const hasData = stage.data && Object.keys(stage.data).length > 0;
-      const detailsId = `stage-${name}-details`;
+
+    // Roadmap stages in canonical order, then any dynamic extras the server
+    // emitted that we didn't anticipate (defensive: never hide information).
+    const extras = [...State.stages.keys()].filter(
+      n => !PIPELINE_IDS.has(n) && n !== 'complete'
+    );
+    const rows = PIPELINE.map(([id, label, desc, detail]) => [id, label, desc, detail])
+      .concat(extras.map(n => [n, n.replace(/_/g, ' '), '', '']));
+    const models = (State.pipelineInfo && State.pipelineInfo.stages) || {};
+
+    let done = 0;
+    for (const [id, label, desc, detail] of rows) {
+      const stage = State.stages.get(id);
+      const status = stage ? stage.status : 'pending';
+      if (status === 'completed') done += 1;
+      const hasData = stage && stage.data && Object.keys(stage.data).length > 0;
+      const detailsId = `stage-${id}-details`;
+      const aboutId = `stage-${id}-about`;
+      const cached = stage && stage.data && stage.data.cached;
+      const model = models[id];
+
       const row = document.createElement('div');
-      row.className = 'stage-row';
+      row.className = `stage-row ${status}${status === 'completed' ? ' done' : ''}`;
       row.innerHTML = `
-        <div class="absolute left-0 top-0 flex items-center justify-center w-7 h-7 bg-white rounded-full shadow-sm">
-          ${STATUS_ICONS[stage.status] || ''}
-        </div>
-        <div class="py-1.5">
-          <div class="flex items-baseline gap-3 flex-wrap">
-            <span class="font-semibold text-slate-800 capitalize text-sm">${escapeHtml(name.replace(/_/g,' '))}</span>
-            <span class="text-xs text-slate-400 font-mono">${elapsed}</span>
-            ${stage.message ? `<span class="text-xs text-slate-500">${escapeHtml(stage.message)}</span>` : ''}
-            ${(hasData||stage.error) ? `<button class="text-xs text-blue-500 hover:underline ml-auto font-medium" data-toggle="${detailsId}">debug ▾</button>` : ''}
+        <div class="stage-icon">${STAGE_SYMBOLS[id] || STAGE_SYMBOLS._default}${STATUS_BADGES[status] || ''}</div>
+        <div class="stage-body py-1">
+          <div class="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
+            <span class="font-semibold text-sm" style="color:var(--text)">${escapeHtml(label)}</span>
+            ${detail ? `<button class="stage-info" data-toggle="${aboutId}" title="What does this stage do?" aria-label="About ${escapeHtml(label)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.5" fill="currentColor"/></svg></button>` : ''}
+            ${model ? `<span class="model-chip" title="Model executing this stage">${escapeHtml(model)}</span>` : ''}
+            <span class="text-xs font-mono-ui stage-time" data-stage="${id}" style="color:var(--text-faint)">${_stageElapsed(stage)}</span>
+            ${cached ? '<span class="cached-chip">⚡ cached</span>' : ''}
+            ${status === 'running' && stage.message
+              ? `<span class="text-xs" style="color:var(--accent-text)">${escapeHtml(stage.message)}</span>`
+              : desc ? `<span class="text-xs" style="color:var(--text-faint)">${escapeHtml(desc)}</span>` : ''}
+            ${(hasData || (stage && stage.error)) ? `<button class="text-xs ml-auto font-medium hover:underline" style="color:var(--accent-text)" data-toggle="${detailsId}">debug ▾</button>` : ''}
           </div>
-          ${(hasData||stage.error) ? `<div id="${detailsId}" class="hidden mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">${renderStageDebug(name,stage)}</div>` : ''}
+          ${detail ? `<div id="${aboutId}" class="hidden debug-panel"><p class="leading-relaxed">${escapeHtml(detail)}</p>${model ? `<p class="mt-2" style="color:var(--text-faint)">Runs on <span class="font-mono-ui" style="color:var(--accent-text)">${escapeHtml(model)}</span>${State.pipelineInfo ? ` — ${escapeHtml(State.pipelineInfo.provider)} provider, ${escapeHtml(State.pipelineInfo.preset)} preset` : ''}</p>` : ''}</div>` : ''}
+          ${(stage && stage.error) ? `<p class="text-xs mt-1 break-words" style="color:#fca5a5">${escapeHtml(stage.error)}</p>` : ''}
+          ${(hasData || (stage && stage.error)) ? `<div id="${detailsId}" class="hidden debug-panel">${renderStageDebug(id, stage)}</div>` : ''}
         </div>`;
       container.appendChild(row);
     }
+
+    // Overall progress: completed roadmap stages over the roadmap length.
+    const total = PIPELINE.length;
+    const roadmapDone = PIPELINE.filter(([id]) => {
+      const s = State.stages.get(id);
+      return s && s.status === 'completed';
+    }).length;
+    $('progress-fill').style.width = `${Math.round((roadmapDone / total) * 100)}%`;
+    $('progress-label').textContent = `${roadmapDone}/${total}`;
+
     container.querySelectorAll('[data-toggle]').forEach(btn => {
       btn.addEventListener('click', () => document.getElementById(btn.dataset.toggle).classList.toggle('hidden'));
     });
@@ -882,30 +1320,38 @@
     const parts = [];
     if (name === 'brief' && d.brief) { const b = d.brief; parts.push(kvBlock('Brief', [['title',b.suggested_title],['angle',b.angle],['thesis',b.thesis],['reader pain point',b.reader_pain_point],['key insight',b.key_insight],['hook seed',b.hook_seed]])); delete d.brief; }
     if (name === 'relevance_check') { parts.push(kvBlock('Verdict',[['aligned',String(d.aligned)],['brief regenerated',String(d.brief_regenerated)],['reasoning',d.reasoning||'(none)'],['suggested adjustment',d.suggested_thesis_adjustment||'(none)']])); if (d.missing_aspects&&d.missing_aspects.length) parts.push(listBlock('Missing aspects',d.missing_aspects)); ['aligned','brief_regenerated','reasoning','suggested_thesis_adjustment','missing_aspects','missing_aspects_count'].forEach(k=>delete d[k]); }
-    if (name === 'search') { parts.push(kvBlock('Summary',[['spans collected',d.spans_count],['from cache',String(!!d.cached)],['search queries run',(d.queries||[]).length],['urls considered',d.search_results_total||(d.urls&&d.urls.length)||0],['urls fetched',d.fetch_attempted||(d.urls&&d.urls.length)||0]])); if (d.queries&&d.queries.length) parts.push(listBlock('Search queries',d.queries)); if (d.urls&&d.urls.length) parts.push(urlTable('URLs fetched',d.urls)); if (d.skipped_urls&&d.skipped_urls.length) parts.push(urlTable('URLs skipped',d.skipped_urls)); ['queries','urls','skipped_urls','fetch_attempted','search_results_total','spans_count','cached'].forEach(k=>delete d[k]); }
+    if (name === 'search') { parts.push(kvBlock('Summary',[['spans collected',d.spans_count],['from cache',String(!!d.cached)],['official doc domains',(d.official_docs_domains||[]).join(', ')||'(none)'],['search queries run',(d.queries||[]).length],['urls considered',d.search_results_total||(d.urls&&d.urls.length)||0],['urls fetched',d.fetch_attempted||(d.urls&&d.urls.length)||0]])); if (d.queries&&d.queries.length) parts.push(listBlock('Search queries',d.queries)); if (d.doc_queries&&d.doc_queries.length) parts.push(listBlock('Docs-first queries',d.doc_queries)); if (d.urls&&d.urls.length) parts.push(urlTable('URLs fetched',d.urls)); if (d.skipped_urls&&d.skipped_urls.length) parts.push(urlTable('URLs skipped',d.skipped_urls)); ['queries','doc_queries','official_docs_domains','urls','skipped_urls','fetch_attempted','search_results_total','spans_count','cached'].forEach(k=>delete d[k]); }
     if (name === 'planning') { parts.push(kvBlock('Summary',[['sections',d.sections],['claims',d.claims_count],['diagrams planned',d.visual_intents_count],['from cache',String(!!d.cached)]])); if (d.section_titles&&d.section_titles.length) parts.push(listBlock('Section titles',d.section_titles)); if (d.visual_intents&&d.visual_intents.length) parts.push(diagramTable('Diagrams',d.visual_intents)); ['sections','claims_count','visual_intents_count','section_titles','visual_intents','cached'].forEach(k=>delete d[k]); }
     if (name === 'verification') { parts.push(kvBlock('Support verdict',[['supported',d.supported],['weak',d.weak],['unsupported',d.unsupported],['total claims',d.total]])); parts.push(kvBlock('Relevance verdict',[['off topic (dropped)',d.off_topic],['tangential',d.tangential],['claims dropped',d.claims_dropped]])); if (d.sample_verdicts&&d.sample_verdicts.length) parts.push(verdictTable('Sample verdicts (first 6)',d.sample_verdicts)); ['supported','weak','unsupported','total','off_topic','tangential','claims_dropped','sample_verdicts','cached'].forEach(k=>delete d[k]); }
     if (name === 'drafting') { parts.push(kvBlock('Summary',[['sections drafted',d.sections],['total words',d.total_words],['diagrams rendered',d.assets_rendered],['diagrams failed',d.assets_failed],['from cache',String(!!d.cached)]])); if (d.section_word_counts&&d.section_word_counts.length) parts.push(wordCountTable('Per-section word counts',d.section_word_counts)); ['sections','total_words','assets_rendered','assets_failed','section_word_counts','cached'].forEach(k=>delete d[k]); }
     if (name === 'editor') { parts.push(kvBlock('Verdict',[['approved',String(d.approved)],['revisions requested',d.revisions],['overall',d.overall_assessment||'']])); if (d.revision_targets&&d.revision_targets.length) parts.push(revisionTable('Revision targets',d.revision_targets)); ['approved','revisions','overall_assessment','revision_targets'].forEach(k=>delete d[k]); }
     if (name === 'polish'||name === 'compilation') { parts.push(kvBlock('Summary',[['levels emitted',(d.levels||[]).join(', ')],['output words',d.output_word_count||'']])); ['levels','skipped_levels','output_word_count'].forEach(k=>delete d[k]); }
     if (name === 'critic') { parts.push(kvBlock('Verdict',[['approved',String(d.approved)],['re-polished',String(!!d.refined)],['blocking issues',d.blocking],['moderate issues',d.moderate],['minor issues',d.minor],['overall',d.overall_assessment||'']])); if (d.issues&&d.issues.length) parts.push(criticIssueTable('Issues',d.issues)); ['approved','refined','blocking','moderate','minor','overall_assessment','issues'].forEach(k=>delete d[k]); }
-    if (Object.keys(d).length > 0) parts.push(`<details><summary class="cursor-pointer text-slate-500">Raw data</summary><pre class="debug mt-2">${escapeHtml(JSON.stringify(d,null,2))}</pre></details>`);
+    if (Object.keys(d).length > 0) parts.push(`<details><summary class="cursor-pointer" style="color:var(--text-faint)">Raw data</summary><pre class="debug mt-2">${escapeHtml(JSON.stringify(d,null,2))}</pre></details>`);
     return parts.join('');
   }
 
-  function kvBlock(title,rows){const items=rows.filter(([,v])=>v!==undefined&&v!==null&&v!=='').map(([k,v])=>`<div class="flex gap-3"><span class="text-slate-400 w-40 shrink-0">${escapeHtml(k)}</span><span class="break-words text-slate-700">${escapeHtml(String(v))}</span></div>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div>${items}</div>`;}
-  function listBlock(title,items){const lis=items.map(i=>`<li class="break-words">${escapeHtml(String(i))}</li>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div><ul class="list-disc list-inside space-y-0.5">${lis}</ul></div>`;}
-  function urlTable(title,urls){const rows=urls.map(u=>`<tr><td class="py-1 pr-2 text-right text-slate-400 w-10">${u.trust_score!=null?u.trust_score:''}</td><td class="py-1 pr-2 text-slate-400 w-16">${escapeHtml(u.status||'')}</td><td class="py-1 pr-2 text-right text-slate-400 w-12">${u.spans_yielded!=null?u.spans_yielded:''}</td><td class="py-1"><a href="${escapeHtml(u.url)}" target="_blank" rel="noopener" class="text-blue-500 hover:underline break-all">${escapeHtml(u.url)}</a>${u.title?` <span class="text-slate-400">— ${escapeHtml(u.title)}</span>`:''}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)} <span class="text-slate-400 font-normal">(${urls.length})</span></div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-right pr-2">trust</th><th class="text-left pr-2">status</th><th class="text-right pr-2">spans</th><th class="text-left">url</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
-  function diagramTable(title,intents){const rows=intents.map(i=>`<tr><td class="py-1 pr-2 text-slate-400 w-20">${escapeHtml(i.format||'')}</td><td class="py-1 pr-2 text-slate-600">${escapeHtml(i.section_title||'')}</td><td class="py-1">${escapeHtml(i.description||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-left pr-2">format</th><th class="text-left pr-2">section</th><th class="text-left">description</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
-  function verdictTable(title,verdicts){const rows=verdicts.map(v=>`<tr><td class="py-1 pr-2 ${v.support==='supported'?'text-green-700':v.support==='weak'?'text-amber-700':'text-red-700'} font-medium">${escapeHtml(v.support||'')}</td><td class="py-1 pr-2 ${v.relevance==='relevant'?'text-green-700':v.relevance==='tangential'?'text-amber-700':'text-red-700'} font-medium">${escapeHtml(v.relevance||'')}</td><td class="py-1 text-slate-600">${escapeHtml(v.note||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-left pr-2">support</th><th class="text-left pr-2">relevance</th><th class="text-left">note</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
-  function wordCountTable(title,counts){const rows=counts.map(c=>`<tr><td class="py-1 pr-2 text-right text-slate-400 w-16">${c.words}</td><td class="py-1 text-slate-600">${escapeHtml(c.title||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-right pr-2">words</th><th class="text-left">section</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
-  function criticIssueTable(title,issues){const sevColor=s=>s==='blocking'?'text-red-700 bg-red-50':s==='moderate'?'text-amber-700 bg-amber-50':'text-slate-600 bg-slate-100';const rows=issues.map(i=>`<tr class="align-top"><td class="py-1.5 pr-2"><span class="px-2 py-0.5 rounded text-xs font-medium ${sevColor(i.severity)}">${escapeHtml(i.severity||'')}</span></td><td class="py-1.5 pr-2 text-slate-400 text-xs">${escapeHtml(i.category||'')}</td><td class="py-1.5 pr-2 text-slate-500 text-xs font-mono">${escapeHtml(i.location||'')}</td><td class="py-1.5 pr-2 text-slate-700">${escapeHtml(i.issue||'')}<div class="text-slate-400 mt-0.5"><span class="font-semibold">Fix:</span> ${escapeHtml(i.fix||'')}</div></td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)} <span class="text-slate-400 font-normal">(${issues.length})</span></div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-left pr-2">severity</th><th class="text-left pr-2">category</th><th class="text-left pr-2">location</th><th class="text-left">issue / fix</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
-  function revisionTable(title,revisions){const rows=revisions.map(r=>`<tr><td class="py-1 pr-2 text-slate-700 align-top w-40">${escapeHtml(r.section_title||'')}</td><td class="py-1 pr-2 text-slate-500 align-top">${(r.issues||[]).map(escapeHtml).join('<br>')}</td><td class="py-1 text-slate-700 align-top">${escapeHtml(r.instruction||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold text-slate-700 mb-1">${escapeHtml(title)}</div><table class="w-full text-xs"><thead class="text-slate-400"><tr><th class="text-left pr-2">section</th><th class="text-left pr-2">issues</th><th class="text-left">instruction</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+  function kvBlock(title,rows){const items=rows.filter(([,v])=>v!==undefined&&v!==null&&v!=='').map(([k,v])=>`<div class="flex gap-3"><span style="color:var(--text-faint)" class="w-40 shrink-0">${escapeHtml(k)}</span><span class="break-words">${escapeHtml(String(v))}</span></div>`).join('');return `<div class="mb-3"><div class="font-semibold mb-1" style="color:var(--text)">${escapeHtml(title)}</div>${items}</div>`;}
+  function listBlock(title,items){const lis=items.map(i=>`<li class="break-words">${escapeHtml(String(i))}</li>`).join('');return `<div class="mb-3"><div class="font-semibold mb-1" style="color:var(--text)">${escapeHtml(title)}</div><ul class="list-disc list-inside space-y-0.5">${lis}</ul></div>`;}
+  function urlTable(title,urls){const rows=urls.map(u=>`<tr><td class="py-1 pr-2 text-right w-10" style="color:var(--text-faint)">${u.trust_score!=null?u.trust_score:''}</td><td class="py-1 pr-2 w-16" style="color:var(--text-faint)">${escapeHtml(u.status||'')}</td><td class="py-1 pr-2 text-right w-12" style="color:var(--text-faint)">${u.spans_yielded!=null?u.spans_yielded:''}</td><td class="py-1"><a href="${escapeHtml(u.url)}" target="_blank" rel="noopener" class="break-all">${escapeHtml(u.url)}</a>${u.title?` <span style="color:var(--text-faint)">— ${escapeHtml(u.title)}</span>`:''}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold mb-1" style="color:var(--text)">${escapeHtml(title)} <span style="color:var(--text-faint)" class="font-normal">(${urls.length})</span></div><table><thead style="color:var(--text-faint)"><tr><th class="text-right pr-2">trust</th><th class="text-left pr-2">status</th><th class="text-right pr-2">spans</th><th class="text-left">url</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+  function diagramTable(title,intents){const rows=intents.map(i=>`<tr><td class="py-1 pr-2 w-20" style="color:var(--text-faint)">${escapeHtml(i.format||'')}</td><td class="py-1 pr-2">${escapeHtml(i.section_title||'')}</td><td class="py-1">${escapeHtml(i.description||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold mb-1" style="color:var(--text)">${escapeHtml(title)}</div><table><thead style="color:var(--text-faint)"><tr><th class="text-left pr-2">format</th><th class="text-left pr-2">section</th><th class="text-left">description</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+  function verdictTable(title,verdicts){const col=s=>({supported:'#34d399',relevant:'#34d399',weak:'#fbbf24',tangential:'#fbbf24'}[s]||'#f87171');const rows=verdicts.map(v=>`<tr><td class="py-1 pr-2 font-medium" style="color:${col(v.support)}">${escapeHtml(v.support||'')}</td><td class="py-1 pr-2 font-medium" style="color:${col(v.relevance)}">${escapeHtml(v.relevance||'')}</td><td class="py-1">${escapeHtml(v.note||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold mb-1" style="color:var(--text)">${escapeHtml(title)}</div><table><thead style="color:var(--text-faint)"><tr><th class="text-left pr-2">support</th><th class="text-left pr-2">relevance</th><th class="text-left">note</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+  function wordCountTable(title,counts){const rows=counts.map(c=>`<tr><td class="py-1 pr-2 text-right w-16" style="color:var(--text-faint)">${c.words}</td><td class="py-1">${escapeHtml(c.title||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold mb-1" style="color:var(--text)">${escapeHtml(title)}</div><table><thead style="color:var(--text-faint)"><tr><th class="text-right pr-2">words</th><th class="text-left">section</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+  function criticIssueTable(title,issues){const sevStyle=s=>s==='blocking'?'color:#fca5a5;background:rgba(239,68,68,0.12)':s==='moderate'?'color:#fcd34d;background:rgba(251,191,36,0.1)':'color:var(--text-dim);background:var(--surface-2)';const rows=issues.map(i=>`<tr class="align-top"><td class="py-1.5 pr-2"><span class="px-2 py-0.5 rounded text-xs font-medium" style="${sevStyle(i.severity)}">${escapeHtml(i.severity||'')}</span></td><td class="py-1.5 pr-2 text-xs" style="color:var(--text-faint)">${escapeHtml(i.category||'')}</td><td class="py-1.5 pr-2 text-xs font-mono-ui" style="color:var(--text-faint)">${escapeHtml(i.location||'')}</td><td class="py-1.5 pr-2">${escapeHtml(i.issue||'')}<div class="mt-0.5" style="color:var(--text-faint)"><span class="font-semibold">Fix:</span> ${escapeHtml(i.fix||'')}</div></td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold mb-1" style="color:var(--text)">${escapeHtml(title)} <span style="color:var(--text-faint)" class="font-normal">(${issues.length})</span></div><table><thead style="color:var(--text-faint)"><tr><th class="text-left pr-2">severity</th><th class="text-left pr-2">category</th><th class="text-left pr-2">location</th><th class="text-left">issue / fix</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+  function revisionTable(title,revisions){const rows=revisions.map(r=>`<tr><td class="py-1 pr-2 align-top w-40">${escapeHtml(r.section_title||'')}</td><td class="py-1 pr-2 align-top" style="color:var(--text-faint)">${(r.issues||[]).map(escapeHtml).join('<br>')}</td><td class="py-1 align-top">${escapeHtml(r.instruction||'')}</td></tr>`).join('');return `<div class="mb-3"><div class="font-semibold mb-1" style="color:var(--text)">${escapeHtml(title)}</div><table><thead style="color:var(--text-faint)"><tr><th class="text-left pr-2">section</th><th class="text-left pr-2">issues</th><th class="text-left">instruction</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
 
   function startElapsedTimer() {
     State.startTime = Date.now();
     if (State.elapsedTimer) clearInterval(State.elapsedTimer);
-    State.elapsedTimer = setInterval(() => { $('elapsed').textContent = ((Date.now()-State.startTime)/1000).toFixed(1)+'s'; }, 100);
+    State.elapsedTimer = setInterval(() => {
+      $('elapsed').textContent = ((Date.now()-State.startTime)/1000).toFixed(1)+'s';
+      // Tick the running stage's timer in place — no full re-render needed.
+      for (const [name, stage] of State.stages) {
+        if (stage.status !== 'running') continue;
+        const el = document.querySelector(`.stage-time[data-stage="${name}"]`);
+        if (el) el.textContent = _stageElapsed(stage);
+      }
+    }, 100);
   }
   function stopElapsedTimer() { if (State.elapsedTimer) { clearInterval(State.elapsedTimer); State.elapsedTimer = null; } }
 
@@ -920,8 +1366,11 @@
   function handleEvent(event) {
     const { type, stage, message, data } = event;
     const name = stage || type;
-    if (type === 'stage_started') {
+    if (type === 'pipeline_info') {
+      State.pipelineInfo = data || null;
+    } else if (type === 'stage_started') {
       State.stages.set(name, { status:'running', message:message||'', data:{}, started_at:Date.now(), completed_at:null });
+      $('execution-subtitle').textContent = message || name.replace(/_/g,' ');
     } else if (type === 'stage_completed') {
       const existing = State.stages.get(name) || { started_at:Date.now() };
       State.stages.set(name, { ...existing, status:'completed', data:data||{}, completed_at:Date.now() });
@@ -930,8 +1379,16 @@
       State.articles = data.articles;
       onComplete(data.output_dir);
     } else if (type === 'error') {
-      State.stages.set(name, { status:'error', message:message||'Failed', error:message, data:data||{}, started_at:Date.now(), completed_at:Date.now() });
-      stopElapsedTimer(); $('stop-btn').disabled = true;
+      // Attach the failure to the stage that was running so the roadmap shows
+      // exactly where the pipeline stopped; fall back to a standalone row.
+      const running = [...State.stages.entries()].find(([, s]) => s.status === 'running');
+      if (running) {
+        const [rName, rStage] = running;
+        State.stages.set(rName, { ...rStage, status:'error', error:message||'Failed', data:{...rStage.data, ...(data||{})}, completed_at:Date.now() });
+      } else {
+        State.stages.set(name, { status:'error', message:message||'Failed', error:message, data:data||{}, started_at:Date.now(), completed_at:Date.now() });
+      }
+      showExecutionError(message || 'The pipeline stopped unexpectedly.');
     } else if (type === 'cancelled') {
       State.stages.set(name, { status:'cancelled', message:'Cancelled', data:{}, started_at:Date.now(), completed_at:Date.now() });
       stopElapsedTimer(); onCancelled();
@@ -951,7 +1408,7 @@
   }
 
   function renderArticle(level) {
-    if (!State.articles || !State.articles[level]) { $('article').innerHTML = `<p class="text-slate-400">No ${level} article available.</p>`; return; }
+    if (!State.articles || !State.articles[level]) { $('article').innerHTML = `<p style="color:var(--text-faint)">No ${level} article available.</p>`; return; }
     renderArticleMarkdown('article', State.articles[level].markdown || '');
   }
 
@@ -990,16 +1447,19 @@
 
   function renderHistoryCard(a) {
     const card = document.createElement('button');
-    card.className = 'history-card text-left bg-white border border-slate-200 rounded-xl p-5 hover:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full';
+    card.className = 'history-card';
     card.innerHTML = `
       <div class="flex items-start justify-between gap-3 mb-2">
-        <h3 class="font-bold text-slate-900 line-clamp-2 leading-snug text-sm">${escapeHtml(a.title||'Untitled')}</h3>
-        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100 flex-shrink-0">${escapeHtml(a.level)}</span>
+        <h3 class="font-display font-bold line-clamp-2 leading-snug text-sm" style="color:var(--text)">${escapeHtml(a.title||'Untitled')}</h3>
+        <span class="flex items-center gap-1.5 flex-shrink-0">
+          ${a.version > 1 ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold" style="background:var(--surface-2);color:var(--text-dim);border:1px solid var(--stroke)" title="${a.version} runs of this article">↻ v${a.version}</span>` : ''}
+          <span class="px-2 py-0.5 rounded-full text-xs font-semibold" style="background:rgba(32,184,205,0.15);color:var(--accent-text);border:1px solid rgba(32,184,205,0.3)">${escapeHtml(a.level)}</span>
+        </span>
       </div>
-      <p class="text-xs text-slate-400 line-clamp-2 mb-3 leading-relaxed">${escapeHtml(a.topic||'')}</p>
-      <div class="flex items-center justify-between text-xs text-slate-300">
+      <p class="text-xs line-clamp-2 mb-3 leading-relaxed" style="color:var(--text-dim)">${escapeHtml(a.topic||'')}</p>
+      <div class="flex items-center justify-between text-xs" style="color:var(--text-faint)">
         <span>${escapeHtml(formatTimestamp(a.generated_at))}</span>
-        <span class="font-mono bg-slate-50 px-1.5 py-0.5 rounded text-slate-400">${a.available_levels.length} level${a.available_levels.length>1?'s':''}</span>
+        <span class="font-mono-ui px-1.5 py-0.5 rounded" style="background:var(--surface-2)">${a.available_levels.length} level${a.available_levels.length>1?'s':''}</span>
       </div>`;
     card.addEventListener('click', () => loadPastArticle(a.id));
     return card;
@@ -1007,7 +1467,7 @@
 
   async function loadPastArticle(id, level = null) {
     showView('past-article');
-    $('past-article').innerHTML = '<p class="text-slate-400">Loading…</p>';
+    $('past-article').innerHTML = '<p style="color:#7a8194">Loading…</p>';
     try {
       const r = await fetch(level ? `/articles/${id}?level=${level}` : `/articles/${id}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -1024,14 +1484,32 @@
       }
       sel.disabled = a.available_levels.length <= 1;
       $('past-level-wrap').style.visibility = a.available_levels.length > 1 ? 'visible' : 'hidden';
+
+      // Version dropdown: only meaningful when this article has re-runs.
+      const vWrap = $('past-version-wrap'), vSel = $('past-version-selector');
+      const versions = a.versions || [];
+      if (versions.length > 1) {
+        vSel.innerHTML = '';
+        for (const v of [...versions].reverse()) {  // newest first
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = `v${v.version} — ${formatTimestamp(v.generated_at)}`;
+          if (v.id === a.id) opt.selected = true;
+          vSel.appendChild(opt);
+        }
+        vWrap.classList.remove('hidden');
+        vWrap.style.display = 'flex';
+      } else {
+        vWrap.style.display = 'none';
+      }
       renderArticleMarkdown('past-article', a.markdown);
-    } catch (err) { $('past-article').innerHTML = `<p class="text-red-500">Failed: ${escapeHtml(err.message)}</p>`; }
+    } catch (err) { $('past-article').innerHTML = `<p style="color:#dc2626">Failed: ${escapeHtml(err.message)}</p>`; }
   }
 
   let _pendingKeyUpdates = {};
   async function loadSettings() {
     showView('settings');
-    $('settings-keys').innerHTML = '<p class="py-8 text-sm text-slate-400 text-center">Loading…</p>';
+    $('settings-keys').innerHTML = '<p class="py-8 text-sm text-center" style="color:var(--text-dim)">Loading…</p>';
     $('settings-save-status').textContent = ''; $('provider-save-status').textContent = '';
     _pendingKeyUpdates = {};
     try {
@@ -1040,7 +1518,7 @@
       const data = await r.json();
       State.keyStatus = data;
       renderProviderCard(data); renderSettingsKeys(data.keys);
-    } catch (err) { $('settings-keys').innerHTML = `<p class="py-8 text-sm text-red-500 text-center">Failed: ${escapeHtml(err.message)}</p>`; }
+    } catch (err) { $('settings-keys').innerHTML = `<p class="py-8 text-sm text-center" style="color:#f87171">Failed: ${escapeHtml(err.message)}</p>`; }
   }
 
   function renderSettingsKeys(keys) {
@@ -1054,14 +1532,14 @@
         <div class="key-status ${k.present ? 'present' : 'missing'}" title="${k.present ? 'Present' : 'Not set'}"></div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1 flex-wrap">
-            <code class="text-xs font-mono font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">${escapeHtml(k.key)}</code>
-            ${k.present && k.masked_value ? `<span class="text-xs text-slate-400 font-mono">${escapeHtml(k.masked_value)}</span>` : ''}
-            ${!k.present ? `<span class="text-xs text-amber-600 font-semibold">not set</span>` : ''}
+            <code class="text-xs font-mono-ui font-semibold px-1.5 py-0.5 rounded" style="background:var(--surface-2);color:var(--accent-text)">${escapeHtml(k.key)}</code>
+            ${k.present && k.masked_value ? `<span class="text-xs font-mono-ui" style="color:var(--text-faint)">${escapeHtml(k.masked_value)}</span>` : ''}
+            ${!k.present ? `<span class="text-xs font-semibold" style="color:#fbbf24">not set</span>` : ''}
           </div>
-          <p class="text-xs text-slate-400 mb-2 leading-relaxed">${escapeHtml(k.description)}</p>
+          <p class="text-xs mb-2 leading-relaxed" style="color:var(--text-dim)">${escapeHtml(k.description)}</p>
           ${isBool
-            ? `<select data-key="${escapeHtml(k.key)}" class="settings-input text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white font-family:inherit"><option value="" ${!k.present?'selected':''}>— keep current —</option><option value="true" ${k.masked_value==='true'?'selected':''}>true</option><option value="false" ${k.masked_value==='false'?'selected':''}>false</option></select>`
-            : `<input data-key="${escapeHtml(k.key)}" type="password" autocomplete="off" spellcheck="false" placeholder="${k.present?'Enter new value to update':'Paste your API key here'}" class="settings-input w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono bg-white" />`
+            ? `<select data-key="${escapeHtml(k.key)}" class="settings-input q-input text-sm" style="width:auto"><option value="" ${!k.present?'selected':''}>— keep current —</option><option value="true" ${k.masked_value==='true'?'selected':''}>true</option><option value="false" ${k.masked_value==='false'?'selected':''}>false</option></select>`
+            : `<input data-key="${escapeHtml(k.key)}" type="password" autocomplete="off" spellcheck="false" placeholder="${k.present?'Enter new value to update':'Paste your API key here'}" class="settings-input q-input font-mono-ui text-sm" />`
           }
         </div>`;
       container.appendChild(row);
@@ -1113,23 +1591,27 @@
     form.innerHTML = '';
     payload.questions.forEach(q => {
       const wrap = document.createElement('div'); wrap.className = 'space-y-2';
-      const label = document.createElement('label'); label.className = 'block text-sm font-semibold text-slate-700'; label.textContent = q.question;
+      const label = document.createElement('label'); label.className = 'block text-sm font-semibold'; label.style.color = 'var(--text)'; label.textContent = q.question;
       wrap.appendChild(label);
       if (q.options && q.options.length > 0) {
         q.options.forEach(opt => {
           const rw = document.createElement('label');
-          rw.className = 'flex items-center gap-2.5 text-sm cursor-pointer hover:bg-blue-50 rounded-lg px-3 py-1.5 transition-colors';
-          rw.innerHTML = `<input type="radio" name="q_${q.id}" value="${escapeHtml(opt)}" class="h-4 w-4 accent-blue-600" /> ${escapeHtml(opt)}`;
+          rw.className = 'flex items-center gap-2.5 text-sm cursor-pointer rounded-lg px-3 py-1.5 transition-colors';
+          rw.style.color = 'var(--text-dim)';
+          rw.onmouseenter = () => rw.style.background = 'var(--surface-2)';
+          rw.onmouseleave = () => rw.style.background = '';
+          rw.innerHTML = `<input type="radio" name="q_${q.id}" value="${escapeHtml(opt)}" class="h-4 w-4 accent-teal-500" /> ${escapeHtml(opt)}`;
           wrap.appendChild(rw);
         });
         const ow = document.createElement('label');
         ow.className = 'flex items-center gap-2.5 text-sm px-3 py-1.5';
-        ow.innerHTML = `<input type="radio" name="q_${q.id}" value="__other__" class="h-4 w-4 accent-blue-600 flex-shrink-0" /><span class="text-slate-500">Other:</span><input type="text" name="q_${q.id}_other" class="flex-1 px-2.5 py-1 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />`;
+        ow.style.color = 'var(--text-dim)';
+        ow.innerHTML = `<input type="radio" name="q_${q.id}" value="__other__" class="h-4 w-4 accent-teal-500 flex-shrink-0" /><span>Other:</span><input type="text" name="q_${q.id}_other" class="flex-1 q-input text-sm py-1" />`;
         wrap.appendChild(ow);
       } else {
         const input = document.createElement('input');
         input.type = 'text'; input.name = `q_${q.id}`;
-        input.className = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
+        input.className = 'w-full q-input text-sm';
         input.placeholder = 'Type your answer (optional)';
         wrap.appendChild(input);
       }
@@ -1151,8 +1633,31 @@
     return answers;
   }
 
+  function showExecutionError(message) {
+    stopElapsedTimer();
+    $('stop-btn').disabled = true;
+    $('exec-spinner').classList.remove('spinner');
+    $('exec-spinner').style.color = '#f87171';
+    $('exec-title').textContent = 'Generation failed';
+    $('execution-subtitle').textContent = 'Fix the cause, then Resume — completed stages replay from cache.';
+    $('exec-error-message').textContent = message;
+    $('exec-error').classList.remove('hidden');
+  }
+
+  function resetExecutionHeader() {
+    $('exec-error').classList.add('hidden');
+    $('exec-spinner').classList.add('spinner');
+    $('exec-spinner').style.color = 'var(--accent-text)';
+    $('exec-title').textContent = 'Writing your article…';
+    $('execution-subtitle').textContent = 'Warming up the pipeline';
+    $('progress-fill').style.width = '0%';
+    $('progress-label').textContent = `0/${PIPELINE.length}`;
+  }
+
   function startExecution(jobId) {
     showView('execution'); State.currentJobId = jobId; State.stages = new Map();
+    State.pipelineInfo = null;
+    resetExecutionHeader();
     renderStages(); $('stop-btn').disabled = false; startElapsedTimer(); openStream(jobId);
   }
 
@@ -1160,6 +1665,7 @@
     if (State.eventSource) State.eventSource.close();
     stopElapsedTimer(); State.currentJobId = null; State.stages = new Map();
     State.articles = null; State.pastArticle = null;
+    clearRerun();
     $('article').innerHTML = ''; $('output-dir').textContent = '';
     showView('config');
   }
@@ -1177,8 +1683,26 @@
     try { const r = await fetch(`/jobs/${State.currentJobId}`, { method:'DELETE' }); if (!r.ok) throw new Error(`HTTP ${r.status}`); }
     catch (err) { alert('Failed to cancel: '+err.message); $('stop-btn').disabled = false; }
   });
+  $('retry-btn').addEventListener('click', async () => {
+    if (!State.pendingRequest) { resetToConfig(); return; }
+    $('retry-btn').disabled = true;
+    try { await submitGenerate(State.pendingRequest); }
+    catch (err) { alert('Failed to resume: ' + err.message); }
+    finally { $('retry-btn').disabled = false; }
+  });
+  $('exec-back-btn').addEventListener('click', () => showView('config'));
   $('result-back-btn').addEventListener('click', resetToConfig);
   $('past-back-btn').addEventListener('click', loadHistory);
+  $('rerun-btn').addEventListener('click', () => {
+    const a = State.pastArticle;
+    if (!a || !a.request || !a.request.topic) {
+      alert('This article has no saved request to re-run (older output format).');
+      return;
+    }
+    const nextVersion = (a.versions && a.versions.length ? a.versions.length : a.version || 1) + 1;
+    prefillCompose(a.request, a.id, a.title, nextVersion);
+  });
+  $('past-version-selector').addEventListener('change', e => loadPastArticle(e.target.value));
   $('history-refresh-btn').addEventListener('click', loadHistory);
   $('nav-new').addEventListener('click', e => { e.preventDefault(); resetToConfig(); });
   $('nav-history').addEventListener('click', e => { e.preventDefault(); loadHistory(); });
@@ -1187,7 +1711,7 @@
   $('level-selector').addEventListener('change', e => renderArticle(e.target.value));
   $('past-level-selector').addEventListener('change', e => { if (State.pastArticle) loadPastArticle(State.pastArticle.id, e.target.value); });
 
-  showView('config'); checkHealth(); refreshKeyStatus();
+  showView('config'); checkHealth(); refreshKeyStatus(); updateSummary();
 </script>
 </body>
 </html>

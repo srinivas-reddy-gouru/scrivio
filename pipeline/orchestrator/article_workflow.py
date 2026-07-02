@@ -29,7 +29,8 @@ from pipeline.workers.editor_worker import revise_draft, run_editor_review
 from pipeline.workers.extraction_worker import process_search_result
 from pipeline.workers.humanization_worker import humanize_article
 from pipeline.workers.planning_worker import find_evidence_gaps, run_planner
-from pipeline.workers.search_worker import multi_search
+from pipeline.workers.search_worker import canonical_url, multi_search
+from pipeline.workers.source_resolver import static_official_sources
 from pipeline.workers.verification_worker import (
     drop_unsupported_claims,
     run_verification_loop,
@@ -121,9 +122,30 @@ async def search_activity(
     if not isinstance(query_package, SearchQueries):
         query_package = SearchQueries.model_validate(query_package)
 
-    search_results = await multi_search(query_package.queries[:3])
+    # Docs-first pass: restrict one search to the topic's official
+    # documentation domains (static seed map only — this path has no
+    # Anthropic-shaped client for the LLM resolver), then merge with the
+    # general results, official pages first.
+    official_domains = frozenset(static_official_sources(request.topic))
+    doc_results = (
+        await multi_search([request.topic], include_domains=sorted(official_domains))
+        if official_domains
+        else []
+    )
+    general_results = await multi_search(query_package.queries[:3])
+    seen: set[str] = set()
+    search_results = []
+    for result in list(doc_results) + list(general_results):
+        key = canonical_url(result.url)
+        if key not in seen:
+            seen.add(key)
+            search_results.append(result)
+
     span_groups = await asyncio.gather(
-        *(process_search_result(result) for result in search_results[:MAX_FETCH_URLS])
+        *(
+            process_search_result(result, official_domains=official_domains)
+            for result in search_results[:MAX_FETCH_URLS]
+        )
     )
     return [span for group in span_groups for span in group]
 

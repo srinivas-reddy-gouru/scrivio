@@ -1,14 +1,11 @@
-from pathlib import Path
-
 import anthropic
 
 from pipeline.model_config import get_model
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import ArticleRequest, StoryBrief
 
 
-_SYSTEM_PROMPT = (
-    Path(__file__).resolve().parents[1] / "prompts" / "brief_v1.txt"
-).read_text(encoding="utf-8")
+_SYSTEM_PROMPT = load_prompt("brief_v2.txt")
 
 # Force structured output via tool_use — Anthropic's equivalent of OpenAI's
 # response_format. tool_choice="tool" guarantees the model always calls this.

@@ -42,8 +42,10 @@ from pipeline.workers.relevance_worker import (
     amend_request_with_missing_aspects,
     check_relevance,
 )
-from pipeline.providers.openai_adapter import OpenAIAnthropicAdapter
-from pipeline.workers.search_worker import multi_search
+from pipeline.model_config import get_model
+from pipeline.providers.openai_adapter import OpenAIAnthropicAdapter, _map_model
+from pipeline.workers.search_worker import canonical_url, multi_search
+from pipeline.workers.source_resolver import resolve_official_sources
 from pipeline.workers.verification_worker import (
     drop_unsupported_claims,
     run_verification_loop,
@@ -58,7 +60,10 @@ MAX_FETCH_URLS = 10
 # yielded content, a second search pass runs with broader queries to avoid
 # producing an under-sourced article silently.
 MIN_USEFUL_SPANS = 15
-MIN_USEFUL_SOURCES = 3
+# 4, not 3: a July 2026 run produced a thin 2-citation article from exactly
+# 3 surviving sources — just above the old bar, so the broader fallback
+# search never fired. Articles need evidence breadth, not just presence.
+MIN_USEFUL_SOURCES = 4
 
 class SearchQueries(BaseModel):
     queries: list[str]
@@ -125,9 +130,21 @@ async def generate_article(
     anthropic_client = _anthropic_client(request)
     cache = StageCache()
 
+    # Tell the UI which model runs each stage before anything executes.
+    await _emit(
+        progress_callback, "pipeline_info", "pipeline", **_pipeline_models(request)
+    )
+
     # ─── brief ────────────────────────────────────────────────────────
     await _emit(progress_callback, "stage_started", "brief", "Setting editorial angle")
-    brief_key = (request.topic, request.explanation_level, request.audience_role, request.extra_context or "")
+    # The resolved provider + preset are part of the key: a brief written by
+    # one provider/model must not be silently reused when the user pins a
+    # different one for this run.
+    model_fingerprint = f"{_resolve_provider(request.llm_provider)}:{request.model_preset}"
+    brief_key = (
+        request.topic, request.explanation_level, request.audience_role,
+        request.extra_context or "", model_fingerprint,
+    )
     cached_brief = cache.get("brief", *brief_key)
     if cached_brief is not None:
         brief = StoryBrief.model_validate(cached_brief)
@@ -171,6 +188,7 @@ async def generate_article(
             brief_key = (
                 request.topic, request.explanation_level,
                 request.audience_role, request.extra_context or "",
+                model_fingerprint,
             )
             cached_retry = cache.get("brief", *brief_key)
             if cached_retry is not None:
@@ -191,6 +209,27 @@ async def generate_article(
             reasoning=relevance.reasoning,
         )
 
+    # ─── official sources ─────────────────────────────────────────────
+    # Resolve the source-of-truth documentation domains for this topic
+    # (kafka.apache.org for Kafka, docs.oracle.com for Java, …) BEFORE
+    # searching, so the docs-first search pass can target them and trust
+    # scoring can rank them above blog posts and Q&A forums.
+    sources_key = (request.topic, request.extra_context or "")
+    cached_domains = cache.get("sources", *sources_key)
+    if not request.web_search or not _has_search_key():
+        # No search will run, so resolved domains would go unused —
+        # skip the LLM call entirely.
+        official_domains: frozenset[str] = frozenset()
+    elif cached_domains is not None:
+        official_domains = frozenset(cached_domains)
+    else:
+        resolved_domains = await resolve_official_sources(
+            request.topic, request.extra_context, anthropic_client,
+            preset=request.model_preset,
+        )
+        cache.set("sources", resolved_domains, *sources_key)
+        official_domains = frozenset(resolved_domains)
+
     # ─── search ───────────────────────────────────────────────────────
     await _emit(progress_callback, "stage_started", "search", "Gathering evidence")
     search_key = (
@@ -198,6 +237,7 @@ async def generate_article(
         brief.thesis if brief else "",
         brief.angle if brief else "",
         request.web_search,
+        sorted(official_domains),
     )
     cached_spans = cache.get("search", *search_key)
     search_debug: dict = {}
@@ -216,9 +256,11 @@ async def generate_article(
         ]
     else:
         spans = await _collect_evidence_spans(
-            request, brief, openai_client, debug_info=search_debug,
+            request, brief, openai_client,
+            official_domains=official_domains, debug_info=search_debug,
         )
         cache.set("search", spans, *search_key)
+    search_debug["official_docs_domains"] = sorted(official_domains)
     await _emit(
         progress_callback, "stage_completed", "search",
         spans_count=len(spans), cached=cached_spans is not None,
@@ -260,7 +302,9 @@ async def generate_article(
     if cached_gap_spans is not None:
         spans = [EvidenceSpan.model_validate(s) for s in cached_gap_spans]
     else:
-        spans = await _fill_evidence_gaps(plan, spans, openai_client)
+        spans = await _fill_evidence_gaps(
+            plan, spans, openai_client, official_domains=official_domains
+        )
         cache.set("gap_fill", spans, *gap_key)
     await _emit(
         progress_callback, "stage_completed", "gap_fill",
@@ -572,22 +616,59 @@ async def _generate_brief(
             suggested_title=f"What Nobody Tells You About {request.topic}",
         )
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        return None
-
+    # The client already encodes provider availability: it is the real
+    # Anthropic client, the OpenAI adapter shim, or (handled above) the mock.
+    # No env-var check here — gating on ANTHROPIC_API_KEY would silently skip
+    # the brief for OpenAI-only users even though the adapter handles it fine.
     return await run_brief(request, anthropic_client)
+
+
+async def _empty_results() -> list:
+    """Awaitable stand-in for a search pass that shouldn't run."""
+    return []
+
+
+def _select_fetch_candidates(
+    results: list, official_domains: frozenset[str], budget: int
+) -> tuple[list, list]:
+    """Rank search results by trust and split into (selected, skipped).
+
+    Official-doc URLs (score 1.0) win the ranking outright, but are capped at
+    half the budget when other sources are available — the planner needs
+    evidence from many distinct URLs, so official docs must anchor the
+    article without monopolizing it."""
+    ranked = sorted(
+        results, key=lambda r: score_url(r.url, official_domains), reverse=True
+    )
+    if not official_domains:
+        return ranked[:budget], ranked[budget:]
+
+    official = [r for r in ranked if score_url(r.url, official_domains) >= 1.0]
+    general = [r for r in ranked if score_url(r.url, official_domains) < 1.0]
+    n_official = min(len(official), max(budget // 2, budget - len(general)))
+    selected = official[:n_official] + general[: budget - n_official]
+    skipped = official[n_official:] + general[budget - n_official:]
+    return selected, skipped
 
 
 async def _collect_evidence_spans(
     request: ArticleRequest,
     brief: StoryBrief | None,
     openai_client,
+    official_domains: frozenset[str] = frozenset(),
     debug_info: dict | None = None,
 ) -> list[EvidenceSpan]:
     """Collect evidence spans by running web searches, ranking results by
-    trust score, and fetching the top-N URLs. When `debug_info` is provided,
-    populates it with per-URL details so the SSE stage_completed event can
-    show the user exactly which URLs were tried and what each contributed."""
+    trust score, and fetching the top-N URLs.
+
+    Two search passes run when official_domains is non-empty: a docs-first
+    pass restricted to the topic's official documentation domains, and the
+    general pass. Official results are merged in first so the source of
+    truth wins ties during deduplication.
+
+    When `debug_info` is provided, populates it with per-URL details so the
+    SSE stage_completed event can show the user exactly which URLs were
+    tried and what each contributed."""
     if not request.web_search or not _has_search_key():
         if debug_info is not None:
             debug_info["mode"] = "seed_only"
@@ -598,14 +679,37 @@ async def _collect_evidence_spans(
         return [_seed_evidence_span(request)]
 
     queries = await _generate_search_queries(request, brief, openai_client)
-    search_results = await multi_search(queries)
+    doc_queries: list[str] = []
+    if official_domains:
+        doc_queries = [request.topic] + [
+            f"{request.topic} {item}" for item in request.must_cover[:2]
+        ]
+
+    general_results, doc_results = await asyncio.gather(
+        multi_search(queries),
+        multi_search(doc_queries, include_domains=sorted(official_domains))
+        if doc_queries else _empty_results(),
+    )
+
+    # Merge with docs first so official pages survive URL deduplication.
+    seen_urls: set[str] = set()
+    search_results = []
+    for result in list(doc_results) + list(general_results):
+        key = canonical_url(result.url)
+        if key not in seen_urls:
+            seen_urls.add(key)
+            search_results.append(result)
 
     # Rank by trust score before fetching so we spend our fetch budget on the
     # highest-quality sources, not just whatever the search API returned first.
-    ranked = sorted(search_results, key=lambda r: score_url(r.url), reverse=True)
-    selected = ranked[:MAX_FETCH_URLS]
+    selected, skipped = _select_fetch_candidates(
+        search_results, official_domains, MAX_FETCH_URLS
+    )
     span_groups = await asyncio.gather(
-        *(process_search_result(result) for result in selected)
+        *(
+            process_search_result(result, official_domains=official_domains)
+            for result in selected
+        )
     )
     spans = [span for group in span_groups for span in group]
 
@@ -643,10 +747,15 @@ async def _collect_evidence_spans(
                 debug_info["fallback_exhausted"] = True
         if fresh:
             ranked_fallback = sorted(
-                fresh, key=lambda r: score_url(r.url), reverse=True
+                fresh,
+                key=lambda r: score_url(r.url, official_domains),
+                reverse=True,
             )
             fallback_groups = await asyncio.gather(
-                *(process_search_result(r) for r in ranked_fallback[:MAX_FETCH_URLS])
+                *(
+                    process_search_result(r, official_domains=official_domains)
+                    for r in ranked_fallback[:MAX_FETCH_URLS]
+                )
             )
             fallback_span_list = [s for g in fallback_groups for s in g]
             spans = spans + fallback_span_list
@@ -660,13 +769,14 @@ async def _collect_evidence_spans(
 
     if debug_info is not None:
         debug_info["queries"] = queries
+        debug_info["doc_queries"] = doc_queries
         debug_info["search_results_total"] = len(search_results)
         debug_info["fetch_attempted"] = len(selected)
         debug_info["urls"] = [
             {
                 "url": r.url,
                 "title": r.title[:120] if r.title else "",
-                "trust_score": round(score_url(r.url), 2),
+                "trust_score": round(score_url(r.url, official_domains), 2),
                 "spans_yielded": len(spans_for_url),
                 "status": "fetched" if spans_for_url else "no_spans",
             }
@@ -678,10 +788,10 @@ async def _collect_evidence_spans(
             {
                 "url": r.url,
                 "title": r.title[:120] if r.title else "",
-                "trust_score": round(score_url(r.url), 2),
+                "trust_score": round(score_url(r.url, official_domains), 2),
                 "reason": "below fetch budget",
             }
-            for r in ranked[MAX_FETCH_URLS:]
+            for r in skipped
         ][:5]  # cap at 5 to keep payload manageable
         if fallback_triggered:
             debug_info["fallback_triggered"] = True
@@ -774,6 +884,7 @@ async def _fill_evidence_gaps(
     plan: ArticlePlan,
     spans: list[EvidenceSpan],
     openai_client,
+    official_domains: frozenset[str] = frozenset(),
 ) -> list[EvidenceSpan]:
     """After planning, fetch evidence for any claims the planner couldn't ground."""
     if not _has_search_key():
@@ -791,7 +902,10 @@ async def _fill_evidence_gaps(
         return spans
 
     span_groups = await asyncio.gather(
-        *(process_search_result(result) for result in search_results[:MAX_FETCH_URLS])
+        *(
+            process_search_result(result, official_domains=official_domains)
+            for result in search_results[:MAX_FETCH_URLS]
+        )
     )
     new_spans = [span for group in span_groups for span in group]
     return spans + new_spans
@@ -824,18 +938,69 @@ def _openai_client(request: ArticleRequest):
     return MockOpenAIClient(request)
 
 
-def _resolve_provider() -> str:
-    """Determine which LLM provider to use based on available keys.
+def _pipeline_models(request: ArticleRequest) -> dict:
+    """Stage → model map for the UI's pipeline roadmap.
 
-    Rules (in priority order):
-      1. Only OPENAI_API_KEY set        → "openai"  (auto)
-      2. Only ANTHROPIC_API_KEY set     → "anthropic" (auto)
+    Emitted once as a `pipeline_info` event at run start so the user can see
+    which model executes each stage BEFORE it runs — including how the
+    provider pin / preset resolved, and the adapter's tier mapping when the
+    writing provider is OpenAI.
+    """
+    provider = _resolve_provider(getattr(request, "llm_provider", "auto"))
+
+    def writing_model(role: str) -> str:
+        if provider == "none":
+            return "mock"
+        model = get_model(role, request.model_preset)
+        return _map_model(model) if provider == "openai" else model
+
+    # Search-query generation and claim verification always run on OpenAI
+    # (hardcoded workers), independent of the writing provider.
+    aux = "gpt-4o-mini" if os.environ.get("OPENAI_API_KEY") else "mock"
+    return {
+        "provider": provider,
+        "preset": request.model_preset,
+        "stages": {
+            "brief": writing_model("brief"),
+            "relevance_check": writing_model("relevance"),
+            "search": f"{aux} + search API",
+            "planning": writing_model("planning"),
+            "gap_fill": "search API",
+            "verification": aux,
+            "drafting": writing_model("drafting"),
+            "editor": writing_model("editor"),
+            "polish": writing_model("polish"),
+            "critic": writing_model("critic"),
+        },
+    }
+
+
+def _resolve_provider(requested: str = "auto") -> str:
+    """Determine which LLM provider to use for the writing stages.
+
+    *requested* is the per-request pin from ArticleRequest.llm_provider
+    ("auto" | "anthropic" | "openai"). A pin wins whenever its key is
+    present; a pin whose key is missing is ignored (with a warning) so a
+    stale saved request can never brick generation.
+
+    Auto rules (in priority order):
+      1. Only OPENAI_API_KEY set        → "openai"
+      2. Only ANTHROPIC_API_KEY set     → "anthropic"
       3. Both set + LLM_PROVIDER pref  → honour pref (default "anthropic")
       4. Both set, no pref             → "anthropic"
       5. Neither set                   → "none"
     """
     has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY"))
     has_openai    = bool(os.environ.get("OPENAI_API_KEY"))
+    has = {"anthropic": has_anthropic, "openai": has_openai}
+
+    if requested in ("anthropic", "openai"):
+        if has[requested]:
+            return requested
+        logging.warning(
+            "Request pinned llm_provider=%s but its API key is not set — "
+            "falling back to auto provider selection.", requested,
+        )
 
     if has_openai and not has_anthropic:
         return "openai"
@@ -848,15 +1013,16 @@ def _resolve_provider() -> str:
 
 
 def _anthropic_client(request: ArticleRequest):
-    """Return the writing-stage client, auto-selected from available keys.
+    """Return the writing-stage client for this request.
 
     Provider priority:
+      • request.llm_provider pin (when its key is present) — per-run choice
       • Only OpenAI key present  → OpenAIAnthropicAdapter (no Claude credits needed)
       • Only Anthropic key       → anthropic.AsyncAnthropic
       • Both keys present        → use LLM_PROVIDER preference (default: Anthropic)
       • Neither key              → MockAnthropicClient (generates placeholder text)
     """
-    provider = _resolve_provider()
+    provider = _resolve_provider(getattr(request, "llm_provider", "auto"))
     if provider == "openai":
         return OpenAIAnthropicAdapter(openai.AsyncOpenAI())
     if provider == "anthropic":
@@ -945,6 +1111,18 @@ class MockOpenAICreateCompletions:
         )
 
 
+def _system_prompt_text(system) -> str:
+    """Normalize a messages.create system param (str or cached-block list)
+    to plain text for mock routing."""
+    if isinstance(system, str):
+        return system
+    if isinstance(system, list):
+        return "\n".join(
+            block.get("text", "") for block in system if isinstance(block, dict)
+        )
+    return str(system)
+
+
 class MockAnthropicClient:
     def __init__(self, request: ArticleRequest) -> None:
         self.request = request
@@ -975,22 +1153,24 @@ class MockAnthropicMessages:
                 ]
             )
 
-        # ── text path: planning, drafting, compiler, humanizer ───────────
-        system = kwargs.get("system", "")
+        # ── text path: planning, drafting, compiler, polisher ────────────
+        # Workers pass system as either a plain string or a cached-block
+        # list ([{"type": "text", "text": ..., "cache_control": ...}]);
+        # normalize to text so the marker matching below works for both.
+        system = _system_prompt_text(kwargs.get("system", ""))
         user_content = kwargs["messages"][-1]["content"]
 
-        if "planning brain" in system:
+        if "article planner" in system:
             content = _mock_plan_json(self.request, user_content)
         elif "writing one section" in system:
             content = _mock_section_markdown(user_content)
         elif "level compiler" in system:
             content = _mock_compiled_markdown(system, user_content)
         elif "copyeditor" in system:
-            # Humanizer / polish: strip the prompt envelope and return just
-            # the markdown content. Match is loosened from "final copyeditor"
-            # to "copyeditor" so the combined polish prompt (which begins
-            # "You are the final-pass copyeditor AND level-adapter") still
-            # routes here.
+            # Polisher: strip the prompt envelope and return just the
+            # markdown content. The polisher prompt opens with "You are the
+            # final-pass copyeditor AND level-adapter", so "copyeditor"
+            # routes it here.
             content = _mock_humanized_markdown(user_content)
         elif user_content.strip().startswith("{"):
             # Diagram intent JSON (from generate_spec via mermaid_worker /
@@ -1048,6 +1228,10 @@ class MockAnthropicMessages:
             return self._mock_relevance_check(user_content)
         if tool_name == "submit_critic_verdict":
             return self._mock_critic_verdict(user_content)
+        if tool_name == "submit_official_sources":
+            # Static seed map in source_resolver still applies; the mock LLM
+            # just adds nothing on top.
+            return {"domains": []}
         # Unknown tool — return an empty dict; the caller's model_validate will
         # raise a clear Pydantic error rather than an obscure AttributeError.
         return {}

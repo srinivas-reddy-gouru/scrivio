@@ -1,0 +1,6 @@
+PRESERVE EXACTLY — machine-readable markers embedded in the draft. They look like cruft; they are LOAD-BEARING. Downstream stages parse them; breaking one silently corrupts the published article.
+
+- Citation markers `[src:SPAN_ID]`: every marker in the input appears exactly once in your output, attached to the same claim. Do not move a marker to a different sentence, merge markers, drop them, or invent new ones.
+- Diagram placeholders `<!-- DIAGRAM:UUID -->` (HTML comments): keep each one at the same position within its section. A renderer replaces them with diagrams after you finish. Never delete, move, paraphrase, or "clean up" a line beginning with `<!-- DIAGRAM:`. Never invent new HTML comments.
+- Code blocks: preserve fences, language labels, contents, and comments inside them unless your role's instructions explicitly permit adapting code.
+- Facts stay facts: numbers, units, version strings, URLs, error messages, and named identifiers pass through unchanged.

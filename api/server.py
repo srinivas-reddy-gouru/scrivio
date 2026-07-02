@@ -369,6 +369,13 @@ async def get_job_status(job_id: str) -> JobStatusResponse:
 _ARTICLE_DIR_PATTERN = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 
+class ArticleVersion(BaseModel):
+    """One run within a re-run lineage."""
+    id: str
+    version: int          # 1 = original, 2 = first re-run, …
+    generated_at: str
+
+
 class ArticleSummary(BaseModel):
     id: str  # directory name
     title: str
@@ -376,6 +383,11 @@ class ArticleSummary(BaseModel):
     level: str  # the level that was generated
     generated_at: str
     available_levels: list[str]  # which markdown files exist on disk
+    rerun_of: str | None = None
+    version: int = 1
+    # Full lineage (oldest → newest), populated on the representative entry
+    # the library shows. A single-run article has just itself here.
+    versions: list[ArticleVersion] = []
 
 
 class ArticleDetail(BaseModel):
@@ -386,6 +398,11 @@ class ArticleDetail(BaseModel):
     generated_at: str
     available_levels: list[str]
     markdown: str
+    # The original ArticleRequest — lets the UI prefill the composer for
+    # "Re-run" with every knob the article was generated with.
+    request: dict = {}
+    version: int = 1
+    versions: list[ArticleVersion] = []
 
 
 def _read_article_meta(article_dir: Path) -> dict | None:
@@ -427,7 +444,69 @@ def _summary_from_meta(article_dir: Path, meta: dict) -> ArticleSummary | None:
         level=requested_level,
         generated_at=meta.get("generated_at", ""),
         available_levels=available_levels,
+        rerun_of=request.get("rerun_of"),
     )
+
+
+def _scan_summaries() -> list[tuple[ArticleSummary, float]]:
+    """All valid article summaries on disk as (summary, dir mtime) pairs."""
+    if not OUTPUT_ROOT.exists():
+        return []
+    pairs: list[tuple[ArticleSummary, float]] = []
+    for article_dir in OUTPUT_ROOT.iterdir():
+        if not article_dir.is_dir():
+            continue
+        meta = _read_article_meta(article_dir)
+        if meta is None:
+            continue
+        summary = _summary_from_meta(article_dir, meta)
+        if summary is not None:
+            pairs.append((summary, article_dir.stat().st_mtime))
+    return pairs
+
+
+def _group_into_lineages(
+    pairs: list[tuple[ArticleSummary, float]]
+) -> list[ArticleSummary]:
+    """Collapse re-run chains into one representative summary per lineage.
+
+    Each article's root is found by walking rerun_of pointers (broken or
+    cyclic pointers degrade to "this article is its own root" — a deleted
+    ancestor must not hide its descendants). Runs are numbered oldest = 1,
+    and the NEWEST run represents the lineage in the library, carrying the
+    full version list so the UI can offer older runs. Directory mtime is
+    the ordering key (matching the pre-lineage history behaviour); the
+    generated_at string is display metadata only.
+    """
+    by_id = {s.id: s for s, _ in pairs}
+
+    def root_of(summary: ArticleSummary) -> str:
+        seen = set()
+        current = summary
+        while current.rerun_of and current.rerun_of in by_id and current.id not in seen:
+            seen.add(current.id)
+            current = by_id[current.rerun_of]
+        return current.id
+
+    lineages: dict[str, list[tuple[ArticleSummary, float]]] = {}
+    for s, mtime in pairs:
+        lineages.setdefault(root_of(s), []).append((s, mtime))
+
+    representatives: list[tuple[ArticleSummary, float]] = []
+    for runs in lineages.values():
+        runs.sort(key=lambda pair: pair[1])  # oldest first
+        versions = [
+            ArticleVersion(id=r.id, version=i + 1, generated_at=r.generated_at)
+            for i, (r, _) in enumerate(runs)
+        ]
+        latest, latest_mtime = runs[-1]
+        representatives.append((
+            latest.model_copy(update={"version": len(runs), "versions": versions}),
+            latest_mtime,
+        ))
+
+    representatives.sort(key=lambda pair: pair[1], reverse=True)
+    return [s for s, _ in representatives]
 
 
 @app.get("/articles", response_model=list[ArticleSummary])
@@ -438,27 +517,9 @@ async def list_articles(limit: int = 50) -> list[ArticleSummary]:
     articles doesn't blow up the UI. The default of 50 fits comfortably
     in the history sidebar.
     """
-    if not OUTPUT_ROOT.exists():
-        return []
-
-    # Sort by directory modification time descending so the freshest
-    # article is first regardless of clock skew on the timestamp prefix.
-    candidates = sorted(
-        (p for p in OUTPUT_ROOT.iterdir() if p.is_dir()),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    summaries: list[ArticleSummary] = []
-    for article_dir in candidates:
-        meta = _read_article_meta(article_dir)
-        if meta is None:
-            continue
-        summary = _summary_from_meta(article_dir, meta)
-        if summary is not None:
-            summaries.append(summary)
-        if len(summaries) >= limit:
-            break
-    return summaries
+    # Scan everything, THEN group and cap: a lineage member older than the
+    # limit window must still fold into its representative card.
+    return _group_into_lineages(_scan_summaries())[:limit]
 
 
 @app.get("/articles/{article_id}", response_model=ArticleDetail)
@@ -494,6 +555,17 @@ async def get_article(article_id: str, level: str | None = None) -> ArticleDetai
         )
     markdown = (article_dir / f"{target_level}.md").read_text(encoding="utf-8")
 
+    # Lineage lookup so the article view can offer a version dropdown and
+    # the Re-run action knows this article's place in its chain.
+    version, versions = 1, []
+    for representative in _group_into_lineages(_scan_summaries()):
+        for v in representative.versions:
+            if v.id == summary.id:
+                version, versions = v.version, representative.versions
+                break
+        if versions:
+            break
+
     return ArticleDetail(
         id=summary.id,
         title=summary.title,
@@ -502,6 +574,9 @@ async def get_article(article_id: str, level: str | None = None) -> ArticleDetai
         generated_at=summary.generated_at,
         available_levels=summary.available_levels,
         markdown=markdown,
+        request=meta.get("request") or {},
+        version=version,
+        versions=versions,
     )
 
 
@@ -515,10 +590,11 @@ _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 # LLM_PROVIDER is NOT here — it's a preference value, not a secret key.
 # It is read/written via the dedicated provider_preference field.
 _MANAGED_KEYS: list[tuple[str, str]] = [
-    ("ANTHROPIC_API_KEY", "Anthropic — required for Claude models (brief, plan, draft, edit, polish, critic)"),
-    ("OPENAI_API_KEY",    "OpenAI — required for GPT-4o writing; also used for diagrams and claim verification"),
+    ("ANTHROPIC_API_KEY", "Anthropic — Claude models for the writing pipeline (brief, plan, draft, edit, polish, critic)"),
+    ("OPENAI_API_KEY",    "OpenAI — GPT models; runs the full pipeline when it is the only key, plus search queries and claim verification"),
     ("TAVILY_API_KEY",    "Tavily — enables live web search for citations (optional)"),
-    ("USE_JINA_READER",   "Use Jina Reader for URL extraction (true / false)"),
+    ("JINA_API_KEY",      "Jina Reader — fallback fetcher for pages that block scrapers (optional; Jina returns 401 without it)"),
+    ("USE_JINA_READER",   "Try Jina Reader FIRST for URL extraction (true / false)"),
 ]
 
 # Search-provider env vars (any one is sufficient).

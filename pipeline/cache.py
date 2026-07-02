@@ -24,7 +24,15 @@ from pydantic import BaseModel
 
 # Bump this whenever prompt content or schema shapes change in a way that
 # should invalidate all previously-cached outputs.
-_CACHE_VERSION = "v1"
+# v2: July 2026 prompt overhaul — all role prompts rewritten as *_v2.txt.
+# v3: drafter heading contract + OpenAI default models gpt-4.1 → gpt-5.2
+#     (cached gpt-4.1 outputs must not replay into new runs).
+# v4: OpenAI defaults gpt-5.2 → gpt-5.4 / gpt-5.4-mini.
+# v5: extraction plausibility guard — cached search spans from runs where
+#     readability collapsed pages to error-div text are tainted.
+# v6: editor/critic/polisher gained duplicate-statement, worked-example-drift
+#     and self-reference checks — cached reviews predate the stricter bar.
+_CACHE_VERSION = "v6"
 
 _DEFAULT_CACHE_DIR = Path(".cache") / "article_pipeline"
 
