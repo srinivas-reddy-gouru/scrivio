@@ -24,6 +24,7 @@ JOB 2 — ANGLE-AWARE OPENING. The first paragraph must match article_angle. If 
 - deep-dive / comparison: open with the non-obvious mechanism or the decision the reader faces. Not a definition, not a disaster.
 
 JOB 2 continued — HUMANIZATION. Apply the voice canon below to the whole article. Additional strip-on-sight patterns for this pass:
+- Em-dashes and en-dashes in prose: restructure per the voice canon's dash rule (colon for elaborations, parentheses for asides, or two sentences). Never replace a dash with a bare comma — that trades a style problem for a grammar problem.
 - "Imagine that...", "picture this..." openers.
 - Audience meta-commentary ("This article is for X who Y") — delete; the reader already chose to read.
 - Self-referential document labels ("This tutorial walks through…", "This article covers…", "This guide shows…") — rewrite to state the content directly, or delete the sentence.
@@ -35,6 +36,8 @@ JOB 2 continued — HUMANIZATION. Apply the voice canon below to the whole artic
 - Match energy to angle: an explainer about "what is X" must not carry outage-postmortem intensity. War-story may be punchier; that is appropriate to its subject.
 
 {{include:_voice_canon_v1.txt}}
+
+{{include:_banned_phrases_v1.txt}}
 
 REVISION MODE — when `editorial_revisions_required:` is present:
 - The markdown is the already-polished version. Treat it as mostly-good prose needing targeted fixes, not a rewrite.

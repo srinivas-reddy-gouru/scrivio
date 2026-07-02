@@ -1,10 +1,12 @@
 import asyncio
 import logging
 import random
+import re
 
 from pipeline.model_config import get_model
 from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
+    SectionRevision,
     ArticlePlan,
     DraftPackage,
     DraftSection,
@@ -108,7 +110,102 @@ async def run_editor_review(
         tool_choice={"type": "tool", "name": "submit_editor_report"},
     )
     tool_use = next(b for b in response.content if b.type == "tool_use")
-    return EditorReport.model_validate(tool_use.input)
+    report = EditorReport.model_validate(tool_use.input)
+    # Deterministic supplement to the LLM review: citation coverage tends to
+    # collapse in later sections and the model rarely notices. Cheap string
+    # math catches it reliably.
+    return flag_low_citation_sections(draft, report)
+
+
+# ── Citation density (mechanical check) ──────────────────────────────
+
+# Minimum fraction of prose paragraphs in a section that must carry at least
+# one [src:...] citation marker. 0.4 because well-cited sections in real
+# output land around 0.6-0.8 while degraded late sections drop to 0.0-0.2;
+# 0.4 splits those populations without flagging legitimately narrative
+# paragraphs (transitions, worked-example commentary) that need no citation.
+CITATION_DENSITY_FLOOR = 0.4
+
+# Sections that are mostly fenced code are walkthroughs — their prose
+# narrates the code rather than asserting sourced facts. Above this ratio of
+# code lines to total lines, the density check does not apply.
+CODE_WALKTHROUGH_LINE_RATIO = 0.5
+
+# Never mechanically flag more than this many sections per article: the
+# drafter re-drafts every flagged section, and mass re-drafting on a thin
+# evidence pool would churn the whole article for marginal benefit.
+MAX_DENSITY_FLAGS = 2
+
+_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+
+
+def section_citation_density(content: str) -> float | None:
+    """Fraction of prose paragraphs containing a [src:...] marker.
+
+    Returns None when the check does not apply: no prose paragraphs, or the
+    section is predominantly a code walkthrough (see
+    CODE_WALKTHROUGH_LINE_RATIO).
+    """
+    lines = content.splitlines()
+    if lines:
+        prose_line_count = len(_FENCE_RE.sub("", content).splitlines())
+        if 1 - (prose_line_count / len(lines)) > CODE_WALKTHROUGH_LINE_RATIO:
+            return None
+
+    prose = _FENCE_RE.sub("", content)
+    paragraphs = [
+        p for p in (chunk.strip() for chunk in prose.split("\n\n"))
+        # Headings, tables, diagram placeholders, and blank chunks are not
+        # citable prose paragraphs.
+        if p and not p.startswith(("#", "|", "<!--", "```"))
+    ]
+    if not paragraphs:
+        return None
+    cited = sum(1 for p in paragraphs if "[src:" in p)
+    return cited / len(paragraphs)
+
+
+def flag_low_citation_sections(
+    draft: DraftPackage, report: EditorReport
+) -> EditorReport:
+    """Append revision requests for sections whose citation density is below
+    CITATION_DENSITY_FLOOR. Sections the editor already flagged are skipped
+    (one instruction per section keeps the re-draft focused)."""
+    already_flagged = {rev.section_title for rev in report.revisions}
+    added: list[SectionRevision] = []
+    for section in draft.sections:
+        if len(added) >= MAX_DENSITY_FLAGS:
+            break
+        if section.title in already_flagged:
+            continue
+        density = section_citation_density(section.content)
+        if density is None or density >= CITATION_DENSITY_FLOOR:
+            continue
+        added.append(SectionRevision(
+            section_title=section.title,
+            issues=[
+                f"Citation coverage is {density:.0%} of prose paragraphs, "
+                f"below the {CITATION_DENSITY_FLOOR:.0%} floor."
+            ],
+            instruction=(
+                "Add [src:...] citations from the provided evidence to the "
+                "factual claims in this section; where no evidence supports "
+                "a claim, hedge it or remove it."
+            ),
+        ))
+        logging.info(
+            "Citation density %.0f%% in section %r — flagged for revision.",
+            density * 100, section.title,
+        )
+
+    if not added:
+        return report
+    # Low-density sections must actually trigger the revision pass, which
+    # only runs when the report is not approved.
+    return report.model_copy(update={
+        "approved": False,
+        "revisions": [*report.revisions, *added],
+    })
 
 
 async def revise_draft(

@@ -188,3 +188,17 @@ def test_remove_boilerplate_recovers_from_tiny_readability_extraction(monkeypatc
     assert "You can't perform that action" not in text
     assert "Pool sizing paragraph 0" in text
     assert len(text) > 5000
+
+
+def test_score_url_social_ugc_ranks_below_official_and_blogs() -> None:
+    """LinkedIn posts and X threads are unreviewed UGC: usable as leads but
+    they must never outrank official docs, curated sources, or even blogs."""
+    linkedin = score_url("https://www.linkedin.com/pulse/kafka-tips-someone")
+    assert linkedin == 0.5
+    assert linkedin < score_url("https://kafka.apache.org/documentation/",
+                                frozenset({"kafka.apache.org"}))  # official 1.0
+    assert linkedin < score_url("https://docs.spring.io/spring-boot/docs/")   # curated 0.9
+    assert linkedin < score_url("https://dev.to/user/post")                   # blogs 0.65
+    assert linkedin < score_url("https://somepersonalblog.io/article")        # unknown 0.6
+    assert linkedin > score_url("https://stackoverflow.com/q/1")              # above forums
+    assert score_url("https://x.com/someone/status/123") == 0.5

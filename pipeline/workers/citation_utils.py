@@ -5,18 +5,66 @@ from pipeline.workers.search_worker import canonical_url
 
 CITATION_PATTERN = re.compile(r"\[src:([^\]]+)\]")
 
-# Em-dash and horizontal-bar → comma+space, regardless of surrounding spacing.
+# Em-dash and horizontal-bar → " - " (spaced hyphen), regardless of
+# surrounding spacing. A hyphen stays grammatical where the old ", "
+# replacement manufactured comma splices; the prompts now instruct the
+# models to restructure dash constructions themselves, so this regex is a
+# last-resort safety net, not the primary mechanism.
 # En-dash → hyphen (preserve spacing — ranges like "1–3" become "1-3").
 _EM_DASH_RE = re.compile(r"\s*[—―]\s*")
 
+# Fenced code blocks (``` … ```, language tags included, ```mermaid too).
+# The capture group makes re.split() return them at ODD indices, alternating
+# with prose segments at even indices.
+_FENCED_BLOCK_RE = re.compile(r"(```.*?```)", re.DOTALL)
+
+# Inline code spans within prose. Same capture-group/odd-index trick.
+_INLINE_CODE_RE = re.compile(r"(`[^`\n]+`)")
+
+
+def _scrub_plain_text(text: str) -> str:
+    """The actual scrub, safe only for prose with no code in it."""
+    text = _EM_DASH_RE.sub(" - ", text)
+    text = text.replace("–", "-")
+    text = re.sub(r" {2,}", " ", text)
+    text = re.sub(r" ([.,;:!?])", r"\1", text)
+    return text
+
+
+def _scrub_prose_segment(segment: str) -> str:
+    """Scrub one between-fences segment, leaving inline code spans intact.
+
+    If the segment contains a stray ``` (an UNCLOSED fence — the paired ones
+    were already captured by _FENCED_BLOCK_RE), everything from that opening
+    fence onward is left untouched: mangling maybe-code is worse than
+    leaving maybe-prose unscrubbed.
+    """
+    fence_idx = segment.find("```")
+    tail = ""
+    if fence_idx != -1:
+        segment, tail = segment[:fence_idx], segment[fence_idx:]
+
+    parts = _INLINE_CODE_RE.split(segment)
+    scrubbed = "".join(
+        part if i % 2 else _scrub_plain_text(part) for i, part in enumerate(parts)
+    )
+    return scrubbed + tail
+
 
 def scrub_em_dashes(markdown: str) -> str:
-    """Remove em/en-dashes that slipped past the LLM prompts."""
-    markdown = _EM_DASH_RE.sub(", ", markdown)
-    markdown = markdown.replace("–", "-")
-    markdown = re.sub(r" {2,}", " ", markdown)
-    markdown = re.sub(r" ([.,;:!?])", r"\1", markdown)
-    return markdown
+    """Remove em/en-dashes that slipped past the LLM prompts — prose only.
+
+    Fenced code blocks (including ```mermaid) and inline code spans pass
+    through byte-for-byte. The scrub used to run on the whole document and
+    its whitespace-collapsing step destroyed code indentation (see the
+    1-space-indented Java/SQL snippets in examples/kafka-design-patterns.md);
+    dashes inside code are code, not typography.
+    """
+    parts = _FENCED_BLOCK_RE.split(markdown)
+    return "".join(
+        part if i % 2 else _scrub_prose_segment(part)
+        for i, part in enumerate(parts)
+    )
 
 
 def resolve_citations(markdown: str, spans: list[EvidenceSpan]) -> str:

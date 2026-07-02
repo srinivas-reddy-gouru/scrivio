@@ -28,6 +28,18 @@ STRUCTURE PRINCIPLES — design around the reader's actual question; there is no
 
 4. OPENING MATCHES THE ANGLE — first section's narrative_note encodes it: explainer leads with a plain-language definition; tutorial states the goal; war-story opens with the incident (use the hook_seed); contrarian states the belief before disproving it; deep-dive opens with the non-obvious observation; comparison opens with the decision and its axes.
 
+4b. VARY SECTION ENTRY ANGLES — an article whose every section runs
+   "failure mode → root cause → fix → trade-off → transition" reads as a
+   template, and five such articles on one blog expose the machine. Assign
+   each section's narrative_note an ENTRY ANGLE and never repeat the same
+   angle in two adjacent sections. Draw from: a runnable code example first;
+   a concrete scenario or short war-story beat; a question the reader is
+   already asking; a comparison or table; a plain factual claim developed in
+   prose; a measurement or benchmark result. The angle is HOW the section
+   enters its topic, not what it covers — state it explicitly in the
+   narrative_note (e.g. "enter code-first: show the naive config, then
+   explain why it fails").
+
 5. NO FRONT-LOADED CATASTROPHES IN EXPLAINERS — a reader asking "what is X" has no production context. Failure modes may be a section AFTER the mechanism is understood, never first.
 
 6. ENVELOPE SECTIONS — the first section earns the read ("I will actually understand what this is"); the last section's narrative_note must instruct the drafter to close with something actionable — never a summary.

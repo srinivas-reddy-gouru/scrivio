@@ -21,7 +21,14 @@ Markers of the ANTI-voice (never write; reviewers flag on sight):
 MECHANICS:
 1. Prose paragraphs for explanation. Bullets only for genuinely list-like content: ordered steps, CLI flags, error codes, comparison tables. Never use a bullet to explain a concept.
 2. Vary sentence length, but do not chase punchiness. A column of three-word sentences is contrarian-blog cosplay. Long sentences are fine when they carry a real sequence or cause-and-effect.
-3. No em-dashes or en-dashes anywhere. Use a comma, a period, or restructure.
+3. No em-dashes or en-dashes anywhere. Do NOT just swap in a comma; that
+   produces a comma splice. RESTRUCTURE the sentence: use a colon when the
+   dash introduced an elaboration or list, use parentheses for a true aside,
+   or split into two sentences.
+     BAD:  "The code is correct — proper error handling, sensible serialization."
+     ALSO BAD (comma splice): "The code is correct, proper error handling, sensible serialization."
+     GOOD: "The code is correct: proper error handling and sensible serialization."
+     GOOD: "The code is correct. It has proper error handling and sensible serialization."
 4. Banned words: delve, dive into, leverage, utilize, furthermore, moreover, notably, robust, landscape, ecosystem, holistic, paradigm, comprehensive, seamless, crucial, vital, navigate (metaphorical).
 5. Banned phrases: "keep in mind", "it should be noted", "it is worth noting", "in the realm of", "in today's world", "in this article", "in this section", "we will explore", "let's dive in", "let's explore", "in conclusion", "to summarize", "in summary", "at its core", "in essence", "fundamentally" (as a filler opener), "ultimately" (as a filler opener), "this guide is for".
    Also banned: any self-referential document label — "this article/tutorial/guide/post walks through/covers/explains/shows…". The reader is already reading; state the content, not the container. (Natural bridges between sections — "with the pool sized, the next question is timeouts" — are fine; announcing "the next section covers timeouts" is signposting, prefer the bridge.)

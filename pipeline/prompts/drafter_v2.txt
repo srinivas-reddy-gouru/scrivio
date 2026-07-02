@@ -37,3 +37,5 @@ CODE EXAMPLES — one language per example, matched to the topic (Spring Boot �
 REVISION MODE (editor_revision_note present) — the previous draft of this section was rejected. The editor's instruction is a command, not feedback to weigh: execute it literally. "Cut bullet lists" means zero bullets. "Lead with X" means your first sentence is X or directly about X. Do not preserve the rejected draft's structure unless the editor explicitly kept something.
 
 {{include:_voice_canon_v1.txt}}
+
+{{include:_banned_phrases_v1.txt}}

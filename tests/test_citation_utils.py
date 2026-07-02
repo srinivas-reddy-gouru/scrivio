@@ -12,15 +12,15 @@ def test_scrub_em_dashes_replaces_em_and_en_dashes() -> None:
     out = scrub_em_dashes(text)
     assert "—" not in out
     assert "–" not in out
-    assert "Some idea, with an em-dash." in out
+    assert "Some idea - with an em-dash." in out
     assert "And another - with an en-dash." in out
     assert "Range 1-3." in out
 
 
 def test_scrub_em_dashes_handles_no_surrounding_spaces() -> None:
     out = scrub_em_dashes("word—word and other—case.")
-    assert "word, word" in out
-    assert "other, case" in out
+    assert "word - word" in out
+    assert "other - case" in out
 
 
 def test_resolve_citations_numbers_in_first_appearance_order() -> None:
@@ -199,3 +199,74 @@ def test_resolve_citations_distinct_urls_still_get_distinct_numbers() -> None:
     assert "B [2]." in out
     assert "1. [Page A]" in out
     assert "2. [Page B]" in out
+
+
+# ── scrub_em_dashes must never touch code ────────────────────────────
+
+def test_scrub_preserves_code_block_indentation() -> None:
+    """The whitespace-collapsing rule used to run over the whole document
+    and flatten 4-space indentation inside fenced blocks to 1 space."""
+    code = (
+        "```java\n"
+        "public class Foo {\n"
+        "    private final String name;\n"
+        "        // double-indented comment\n"
+        "}\n"
+        "```"
+    )
+    markdown = f"Some prose  with   extra spaces.\n\n{code}\n\nMore prose."
+    out = scrub_em_dashes(markdown)
+    assert code in out                       # byte-for-byte unchanged
+    assert "Some prose with extra spaces." in out  # prose still scrubbed
+
+
+def test_scrub_preserves_mermaid_block() -> None:
+    mermaid = (
+        "```mermaid\n"
+        "flowchart LR\n"
+        "    A[Start] --> B[End]\n"
+        "    B --> C[Done]\n"
+        "```"
+    )
+    out = scrub_em_dashes(f"Intro — text.\n\n{mermaid}\n\nOutro.")
+    assert mermaid in out
+    assert "Intro - text." in out
+
+
+def test_scrub_preserves_em_dash_inside_code_block() -> None:
+    code = "```bash\necho \"a — b\"   # em-dash and  spaces stay\n```"
+    out = scrub_em_dashes(f"Before — prose.\n{code}\nAfter — prose.")
+    assert code in out
+    assert "Before - prose." in out
+    assert "After - prose." in out
+
+
+def test_scrub_still_scrubs_prose_around_code() -> None:
+    out = scrub_em_dashes("A — B\n```\nx\n```\nC — D")
+    assert out.startswith("A - B")
+    assert out.endswith("C - D")
+    assert "—" not in out.replace("```\nx\n```", "")
+
+
+def test_scrub_preserves_inline_code_spans() -> None:
+    markdown = "Run `kubectl  get   pods` now — it lists pods. Also `a — b` stays."
+    out = scrub_em_dashes(markdown)
+    assert "`kubectl  get   pods`" in out    # multiple spaces survive
+    assert "`a — b`" in out                  # code is code, even inline
+    assert "now - it lists pods." in out      # surrounding prose scrubbed
+
+
+def test_scrub_leaves_unclosed_fence_untouched() -> None:
+    markdown = "Prose — here.\n```python\ndef f():\n    return  1  —  2\n"
+    out = scrub_em_dashes(markdown)
+    assert "Prose - here." in out
+    # Everything from the unpaired opening fence onward is untouched.
+    assert "```python\ndef f():\n    return  1  —  2\n" in out
+
+
+def test_scrub_handles_multiple_code_blocks() -> None:
+    block1 = "```sql\nSELECT *\n    FROM t;\n```"
+    block2 = "```\n    raw\n```"
+    out = scrub_em_dashes(f"X — Y {block1} P — Q {block2} Z — W")
+    assert block1 in out and block2 in out
+    assert "X - Y" in out and "P - Q" in out and "Z - W" in out

@@ -1,0 +1,46 @@
+# Golden topic set for quality regression evals.
+# Generate each on the Best preset, then grade with run_eval.py.
+# The first five mirror the articles in examples/; fill in the placeholders
+# with topics that stress different angles (tutorial, comparison, war-story).
+topics:
+  - id: spring-jpa-hibernate
+    topic: "What is Spring JPA? How it helped backend devs? Explain with the sense of Hibernate."
+    audience: software engineer
+    depth: intermediate
+  - id: spring-security-filter-chain
+    topic: "What is Spring Security? How is it configured for different token mechanisms, with the event flow?"
+    audience: software engineer
+    depth: intermediate
+  - id: spring-ai-overview
+    topic: "Complete overview of Spring AI for Java backend developers: event flows and connectivity with LLMs and databases."
+    audience: Java backend developer
+    depth: intermediate
+  - id: kafka-design-patterns
+    topic: "Kafka design patterns to be known by backend engineers"
+    audience: backend engineer
+    depth: intermediate
+  - id: spring-boot-production-patterns
+    topic: "Production-level Spring Boot patterns every Java developer must master before building real-world applications"
+    audience: Java developer
+    depth: intermediate
+  # ── placeholders: fill these in ────────────────────────────────────
+  - id: placeholder-1
+    topic: "TODO"
+    audience: software engineer
+    depth: intermediate
+  - id: placeholder-2
+    topic: "TODO"
+    audience: software engineer
+    depth: basic
+  - id: placeholder-3
+    topic: "TODO"
+    audience: software engineer
+    depth: advanced
+  - id: placeholder-4
+    topic: "TODO"
+    audience: software engineer
+    depth: intermediate
+  - id: placeholder-5
+    topic: "TODO"
+    audience: software engineer
+    depth: intermediate

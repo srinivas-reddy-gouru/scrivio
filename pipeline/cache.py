@@ -32,7 +32,12 @@ from pydantic import BaseModel
 #     readability collapsed pages to error-div text are tainted.
 # v6: editor/critic/polisher gained duplicate-statement, worked-example-drift
 #     and self-reference checks — cached reviews predate the stricter bar.
-_CACHE_VERSION = "v6"
+# v7: dash rule rewritten (restructure, never comma-swap) in the voice canon
+#     and polisher — cached drafts/polishes may carry comma splices.
+# v8: planner section-angle variation, banned-phrase fragment in drafter and
+#     polisher, diagram-spec negative patterns — cached plans/drafts predate
+#     the anti-template rules.
+_CACHE_VERSION = "v8"
 
 _DEFAULT_CACHE_DIR = Path(".cache") / "article_pipeline"
 

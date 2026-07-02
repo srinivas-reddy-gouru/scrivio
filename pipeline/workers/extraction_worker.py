@@ -53,6 +53,7 @@ _PERMANENT_STATUSES = frozenset({400, 401, 403, 404, 410, 451})
 #   0.7   github.com (source code and issue threads)
 #   0.65  blog platforms (useful colour, weaker authority)
 #   0.6   unknown HTTPS
+#   0.5   social/UGC platforms (LinkedIn posts, X threads)
 #   0.45  Q&A forums — deliberately BELOW unknown articles: answers are
 #         unreviewed and the user wants docs > articles > Stack Overflow
 #   0.35  plain HTTP
@@ -93,6 +94,17 @@ _BLOG_PLATFORM_DOMAINS = frozenset({
 _QA_FORUM_DOMAINS = frozenset({
     "stackoverflow.com", "stackexchange.com", "serverfault.com",
     "superuser.com", "reddit.com", "quora.com", "news.ycombinator.com",
+})
+
+# Social / pure-UGC platforms: personal posts with no editorial review and
+# no accountability trail. They rank BELOW unknown HTTPS sites (0.6) so they
+# can still surface as leads but never outrank official docs (1.0), curated
+# engineering sources (0.9), or even anonymous blogs. Edit this list freely —
+# it exists because a LinkedIn post once got cited next to Confluent
+# engineering and Red Hat Developer articles. (medium.com / dev.to already
+# sit in _BLOG_PLATFORM_DOMAINS at 0.65; reddit/quora/HN in the forum tier.)
+_SOCIAL_UGC_DOMAINS = frozenset({
+    "linkedin.com", "x.com", "twitter.com", "facebook.com", "threads.net",
 })
 
 # Heuristic markers of official-documentation URLs on domains we've never
@@ -343,9 +355,12 @@ def score_url(url: str, official_domains: frozenset[str] = frozenset()) -> float
         return 1.0
     if _domain_in(domain, _HIGH_TRUST_DOMAINS):
         return 0.9
-    # Q&A forums before the docs heuristic so forum paths can't sneak up a tier.
+    # Q&A forums and social/UGC before the docs heuristic so their paths
+    # (e.g. /pulse/, /r/docs) can't sneak up a tier.
     if _domain_in(domain, _QA_FORUM_DOMAINS):
         return 0.45
+    if _domain_in(domain, _SOCIAL_UGC_DOMAINS):
+        return 0.5
     if _looks_like_docs(domain, path):
         return 0.8
     if _domain_in(domain, _MEDIUM_TRUST_DOMAINS):

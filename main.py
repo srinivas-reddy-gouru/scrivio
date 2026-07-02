@@ -46,11 +46,12 @@ from pipeline.model_config import get_model
 from pipeline.providers.openai_adapter import OpenAIAnthropicAdapter, _map_model
 from pipeline.workers.search_worker import canonical_url, multi_search
 from pipeline.workers.source_resolver import resolve_official_sources
+from pipeline.workers.style_checks import find_banned_phrases
 from pipeline.workers.verification_worker import (
     drop_unsupported_claims,
     run_verification_loop,
 )
-from render.mermaid_worker import process_visual_intent
+from render.mermaid_worker import process_visual_intent, review_diagram
 from render.vhs_worker import process_vhs_intent
 
 
@@ -375,6 +376,13 @@ async def generate_article(
             _generate_assets(publishable_plan, anthropic_client),
         )
         cache.set("drafting", draft, *draft_key)
+
+    # Diagram semantic review. Specs are generated in parallel with drafting
+    # (from the plan's intent only), so this is the first moment the actual
+    # section text exists to check them against. One round, no loops.
+    assets, diagrams_revised = await _review_diagram_assets(
+        draft, assets, anthropic_client, request.model_preset
+    )
     await _emit(
         progress_callback, "stage_completed", "drafting",
         sections=len(draft.sections), cached=cached_draft is not None,
@@ -387,6 +395,7 @@ async def generate_article(
         total_words=sum(len(s.content.split()) for s in draft.sections),
         assets_rendered=sum(1 for a in assets if a.qa_passed),
         assets_failed=sum(1 for a in assets if not a.qa_passed),
+        diagrams_revised=diagrams_revised,
     )
 
     await _emit(progress_callback, "stage_started", "editor", "Editorial review")
@@ -510,6 +519,16 @@ async def generate_article(
             prior_markdown=polished_article.markdown,
         )
     articles = {request.explanation_level: polished_article}
+
+    # Mechanical template-signature scan: prose-only, no LLM call. Warn-only —
+    # the prompts are responsible for prevention; this makes regressions
+    # visible in logs and the stage debug panel.
+    banned_hits = find_banned_phrases(polished_article.markdown)
+    if banned_hits:
+        logging.warning(
+            "Banned stock phrases found in final article prose: %s",
+            ", ".join(banned_hits),
+        )
     await _emit(
         progress_callback, "stage_completed", "critic",
         approved=verdict.approved,
@@ -519,6 +538,7 @@ async def generate_article(
         overall_assessment=verdict.overall_assessment,
         refined=verdict.has_blocking_issues(),
         issues=[i.model_dump(mode="json") for i in verdict.issues],
+        banned_phrase_hits=banned_hits,
     )
 
     for article in articles.values():
@@ -930,6 +950,34 @@ async def _generate_assets(plan: ArticlePlan, anthropic_client) -> list[RenderAs
         return []
 
     return list(await asyncio.gather(*tasks))
+
+
+async def _review_diagram_assets(
+    draft, assets: list[RenderAsset], anthropic_client, preset: str
+) -> tuple[list[RenderAsset], int]:
+    """Semantic-check each rendered Mermaid asset against the drafted text of
+    the section it belongs to; swap in the reviewer's corrected spec when the
+    revision itself renders. Returns (assets, revised_count). Best-effort:
+    any per-asset failure keeps that asset unchanged."""
+    if isinstance(anthropic_client, MockAnthropicClient):
+        return assets, 0
+
+    section_text = {s.title: s.content for s in draft.sections}
+    reviewed: list[RenderAsset] = []
+    revised_count = 0
+    for asset in assets:
+        text = section_text.get(asset.intent.section_title or "")
+        if asset.intent.format != "mermaid" or not asset.qa_passed or not text:
+            reviewed.append(asset)
+            continue
+        final_spec, was_revised, _errors = await review_diagram(
+            text, asset.spec, anthropic_client, preset=preset
+        )
+        if was_revised:
+            revised_count += 1
+            asset = asset.model_copy(update={"spec": final_spec})
+        reviewed.append(asset)
+    return reviewed, revised_count
 
 
 def _openai_client(request: ArticleRequest):

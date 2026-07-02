@@ -469,3 +469,88 @@ def test_generate_spec_applies_sanitizer_to_llm_output() -> None:
     out = asyncio.run(generate_spec(intent, _Client()))
 
     assert 'A["postProcessBeforeInitialization()"]' in out
+
+
+# ── review_diagram: one-round semantic check ─────────────────────────
+
+class _FakeReviewClient:
+    """Anthropic-shaped client returning a canned JSON verdict."""
+
+    def __init__(self, payload: str):
+        self.messages = self
+        self._payload = payload
+        self.calls = []
+
+    async def create(self, **kwargs):
+        import types
+        self.calls.append(kwargs)
+        return types.SimpleNamespace(
+            content=[types.SimpleNamespace(type="text", text=self._payload)]
+        )
+
+
+_SECTION = "The producer writes to the outbox table; a relay publishes to Kafka."
+_ORIGINAL = "flowchart LR\n A[Producer] --> B[Kafka]"
+
+
+def test_review_diagram_approves_keeps_original() -> None:
+    import asyncio
+    from render.mermaid_worker import review_diagram
+
+    client = _FakeReviewClient('{"accurate": true, "errors": [], "revised_mermaid": null}')
+    spec, revised, errors = asyncio.run(review_diagram(_SECTION, _ORIGINAL, client))
+    assert spec == _ORIGINAL
+    assert revised is False
+    assert errors == []
+
+
+def test_review_diagram_applies_rendering_revision(monkeypatch) -> None:
+    import asyncio
+    from render import mermaid_worker
+
+    fixed = "flowchart LR\n A[Producer] --> O[Outbox] --> B[Kafka]"
+    client = _FakeReviewClient(
+        '{"accurate": false, "errors": ["missing outbox step"], '
+        f'"revised_mermaid": "{fixed.replace(chr(10), chr(92) + "n")}"}}'
+    )
+
+    async def fake_render(spec, output_dir="/tmp/article_assets"):
+        return "/tmp/ok.svg"
+
+    monkeypatch.setattr(mermaid_worker, "render_mermaid", fake_render)
+    spec, revised, errors = asyncio.run(
+        mermaid_worker.review_diagram(_SECTION, _ORIGINAL, client)
+    )
+    assert revised is True
+    assert "Outbox" in spec
+    assert errors == ["missing outbox step"]
+
+
+def test_review_diagram_falls_back_when_revision_wont_render(monkeypatch) -> None:
+    import asyncio
+    from render import mermaid_worker
+    from render.mermaid_worker import RenderError
+
+    client = _FakeReviewClient(
+        '{"accurate": false, "errors": ["bad"], "revised_mermaid": "flowchart LR\\n A --> "}'
+    )
+
+    async def failing_render(spec, output_dir="/tmp/article_assets"):
+        raise RenderError("parse error")
+
+    monkeypatch.setattr(mermaid_worker, "render_mermaid", failing_render)
+    spec, revised, errors = asyncio.run(
+        mermaid_worker.review_diagram(_SECTION, _ORIGINAL, client)
+    )
+    assert spec == _ORIGINAL      # never lose a working diagram
+    assert revised is False
+    assert errors == ["bad"]
+
+
+def test_review_diagram_survives_malformed_json() -> None:
+    import asyncio
+    from render.mermaid_worker import review_diagram
+
+    client = _FakeReviewClient("I think it looks fine!")
+    spec, revised, errors = asyncio.run(review_diagram(_SECTION, _ORIGINAL, client))
+    assert spec == _ORIGINAL and revised is False

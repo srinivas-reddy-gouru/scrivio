@@ -60,3 +60,13 @@ RULES:
   GENERAL RULE: quoting is required only inside flowchart shape brackets and flowchart
   edge label pipes. For every other diagram type the IDs are bare. When in doubt for
   non-flowchart diagrams, leave names bare.
+
+NEGATIVE PATTERNS — two real failures to never reproduce:
+- NEVER merge a problem-path and its solution-path into one undifferentiated
+  graph. A reader cannot tell which arrows are the bug and which are the fix.
+  Use two subgraphs ("Without outbox" / "With outbox") or emit the solution
+  flow only — the prose already explains the problem.
+- NEVER draw a retry loop back to an entry node (e.g. "Receive message") when
+  the retry actually re-attempts a processing step. Point the retry edge at
+  the step that re-executes; add a separate redelivery edge only if the text
+  explicitly describes redelivery.

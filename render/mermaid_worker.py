@@ -14,6 +14,7 @@ from pipeline.schemas.models import RenderAsset, VisualIntent
 # jobs with different parser constraints, so each gets its own prompt.
 _DIAGRAM_PROMPT = load_prompt("diagram_spec_v2.txt")
 _VHS_PROMPT = load_prompt("vhs_tape_v2.txt")
+_REVIEWER_PROMPT = load_prompt("diagram_reviewer_v1.txt")
 
 
 # Characters that break Mermaid's flowchart parser when present in a node
@@ -242,6 +243,56 @@ async def generate_spec(intent: VisualIntent, client, preset: str = "balanced") 
     # Defensive sanitization: even if the prompt tells the LLM to quote
     # labels with parens, occasional misses still happen — this catches them.
     return sanitize_mermaid_spec(spec)
+
+
+async def review_diagram(
+    section_text: str, spec: str, client, preset: str = "balanced"
+) -> tuple[str, bool, list[str]]:
+    """One-round semantic review of a Mermaid diagram against its section.
+
+    Prose gets fact-checked by the verifier; this is the diagram equivalent —
+    it catches merged problem/solution paths, reversed arrows, retry loops
+    pointing at the wrong node, and node soup. Returns
+    ``(final_spec, was_revised, errors)``. Any failure (bad JSON, revised
+    diagram that doesn't render) degrades to the ORIGINAL spec: a review
+    step must never lose a working diagram.
+    """
+    import json
+
+    try:
+        response = await client.messages.create(
+            model=get_model("diagram_review", preset),
+            max_tokens=1400,
+            system=_REVIEWER_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": f"section_text:\n{section_text}\n\nmermaid_source:\n{spec}",
+            }],
+        )
+        raw = next((b.text for b in response.content if b.type == "text"), "") or ""
+        verdict = json.loads(_strip_markdown_fences(raw))
+    except Exception as exc:  # noqa: BLE001 — reviewer is best-effort
+        logging.warning("Diagram review failed (%s) — keeping original spec.", exc)
+        return spec, False, []
+
+    errors = [str(e) for e in verdict.get("errors") or []]
+    revised = verdict.get("revised_mermaid")
+    if verdict.get("accurate", True) or not revised:
+        return spec, False, errors
+
+    revised = sanitize_mermaid_spec(_strip_markdown_fences(str(revised)))
+    try:
+        # Same syntax gate the original spec passed through: if the revision
+        # doesn't render, the review made things worse — fall back.
+        await render_mermaid(revised)
+    except (RenderError, Exception) as exc:  # noqa: BLE001
+        logging.warning(
+            "Diagram revision failed to render (%s) — keeping original spec.", exc
+        )
+        return spec, False, errors
+
+    logging.info("Diagram revised after review: %s", "; ".join(errors) or "unspecified")
+    return revised, True, errors
 
 
 async def render_mermaid(

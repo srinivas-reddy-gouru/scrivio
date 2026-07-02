@@ -46,9 +46,9 @@ def _build_plan_and_draft() -> tuple[ArticlePlan, DraftPackage, list[EvidenceSpa
     draft = DraftPackage(
         plan=plan,
         sections=[
-            DraftSection(title="Hook", content="Original hook content.", citation_ids=[]),
-            DraftSection(title="Body", content="Original body content.", citation_ids=[]),
-            DraftSection(title="Close", content="Original close content.", citation_ids=[]),
+            DraftSection(title="Hook", content="Original hook content. [src:s1]", citation_ids=[]),
+            DraftSection(title="Body", content="Original body content. [src:s1]", citation_ids=[]),
+            DraftSection(title="Close", content="Original close content. [src:s1]", citation_ids=[]),
         ],
         raw_markdown="",
     )
@@ -87,8 +87,8 @@ def test_revise_draft_only_redrafts_flagged_sections(monkeypatch) -> None:
     assert [call[0] for call in redraft_calls] == ["Hook"]
     assert redraft_calls[0][1] == editor_report.revisions[0].instruction
     assert new_draft.sections[0].content == "REWRITTEN Hook"
-    assert new_draft.sections[1].content == "Original body content."
-    assert new_draft.sections[2].content == "Original close content."
+    assert new_draft.sections[1].content == "Original body content. [src:s1]"
+    assert new_draft.sections[2].content == "Original close content. [src:s1]"
     assert "REWRITTEN Hook" in new_draft.raw_markdown
 
 
@@ -182,3 +182,81 @@ def test_run_editor_review_emits_none_marker_when_extra_context_blank() -> None:
 
     user_content = calls[0]["messages"][0]["content"]
     assert "user_extra_context: (none)" in user_content
+
+
+# ── Citation density (mechanical check) ──────────────────────────────
+
+def _density_section(title: str, content: str):
+    from pipeline.schemas.models import DraftSection
+    return DraftSection(title=title, content=content, citation_ids=[])
+
+
+def test_density_flags_low_citation_section() -> None:
+    from pipeline.workers.editor_worker import section_citation_density
+
+    low = (
+        "First factual paragraph without citation.\n\n"
+        "Second factual paragraph, also uncited.\n\n"
+        "Third paragraph with a citation [src:abc123].\n\n"
+        "Fourth uncited paragraph.\n\n"
+        "Fifth uncited paragraph."
+    )
+    density = section_citation_density(low)
+    assert density is not None and density < 0.4
+
+
+def test_density_passes_well_cited_section() -> None:
+    from pipeline.workers.editor_worker import section_citation_density
+
+    good = (
+        "Claim one [src:a].\n\n"
+        "Claim two backed by evidence [src:b].\n\n"
+        "A narrative transition paragraph.\n\n"
+        "Claim three [src:c]."
+    )
+    assert section_citation_density(good) >= 0.4
+
+
+def test_density_exempts_code_walkthroughs_and_ignores_code_content() -> None:
+    from pipeline.workers.editor_worker import section_citation_density
+
+    walkthrough = (
+        "Short intro.\n\n"
+        "```java\n" + "\n".join(f"line{i}();" for i in range(30)) + "\n```"
+    )
+    assert section_citation_density(walkthrough) is None
+
+
+def test_flag_low_citation_sections_appends_revision_and_unapproves() -> None:
+    from pipeline.schemas.models import (
+        ArticlePlan, ArticleRequest, DraftPackage, EditorReport,
+    )
+    from pipeline.workers.editor_worker import flag_low_citation_sections
+
+    plan = ArticlePlan(
+        request=ArticleRequest(topic="t"), sections=[], claims=[],
+        visual_intents=[], evidence_span_ids=[],
+    )
+    uncited = "\n\n".join(f"Uncited factual paragraph {i}." for i in range(5))
+    cited = "\n\n".join(f"Cited paragraph {i} [src:x]." for i in range(5))
+    draft = DraftPackage(
+        plan=plan,
+        sections=[
+            _density_section("Well cited", cited),
+            _density_section("Citation desert", uncited),
+        ],
+        raw_markdown="",
+    )
+    report = EditorReport(approved=True, overall_assessment="ok", revisions=[])
+
+    out = flag_low_citation_sections(draft, report)
+    assert out.approved is False
+    assert [r.section_title for r in out.revisions] == ["Citation desert"]
+    assert "below the 40% floor" in out.revisions[0].issues[0]
+
+    # A fully-cited draft leaves the report untouched.
+    clean_draft = DraftPackage(
+        plan=plan, sections=[_density_section("Well cited", cited)], raw_markdown="",
+    )
+    untouched = flag_low_citation_sections(clean_draft, report)
+    assert untouched.approved is True and untouched.revisions == []

@@ -1,0 +1,16 @@
+BANNED STOCK PHRASES — these exact phrases (case-insensitive) are forbidden in prose. Each one is an over-produced AI tell; five articles on the same blog using them expose the machine. Express the idea differently every time; if a phrase below is the natural way to say something, restructure the sentence so it is not needed. This list is editable — one phrase per line.
+- delve
+- it's worth noting
+- it is worth noting
+- in the ever-evolving landscape
+- ever-evolving
+- let's dive in
+- the key takeaway
+- at its core
+- robust
+- seamless
+- The structural fix is
+- worth naming
+- One operational detail
+- Here's the situation that motivates this article
+- the situation that motivates
