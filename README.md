@@ -10,11 +10,11 @@ Scrivio is a multi-stage AI pipeline that turns a topic or question into a sourc
 
 Dark mode:
 
-![Scrivio UI (dark mode)](docs/screenshot-dark.png)
+![Scrivio UI (dark mode)](docs/ui-dark.png)
 
 Light mode:
 
-![Scrivio UI (light mode)](docs/screenshot-light.png)
+![Scrivio UI (light mode)](docs/ui-light.png)
 
 ---
 
