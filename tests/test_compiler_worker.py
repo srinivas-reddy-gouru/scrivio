@@ -183,3 +183,37 @@ def test_compile_level_works_without_assets_argument() -> None:
 
     assert isinstance(article, PublishedArticle)
     assert "[src:abc123]" in article.markdown
+
+
+def test_compile_level_drops_placeholder_when_asset_failed_qa() -> None:
+    """An asset whose spec failed the mermaid-cli render gate (qa_passed
+    False) must NOT be embedded — shipping a known-broken spec renders as
+    an error block everywhere. Regression: a July 2026 article embedded a
+    diagram with `DB["("Database")"]` because only spec-emptiness was
+    checked. A missing diagram beats a broken one."""
+    draft = make_draft()
+    intent = VisualIntent(
+        description="Layered call flow",
+        format="mermaid",
+        rationale="Shows the delegation chain.",
+        section_title="Indexes",
+    )
+    broken_asset = RenderAsset(
+        intent=intent,
+        spec='flowchart TD\n  DB["("Database")"]',  # unparseable
+        output_path="",
+        qa_passed=False,
+    )
+    compiled = (
+        f"# Database indexes\n\n"
+        f"Indexes speed up reads [src:abc123].\n\n"
+        f"<!-- DIAGRAM:{intent.intent_id} -->\n\n"
+        f"Writes pay a cost [src:def456]."
+    )
+    client = MockAnthropicClient([compiled])
+
+    article = asyncio.run(compile_level(draft, "basic", client, assets=[broken_asset]))
+
+    assert "<!-- DIAGRAM:" not in article.markdown
+    assert "```mermaid" not in article.markdown
+    assert "Indexes speed up reads" in article.markdown

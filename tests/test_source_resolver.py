@@ -202,3 +202,31 @@ def test_pipeline_models_reports_stage_models(monkeypatch) -> None:
     for stage in ("brief", "relevance_check", "search", "planning", "gap_fill",
                   "verification", "drafting", "editor", "polish", "critic"):
         assert auto["stages"][stage]
+
+
+def test_emit_pipeline_info_builds_valid_event(monkeypatch) -> None:
+    """Regression: _emit must be able to construct the run-start pipeline_info
+    event. The ProgressEvent.type Literal once omitted 'pipeline_info', so the
+    very first emit raised a ValidationError and every generation failed at
+    0/10. _pipeline_models is exercised elsewhere, but only the actual emit
+    catches a schema/emitter drift."""
+    import asyncio
+    from main import _emit, _pipeline_models
+    from pipeline.schemas.models import ArticleRequest, ProgressEvent
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "a-key")
+
+    captured: list[ProgressEvent] = []
+
+    async def callback(event: ProgressEvent) -> None:
+        captured.append(event)
+
+    async def run() -> None:
+        await _emit(callback, "pipeline_info", "pipeline",
+                    **_pipeline_models(ArticleRequest(topic="k")))
+
+    asyncio.run(run())
+
+    assert len(captured) == 1
+    assert captured[0].type == "pipeline_info"
+    assert captured[0].data["stages"]["drafting"]

@@ -98,7 +98,10 @@ def _embed_diagrams(markdown: str, assets: list[RenderAsset]) -> str:
     def replace(match: re.Match[str]) -> str:
         intent_id = match.group(1)
         asset = by_intent_id.get(intent_id)
-        if asset is None or not asset.spec:
+        # qa_passed=False means the spec failed the mermaid-cli render gate —
+        # embedding it ships a diagram that is known not to render anywhere.
+        # A missing diagram beats a broken one.
+        if asset is None or not asset.spec or not asset.qa_passed:
             return ""
         fence_lang = asset.intent.format if asset.intent.format in ("mermaid", "graphviz") else "mermaid"
         return f"```{fence_lang}\n{asset.spec.strip()}\n```"

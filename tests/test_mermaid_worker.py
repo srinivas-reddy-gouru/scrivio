@@ -554,3 +554,51 @@ def test_review_diagram_survives_malformed_json() -> None:
     client = _FakeReviewClient("I think it looks fine!")
     spec, revised, errors = asyncio.run(review_diagram(_SECTION, _ORIGINAL, client))
     assert spec == _ORIGINAL and revised is False
+
+
+# ── sanitize_mermaid_spec: quotes wrapped around SHAPE delimiters ───────
+
+def test_sanitize_repairs_quote_wrapped_cylinder() -> None:
+    """The exact failure from the July 2026 Spring JPA run: the LLM applied
+    the label-quoting rule to the cylinder shape syntax itself, producing
+    `DB["("Database")"]` — the quotes swallow the shape parens and the
+    parser dies with `Expecting 'SQE' … got 'STR'`."""
+    spec = 'flowchart TD\n  HS --> DB["("Database")"]'
+    out = sanitize_mermaid_spec(spec)
+    assert 'DB[("Database")]' in out
+    # Idempotent: the repaired form survives a second pass unchanged.
+    assert sanitize_mermaid_spec(out) == out
+
+
+def test_sanitize_repairs_quote_wrapped_circle_and_stadium() -> None:
+    spec = 'flowchart LR\n  A("("Start")") --> B("["Finish"]")'
+    out = sanitize_mermaid_spec(spec)
+    assert 'A(("Start"))' in out
+    assert 'B(["Finish"])' in out
+
+
+def test_sanitize_keeps_valid_parenthesized_rect_label() -> None:
+    """`A["(optional)"]` is a VALID rectangle whose quoted label happens to
+    be parenthesized — the shape repair must not rewrite it into a cylinder.
+    Only the inner-quoted form (`["("x")"]`) is unparseable."""
+    spec = 'flowchart LR\n  A["(optional)"] --> B'
+    assert sanitize_mermaid_spec(spec) == spec
+
+
+def test_sanitize_preserves_valid_cylinder_true_root_cause() -> None:
+    """THE actual root cause of the July 2026 failure: the rectangle pattern
+    used to match a cylinder's exterior (`[("x")]`, label `("x")`), see
+    parens, and 'helpfully' re-quote it into the unparseable `["("x")"]`.
+    A valid cylinder must pass through the sanitizer untouched."""
+    spec = 'flowchart TD\n  HS -->|"SQL via JDBC"| DB[("Database")]'
+    assert sanitize_mermaid_spec(spec) == spec
+
+
+def test_sanitize_leaves_unquoted_cylinder_with_plain_label() -> None:
+    """A bare cylinder label without problematic chars is valid as-is —
+    the sanitizer must not touch it (and must not see the shape parens
+    as a parenthesized rectangle label)."""
+    spec = "flowchart TD\n  A --> DB[(Primary Database)]"
+    out = sanitize_mermaid_spec(spec)
+    assert out == spec
+    assert sanitize_mermaid_spec(out) == out

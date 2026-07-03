@@ -28,10 +28,13 @@ _PROBLEMATIC_LABEL_CHARS = re.compile(r"[()]")
 # can't ambiguously contain the outer bracket. Order matters: longer
 # (more-bracket) shapes first so `[[label]]` isn't misread as `[label`.
 _SHAPE_PATTERNS = [
-    (re.compile(r"\[\[([^\[\]]+)\]\]"), "[[", "]]"),  # subroutine
-    (re.compile(r"\{\{([^\{\}]+)\}\}"), "{{", "}}"),  # hexagon
-    (re.compile(r"\[([^\[\]]+)\]"), "[", "]"),          # rectangle
-    (re.compile(r"\{([^\{\}]+)\}"), "{", "}"),          # rhombus
+    (re.compile(r"\[\[([^\[\]]+)\]\]"), "[[", "]]"),      # subroutine
+    (re.compile(r"\[\(([^()\[\]]+)\)\]"), "[(", ")]"),    # cylinder
+    (re.compile(r"\(\(([^()]+)\)\)"), "((", "))"),        # circle
+    (re.compile(r"\(\[([^()\[\]]+)\]\)"), "([", "])"),    # stadium
+    (re.compile(r"\{\{([^\{\}]+)\}\}"), "{{", "}}"),      # hexagon
+    (re.compile(r"\[([^\[\]]+)\]"), "[", "]"),            # rectangle
+    (re.compile(r"\{([^\{\}]+)\}"), "{", "}"),            # rhombus
 ]
 
 # Edge label pattern: `A -->|label| B` (also `---|label|`, `==>|label|`,
@@ -41,6 +44,21 @@ _SHAPE_PATTERNS = [
 # a parse error, so we strip them.
 _EDGE_LABEL_PATTERN = re.compile(r"\|([^|]*)\|")
 
+# Misquoted SHAPE delimiters: the LLM applies the "quote labels with
+# punctuation" rule to the shape syntax itself, e.g. `DB["("Database")"]`
+# when it means a cylinder `DB[("Database")]`. The quotes swallow the shape
+# parens and the parser dies with `Expecting 'SQE' … got 'STR'` (real
+# failure from a July 2026 Spring JPA article). Quotes belong around the
+# label INSIDE the shape delimiters, never around the delimiters.
+# The inner label must itself be quoted for this to fire: `["("Database")"]`
+# can never parse, while `["(Database)"]` is a VALID rectangle whose label
+# happens to be parenthesized — rewriting that would silently change shape.
+_MISQUOTED_SHAPES = [
+    (re.compile(r'\[\s*"\(\s*"([^"]*)"\s*\)"\s*\]'), "[(", ")]"),  # cylinder [("x")]
+    (re.compile(r'\(\s*"\(\s*"([^"]*)"\s*\)"\s*\)'), "((", "))"),  # circle (("x"))
+    (re.compile(r'\(\s*"\[\s*"([^"]*)"\s*\]"\s*\)'), "([", "])"),  # stadium (["x"])
+]
+
 
 class RenderError(Exception):
     pass
@@ -49,12 +67,16 @@ class RenderError(Exception):
 def sanitize_mermaid_spec(spec: str) -> str:
     """Make Mermaid specs robust to common LLM-generated syntax mistakes.
 
-    Two distinct fixes, dispatched by diagram type:
+    Three distinct fixes, dispatched by diagram type:
 
     1. FLOWCHART / GRAPH: ADD quotes around node and edge labels that
        contain parens. Mermaid's flowchart parser treats `()` as shape
        syntax, so an unquoted label like `[postProcessBeforeInitialization()]`
-       is rejected. We wrap such labels in double quotes.
+       is rejected. We wrap such labels in double quotes. Shape-delimiter
+       forms (cylinder `[(…)]`, circle `((…))`, stadium `([…])`) are
+       recognized before the rectangle pattern so their exteriors are never
+       mistaken for parenthesized labels, and quotes misapplied AROUND shape
+       delimiters (`["("x")"]`) are repaired to `[("x")]`.
 
     2. STATE DIAGRAM (`stateDiagram-v2`): REMOVE quotes around state IDs.
        Mermaid's state diagram grammar requires state IDs to be bare
@@ -92,10 +114,26 @@ def _sanitize_flowchart(spec: str) -> str:
     whitespace from the captured label region — we re-emit `|"label"|`
     or `|label|` tight, regardless of what the LLM produced.
     """
+    # FIRST: repair quotes wrapped around shape delimiters (`["(x)"]` →
+    # `[("x")]`). Must run before the shape-pattern loop below — the
+    # rectangle pattern would otherwise see `"("Database")"` as an
+    # already-quoted label and wave the broken syntax through.
+    for pattern, open_d, close_d in _MISQUOTED_SHAPES:
+        def shape_repl(m: re.Match, o: str = open_d, c: str = close_d) -> str:
+            return f'{o}"{m.group(1).strip()}"{c}'
+        spec = pattern.sub(shape_repl, spec)
+
     # Node labels: `A[label]`, `B((label))`, etc.
     for pattern, open_d, close_d in _SHAPE_PATTERNS:
         def repl(m: re.Match, o: str = open_d, c: str = close_d) -> str:
             label = m.group(1).strip()
+            # The rectangle pattern also matches a cylinder's exterior
+            # (`[("x")]` → label `("x")`). Quoting that would corrupt the
+            # shape — the July 2026 Spring JPA diagram broke exactly this
+            # way. The parens ARE the shape here; the cylinder pattern
+            # above already handled the label inside them.
+            if o == "[" and label.startswith("(") and label.endswith(")"):
+                return m.group(0)
             # Already double-quoted (with possible internal padding stripped).
             if label.startswith('"') and label.endswith('"'):
                 return f'{o}{label}{c}'

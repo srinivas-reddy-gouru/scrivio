@@ -298,7 +298,10 @@ async def generate_article(
 
     # ─── gap fill (cached together with the spans it produces) ────────
     await _emit(progress_callback, "stage_started", "gap_fill", "Filling evidence gaps")
-    gap_key = (plan_key, sorted(c.text for c in plan.claims))
+    # "ugc-guard-v1": salt invalidating gap-fill entries cached before the
+    # low-trust-sole-source guard existed — surgical alternative to a global
+    # _CACHE_VERSION bump, which would needlessly re-run search/planning too.
+    gap_key = (plan_key, sorted(c.text for c in plan.claims), "ugc-guard-v1")
     cached_gap_spans = cache.get("gap_fill", *gap_key)
     if cached_gap_spans is not None:
         spans = [EvidenceSpan.model_validate(s) for s in cached_gap_spans]

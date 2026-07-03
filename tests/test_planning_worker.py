@@ -140,3 +140,63 @@ def test_run_planner_drops_unknown_claim_refs_from_sections() -> None:
 
     # Only the real claim survives; "c99" is dropped silently.
     assert parsed.sections[0].claim_ids == [str(parsed.claims[0].claim_id)]
+
+
+# ── find_evidence_gaps: low-trust sole-source guard ─────────────────────
+
+def _plan_with_claims(*claims_spec) -> "SimpleNamespace":
+    """Minimal plan stand-in: find_evidence_gaps only reads plan.claims,
+    and each claim only needs .text and .source_ids."""
+    return SimpleNamespace(claims=[
+        SimpleNamespace(text=text, source_ids=source_ids)
+        for text, source_ids in claims_spec
+    ])
+
+
+def test_find_evidence_gaps_flags_low_trust_only_claims() -> None:
+    """A claim grounded ONLY in penalized-tier sources (trust <= 0.5:
+    social/UGC at 0.5, forums at 0.45) is a gap — re-search rather than
+    let a LinkedIn post carry a section. Regression: a July 2026 article's
+    LazyInitializationException section was sourced 4x from a LinkedIn
+    Pulse post after Jina 401s thinned the evidence pool."""
+    from pipeline.workers.planning_worker import find_evidence_gaps
+
+    linkedin = make_span(1, trust_score=0.5)
+    forum = make_span(2, trust_score=0.45)
+    official = make_span(3, trust_score=1.0)
+
+    plan = _plan_with_claims(
+        ("ugc-only claim", [str(linkedin.span_id), str(forum.span_id)]),
+        ("well-sourced claim", [str(official.span_id), str(linkedin.span_id)]),
+    )
+    gaps = find_evidence_gaps(plan, [linkedin, forum, official])
+
+    assert gaps == ["ugc-only claim"]
+
+
+def test_find_evidence_gaps_orders_ungrounded_before_low_trust() -> None:
+    """The caller caps gap queries at 3, so fully ungrounded claims (which
+    will fail verification outright) must win the budget over claims that
+    are merely weakly sourced."""
+    from pipeline.workers.planning_worker import find_evidence_gaps
+
+    ugc = make_span(1, trust_score=0.5)
+    plan = _plan_with_claims(
+        ("low-trust claim", [str(ugc.span_id)]),
+        ("ungrounded claim", ["hallucinated-span-id"]),
+    )
+    gaps = find_evidence_gaps(plan, [ugc])
+
+    assert gaps == ["ungrounded claim", "low-trust claim"]
+
+
+def test_find_evidence_gaps_accepts_unknown_blog_as_sole_source() -> None:
+    """Unknown HTTPS sites (0.6) and blog platforms (0.65) sit above the
+    ceiling — they remain acceptable sole sources, so the guard must not
+    turn every blog-cited claim into a search query."""
+    from pipeline.workers.planning_worker import find_evidence_gaps
+
+    blog = make_span(1, trust_score=0.6)
+    plan = _plan_with_claims(("blog-sourced claim", [str(blog.span_id)]))
+
+    assert find_evidence_gaps(plan, [blog]) == []

@@ -22,6 +22,14 @@ RULES:
       BAD:  `A -->|chain.doFilter()| B`
     When in doubt, quote. Mermaid accepts redundantly-quoted labels in flowcharts.
 
+    SHAPE DELIMITERS ARE NOT PART OF THE LABEL. The characters that pick a
+    node's shape — `[(...)]` cylinder, `((...))` circle, `([...])` stadium,
+    `{{...}}` hexagon — are syntax. Quotes go around the label INSIDE them,
+    never around the delimiters themselves.
+      GOOD: `DB[("Database")]`      (cylinder)
+      BAD:  `DB["("Database")"]`    — quotes swallowed the shape parens;
+            the parser dies with `Expecting 'SQE' … got 'STR'` (real failure)
+
   STATE DIAGRAM (`stateDiagram-v2`):
     State IDs are BARE identifiers. NEVER quote them, even if they contain
     punctuation — quotes cause `Expecting 'ID', got 'STRING'` parser errors.

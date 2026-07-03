@@ -345,6 +345,9 @@ class PublishedArticle(BaseModel):
 
 
 ProgressEventType = Literal[
+    # Emitted once at run start (before any stage) to name the model that
+    # will execute each stage — see main._pipeline_models and the UI handler.
+    "pipeline_info",
     "stage_started", "stage_completed", "complete", "error", "cancelled"
 ]
 

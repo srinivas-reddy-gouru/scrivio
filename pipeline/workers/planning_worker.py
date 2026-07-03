@@ -204,21 +204,43 @@ def load_evidence_context(
     return "\n".join(context_parts)
 
 
+# Claims grounded ONLY in sources at or below this trust score count as
+# evidence gaps. 0.5 is the extraction worker's social/UGC tier (LinkedIn,
+# X/Twitter) and just above its Q&A-forum tier (0.45) — when fetch failures
+# thin the pool, these are the sources that end up carrying whole sections
+# (a LinkedIn Pulse post once became the sole source for a
+# LazyInitializationException section). Unknown HTTPS blogs (0.6) and blog
+# platforms (0.65) stay acceptable as sole sources.
+LOW_TRUST_SOLE_SOURCE_CEILING = 0.5
+
+
 def find_evidence_gaps(
     plan: ArticlePlan, spans: list[EvidenceSpan]
 ) -> list[str]:
-    """Return claim texts whose source_ids don't match any span we actually have.
+    """Return claim texts that need targeted gap-fill searches.
 
-    The planner may reference span IDs that it hallucinated or that were never
-    fetched. These claims will fail verification. Better to detect them before
-    drafting and fetch targeted evidence first.
+    Two kinds of gap, returned in severity order:
+    1. Ungrounded — the claim's source_ids match no span we actually have
+       (the planner hallucinated IDs or the fetch failed). These claims
+       will fail verification outright.
+    2. Low-trust-only — every span backing the claim sits at or below
+       LOW_TRUST_SOLE_SOURCE_CEILING (forums, social/UGC). The claim is
+       technically grounded, but a penalized source would carry it alone;
+       re-searching gives the drafter something better to cite.
+
+    Ordering matters: the caller caps how many gap queries it runs, so
+    ungrounded claims must win the budget over merely weakly-sourced ones.
     """
-    available_ids = {str(span.span_id) for span in spans}
-    gap_texts = []
+    spans_by_id = {str(span.span_id): span for span in spans}
+    ungrounded: list[str] = []
+    low_trust_only: list[str] = []
     for claim in plan.claims:
-        if not any(sid in available_ids for sid in claim.source_ids):
-            gap_texts.append(claim.text)
-    return gap_texts
+        backing = [spans_by_id[sid] for sid in claim.source_ids if sid in spans_by_id]
+        if not backing:
+            ungrounded.append(claim.text)
+        elif all(s.trust_score <= LOW_TRUST_SOLE_SOURCE_CEILING for s in backing):
+            low_trust_only.append(claim.text)
+    return ungrounded + low_trust_only
 
 
 async def run_planner(
