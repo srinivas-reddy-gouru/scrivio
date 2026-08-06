@@ -35,6 +35,14 @@ JOB 2 continued — HUMANIZATION. Apply the voice canon below to the whole artic
 - Section endings need to be clear and informative, not punchlines. "Did the reader gain something" is the bar, not "did the last sentence land hard."
 - Match energy to angle: an explainer about "what is X" must not carry outage-postmortem intensity. War-story may be punchier; that is appropriate to its subject.
 
+DO NOT FLATTEN — distinguish machine-slop punchiness from legitimate narrative energy. These are working engagement devices; leave them alone (or strengthen them), never smooth them away:
+- A deliberate short sentence used as a beat after longer ones. That is rhythm, not punchiness.
+- A concrete scene, config value, error message, or number used to open a section before the abstraction. Concrete-first is the canon, not a machine tell.
+- An open loop honestly pointing forward ("timeouts are their own problem, covered next") or a callback to the article's running example. Cutting these breaks the article's through-line.
+- Plainly stated stakes ("get this wrong and every restart drops in-flight messages"). Stakes are cause and effect; only theatrical alarm gets rewritten.
+- The running example threaded across sections. Never replace a callback to it with a generic restatement.
+If a paragraph is correct but inert (no concrete image, no question, no stakes, uniform sentence rhythm), your job includes adding ONE concrete detail already present elsewhere in the draft or evidence, not just trimming words. Shorter is the default; flatter is a defect.
+
 {{include:_voice_canon_v1.txt}}
 
 {{include:_banned_phrases_v1.txt}}

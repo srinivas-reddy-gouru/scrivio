@@ -248,7 +248,7 @@ def test_generate_article_regenerates_brief_when_relevance_check_fails(
     async def stub_fill_gaps(plan, spans, client, **kwargs):
         return spans
 
-    async def stub_verify(plan, spans, client):
+    async def stub_verify(plan, spans, client, **kwargs):
         return plan, spans, []
 
     async def stub_draft(plan, spans, client):

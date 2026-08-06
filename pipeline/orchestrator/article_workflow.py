@@ -233,7 +233,13 @@ async def revision_activity(
 async def compilation_activity(
     draft: DraftPackage,
 ) -> dict[str, PublishedArticle]:
-    compiled = await compile_all_levels(draft, anthropic.AsyncAnthropic())
+    # Compile ONLY the requested level — each level is an independent LLM
+    # call (the priciest stage), and humanization then runs per level too.
+    # Compiling all three when the user asked for one tripled the cost.
+    requested = draft.plan.request.explanation_level
+    compiled = await compile_all_levels(
+        draft, anthropic.AsyncAnthropic(), levels=(requested,)
+    )
     return {level: article for level, article in compiled.items()}
 
 

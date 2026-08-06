@@ -2,7 +2,7 @@ import asyncio
 import logging
 import re
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 import httpx
@@ -110,11 +110,14 @@ _SOCIAL_UGC_DOMAINS = frozenset({
 # Heuristic markers of official-documentation URLs on domains we've never
 # seen before. Covers the long tail the curated list can't: docs.<vendor>,
 # <project>.readthedocs.io, <vendor>.com/docs/…
+# NOTE: "/guide" and "/guides" are deliberately absent — they are the most
+# common SEO-farm path segment ("The Ultimate Guide to X") and were letting
+# spam domains score docs-grade trust on URL shape alone.
 _DOCS_HOST_PREFIXES = ("docs.", "doc.", "developer.", "developers.", "wiki.")
 _DOCS_HOST_SUFFIXES = (".readthedocs.io", ".github.io")
 _DOCS_PATH_PREFIXES = (
     "/docs", "/documentation", "/reference", "/manual", "/javadoc",
-    "/apidocs", "/api-reference", "/guide", "/guides",
+    "/apidocs", "/api-reference",
 )
 
 # Jina AI Reader converts any URL to clean plain text, including JS-rendered
@@ -331,13 +334,17 @@ def _domain_in(domain: str, domains) -> bool:
     return any(domain == d or domain.endswith(f".{d}") for d in domains)
 
 
-def _looks_like_docs(domain: str, path: str) -> bool:
-    """Heuristic: does this URL look like official documentation?"""
-    if domain.startswith(_DOCS_HOST_PREFIXES):
-        return True
-    if domain.endswith(_DOCS_HOST_SUFFIXES):
-        return True
-    return path.startswith(_DOCS_PATH_PREFIXES)
+def _docs_trust(domain: str, path: str) -> float:
+    """0.0 = not docs-like. Docs-shaped HOSTS (docs.vendor.com,
+    project.readthedocs.io) earn near-curated trust; PATH-only matches
+    (/docs/… on an unknown host) are trivially faked by SEO farms — any
+    spam site can put /docs/ in a slug — so they cap at the github tier
+    instead of outranking real independent sources."""
+    if domain.startswith(_DOCS_HOST_PREFIXES) or domain.endswith(_DOCS_HOST_SUFFIXES):
+        return 0.75
+    if path.startswith(_DOCS_PATH_PREFIXES):
+        return 0.7
+    return 0.0
 
 
 def score_url(url: str, official_domains: frozenset[str] = frozenset()) -> float:
@@ -361,8 +368,9 @@ def score_url(url: str, official_domains: frozenset[str] = frozenset()) -> float
         return 0.45
     if _domain_in(domain, _SOCIAL_UGC_DOMAINS):
         return 0.5
-    if _looks_like_docs(domain, path):
-        return 0.8
+    docs_tier = _docs_trust(domain, path)
+    if docs_tier:
+        return docs_tier
     if _domain_in(domain, _MEDIUM_TRUST_DOMAINS):
         return 0.7
     if _domain_in(domain, _BLOG_PLATFORM_DOMAINS):
@@ -432,6 +440,19 @@ def _is_injection_line(line: str) -> bool:
     )
 
 
+# Brave returns age as a relative string ("3 days ago", "2 years ago");
+# Tavily/Exa return ISO-8601. Without relative parsing, every Brave result
+# came through with published_at=None and silently bypassed the
+# max_source_age_days filter.
+_RELATIVE_AGE_RE = re.compile(
+    r"(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago", re.IGNORECASE
+)
+_AGE_UNIT_DAYS = {
+    "minute": 1 / 1440, "hour": 1 / 24, "day": 1,
+    "week": 7, "month": 30, "year": 365,
+}
+
+
 def _parse_published_at(published_at):
     if published_at is None or isinstance(published_at, datetime):
         return published_at
@@ -439,4 +460,10 @@ def _parse_published_at(published_at):
     try:
         return datetime.fromisoformat(published_at.replace("Z", "+00:00"))
     except ValueError:
-        return None
+        pass
+
+    match = _RELATIVE_AGE_RE.search(published_at)
+    if match:
+        days = int(match.group(1)) * _AGE_UNIT_DAYS[match.group(2).lower()]
+        return datetime.now() - timedelta(days=days)
+    return None

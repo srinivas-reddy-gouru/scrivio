@@ -44,6 +44,12 @@ STRUCTURE PRINCIPLES — design around the reader's actual question; there is no
 
 6. ENVELOPE SECTIONS — the first section earns the read ("I will actually understand what this is"); the last section's narrative_note must instruct the drafter to close with something actionable — never a summary.
 
+7. GLOBAL ARC — a plan is a story shape, not a list of chapters:
+   - DRIVING QUESTION: derive from the thesis the one question the whole article chases ("why does a correct-looking consumer still lose messages?") and state it in the FIRST section's narrative_note. Every later narrative_note should advance or partially answer it; the closing section answers it fully.
+   - RUNNING EXAMPLE: pick one concrete scenario (a service, a dataset, a failure, with stable names and numbers) in the first or second section's narrative_note and instruct later sections to develop THAT example rather than inventing fresh ones. Name it explicitly in each narrative_note that should carry it.
+   - ONE OPEN LOOP: at least one narrative_note must plant a question that a LATER section pays off ("note that this holds only until rebalancing; section 4 resolves it"), and that later section's note must name the payoff. This is what pulls a reader across section boundaries.
+   - CONNECTIVE TISSUE FOR PARALLEL SECTIONS: when rule 0 produces parallel per-item sections, order them by escalation (simplest to most powerful, cheapest to most invasive, common to rare) and make each narrative_note say what the previous item could NOT do that this one can. Parallel must never mean interchangeable; a reader should feel the sequence building.
+
 WORKED EXAMPLE — "Explain Kafka and how to use Spring Boot to listen and what is the event flow lifecycle":
 - Sub-questions: (a) what is Kafka, (b) Spring Boot listening, (c) event flow lifecycle.
 - Dependencies: (b) needs (a) and partly (c); (c) needs (a).

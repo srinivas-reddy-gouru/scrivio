@@ -59,6 +59,8 @@ For war-story angle: a concrete incident opener IS correct. Only flag if the art
 
 Accusatory second-person sequences ("You did X. You did Y. The result is not what you expected.") are `blocking` for any non-war-story angle.
 
+Then the second question, for every angle: does the opening make you WANT to keep reading, or merely inform you? A correct definition followed by nothing concrete (no example, no stake, no question the article will answer) is `moderate` — the fix is adding one concrete instance or naming what the reader will be able to do, not adding drama.
+
 ---
 
 CHECK 3 — CITATIONS (category: "citations")
@@ -118,7 +120,13 @@ Markers of the RIGHT voice (do NOT flag these):
   - Honest trade-off language: "This works well when X; the cost shows up when Y."
   - Plain factual paragraphs that explain without editorializing.
 
-Persistent wrong voice across multiple sections → `moderate`. One or two stray zingers → acceptable, don't flag.
+Markers of the FLAT voice — the opposite failure, equally worth flagging:
+  - Three consecutive paragraphs with no concrete instance (no config value, error, number, snippet, or named scenario).
+  - Every sentence the same medium length; no deliberate short beats.
+  - Sections that never raise a question or stake; prose that informs but gives no reason to keep reading.
+  - A "running example" promised early that later sections abandon for generic restatements.
+
+Persistent wrong voice OR persistently flat voice across multiple sections → `moderate`. One or two stray zingers, or one plain section → acceptable, don't flag.
 
 ---
 

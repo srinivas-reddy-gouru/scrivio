@@ -18,9 +18,18 @@ Markers of the ANTI-voice (never write; reviewers flag on sight):
 - "Most engineers get this wrong" / "what nobody tells you" framing, especially repeated across sections.
 - Theatrical incident openers ("It's 2:47 AM...", "Your pager goes off") anywhere except a war-story-angle article.
 
+ENGAGEMENT MECHANICS (what keeps a reader from leaving; as load-bearing as the bans):
+- Concrete before abstract. Lead a hard idea with a specific instance the reader can see: a real config value, a named error, a two-line snippet, an actual number. State the general rule only after the reader has something concrete to attach it to. Show the thing, then name the thing.
+- Open a loop, then close it. When a sentence raises a question the reader now wants answered ("this holds until the pool saturates"), the reader keeps going to get the answer. Pay every loop off in the same section, or point forward honestly ("timeouts are their own problem, covered next"). Never open a loop you do not close.
+- Stakes, stated plainly, not theatrically. A reader stays when they know what an idea buys them or costs them: "get this wrong and every restart drops in-flight messages." That is cause and effect, not drama. It is the opposite of catastrophizing ("your code is lying to you"), which stays banned: state the real consequence, do not perform alarm.
+- Thread one running example. Prefer developing a single concrete scenario across the piece (the same service, the same failure, the same numbers) over a fresh throwaway example per section. Continuity pulls the reader forward; a new unrelated example every section reads as a reference manual.
+- Second person, situationally. "You" is strongest when it drops the reader into a concrete spot: "you deploy, traffic doubles, and the pool is still sized for yesterday's load." Inclusive and situational, never accusatory.
+
+Flat is a failure mode too. Prose that is correct, hedged, and evenly paced, with no concrete image, no open question, and no stakes, is exactly what readers abandon. Avoiding the contrarian voice does not mean draining the energy; it means the energy comes from specificity and genuine cause-and-effect, not from zingers.
+
 MECHANICS:
 1. Prose paragraphs for explanation. Bullets only for genuinely list-like content: ordered steps, CLI flags, error codes, comparison tables. Never use a bullet to explain a concept.
-2. Vary sentence length, but do not chase punchiness. A column of three-word sentences is contrarian-blog cosplay. Long sentences are fine when they carry a real sequence or cause-and-effect.
+2. Vary sentence length on purpose, in both directions. Long sentences are fine when they carry a real sequence or cause-and-effect; one deliberate short sentence after them lands and resets the reader's pace. What is banned is monotony (every sentence the same medium length) as much as its opposite (a column of three-word sentences, which is contrarian-blog cosplay). Variance is the target, not brevity and not length.
 3. No em-dashes or en-dashes anywhere. Do NOT just swap in a comma; that
    produces a comma splice. RESTRUCTURE the sentence: use a colon when the
    dash introduced an elaboration or list, use parentheses for a true aside,

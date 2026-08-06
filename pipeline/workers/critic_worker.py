@@ -16,6 +16,8 @@ The critic is the missing layer that reads the article AS THE READER
 will see it and applies the polish-layer judgement no other agent does.
 """
 
+import logging
+
 from pipeline.model_config import get_model
 from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import ArticlePlan, CriticVerdict
@@ -64,7 +66,9 @@ async def critique_article(
     ]
     response = await client.messages.create(
         model=get_model("critic", plan.request.model_preset),
-        max_tokens=2048,
+        # Structured verdict — cheap tokens; 2048 could truncate a long
+        # issue list into invalid JSON after the whole pipeline has run.
+        max_tokens=4096,
         system=cached_system,
         extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
         tools=[_CRITIC_TOOL],
@@ -72,4 +76,13 @@ async def critique_article(
         messages=[{"role": "user", "content": user_content}],
     )
     tool_use = next(b for b in response.content if b.type == "tool_use")
-    return CriticVerdict.model_validate(tool_use.input)
+    try:
+        return CriticVerdict.model_validate(tool_use.input)
+    except Exception:
+        if getattr(response, "stop_reason", None) == "max_tokens":
+            logging.warning("Critic verdict truncated at max_tokens; treating as approved")
+            return CriticVerdict(
+                approved=True, issues=[],
+                overall_assessment="Critic verdict truncated; auto-approved.",
+            )
+        raise

@@ -21,6 +21,8 @@ CHECKS, in priority order:
 
 4. CONCRETE VS VAGUE — a section asserting a claim without the code snippet, scenario, or specific number it obviously warrants gets flagged.
 
+4b. MOMENTUM — does each section give the reader a reason to continue? Flag a section that is correct but inert: no concrete image, no open question, no stakes, uniform sentence length, or an opening abstraction with no specific instance. Flag an article that reads as a flat list of parallel sections with no through-line (no running example, no question carried across sections). Inert prose is as much a defect as slop; the fix instruction should name the missing device ("open with the failing config from section 2", "state what breaks if this is skipped").
+
 5. TRANSITIONS — second-or-later sections that start cold, with no acknowledgment of the prior thread, feel disjointed.
 
 6. REPETITION AND CONTRADICTION — the same concrete scenario, motivating story, or failure example must appear ONCE. The opening section owns the motivating scenario; flag any later section that re-narrates it (even paraphrased). This applies WITHIN a section too: a definition or fact stated in paragraph 1 must not be restated in paragraph 4 of the same section ("X is the default connection pool… [three paragraphs later] X is the default connection pool, included automatically…") — parallel section drafting makes this the most common seam, so check the assembled draft for it deliberately. Flag internal contradictions between sections.

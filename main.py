@@ -43,6 +43,11 @@ from pipeline.workers.relevance_worker import (
     check_relevance,
 )
 from pipeline.model_config import get_model
+from pipeline.providers.claude_cli_adapter import (
+    ClaudeCLIAdapter,
+    ClaudeCLIOpenAIFacade,
+    claude_cli_available,
+)
 from pipeline.providers.openai_adapter import OpenAIAnthropicAdapter, _map_model
 from pipeline.workers.search_worker import canonical_url, multi_search
 from pipeline.workers.source_resolver import resolve_official_sources
@@ -335,7 +340,7 @@ async def generate_article(
         reports = [VerificationReport.model_validate(r) for r in cached_verify["reports"]]
     else:
         verified_plan, verified_spans, reports = await run_verification_loop(
-            plan, spans, openai_client
+            plan, spans, openai_client, official_domains=official_domains
         )
         cache.set(
             "verification",
@@ -984,8 +989,24 @@ async def _review_diagram_assets(
 
 
 def _openai_client(request: ArticleRequest):
+    """Client for the OpenAI-interface stages (claim verification,
+    corrective search). Priority:
+      1. Provider resolved to claude-cli → the CLI facade, ALWAYS — the
+         user explicitly chose their subscription, so no stage may silently
+         bill an API key that happens to be configured.
+      2. Real OpenAI when its key exists.
+      3. Claude CLI facade when the CLI is installed — verification runs on
+         the subscription instead of silently degrading to the mock. This
+         also covers anthropic-key-only users: a mocked fact-check is a
+         disabled fact-check.
+      4. Mock (placeholder output, keyless dev only)."""
+    provider = _resolve_provider(getattr(request, "llm_provider", "auto"))
+    if provider == "claude-cli":
+        return ClaudeCLIOpenAIFacade()
     if os.environ.get("OPENAI_API_KEY"):
         return openai.AsyncOpenAI()
+    if claude_cli_available():
+        return ClaudeCLIOpenAIFacade()
     return MockOpenAIClient(request)
 
 
@@ -1003,11 +1024,26 @@ def _pipeline_models(request: ArticleRequest) -> dict:
         if provider == "none":
             return "mock"
         model = get_model(role, request.model_preset)
-        return _map_model(model) if provider == "openai" else model
+        if provider == "openai":
+            return _map_model(model)
+        if provider == "claude-cli":
+            # The global CLI override beats every per-stage choice — show
+            # what will actually run, not the tier that would have.
+            override = os.environ.get("CLAUDE_CLI_MODEL")
+            return f"{override or model} (subscription)"
+        return model
 
-    # Search-query generation and claim verification always run on OpenAI
-    # (hardcoded workers), independent of the writing provider.
-    aux = "gpt-4o-mini" if os.environ.get("OPENAI_API_KEY") else "mock"
+    # Claim verification mirrors _openai_client's priority exactly, so the
+    # roadmap never shows a model that won't actually run: subscription
+    # provider → subscription; else OpenAI key; else CLI; else mock.
+    if provider == "claude-cli":
+        aux = "haiku (subscription)"
+    elif os.environ.get("OPENAI_API_KEY"):
+        aux = "gpt-4o-mini"
+    elif claude_cli_available():
+        aux = "haiku (subscription)"
+    else:
+        aux = "mock"
     return {
         "provider": provider,
         "preset": request.model_preset,
@@ -1039,13 +1075,25 @@ def _resolve_provider(requested: str = "auto") -> str:
       2. Only ANTHROPIC_API_KEY set     → "anthropic"
       3. Both set + LLM_PROVIDER pref  → honour pref (default "anthropic")
       4. Both set, no pref             → "anthropic"
-      5. Neither set                   → "none"
+      5. No API key, but the Claude Code CLI is installed → "claude-cli"
+         (BYO subscription: `claude -p` runs on the user's Pro/Max login)
+      6. Nothing at all                → "none"
+
+    "claude-cli" may also be pinned per-request or via LLM_PROVIDER; the
+    pin wins whenever the CLI binary is present, even when API keys exist.
     """
     has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY"))
     has_openai    = bool(os.environ.get("OPENAI_API_KEY"))
     has = {"anthropic": has_anthropic, "openai": has_openai}
 
-    if requested in ("anthropic", "openai"):
+    if requested == "claude-cli":
+        if claude_cli_available():
+            return "claude-cli"
+        logging.warning(
+            "Request pinned llm_provider=claude-cli but the Claude Code CLI "
+            "is not installed — falling back to auto provider selection."
+        )
+    elif requested in ("anthropic", "openai"):
         if has[requested]:
             return requested
         logging.warning(
@@ -1053,13 +1101,18 @@ def _resolve_provider(requested: str = "auto") -> str:
             "falling back to auto provider selection.", requested,
         )
 
+    pref = os.environ.get("LLM_PROVIDER", "").strip().lower()
+    if pref == "claude-cli" and claude_cli_available():
+        return "claude-cli"
+
     if has_openai and not has_anthropic:
         return "openai"
     if has_anthropic and not has_openai:
         return "anthropic"
     if has_anthropic and has_openai:
-        pref = os.environ.get("LLM_PROVIDER", "anthropic").strip().lower()
         return pref if pref in ("anthropic", "openai") else "anthropic"
+    if claude_cli_available():
+        return "claude-cli"
     return "none"
 
 
@@ -1078,6 +1131,8 @@ def _anthropic_client(request: ArticleRequest):
         return OpenAIAnthropicAdapter(openai.AsyncOpenAI())
     if provider == "anthropic":
         return anthropic.AsyncAnthropic()
+    if provider == "claude-cli":
+        return ClaudeCLIAdapter()
     logging.warning(
         "No LLM API key found (ANTHROPIC_API_KEY or OPENAI_API_KEY). "
         "Using mock client — add a key in Settings to generate real articles."
@@ -1086,10 +1141,13 @@ def _anthropic_client(request: ArticleRequest):
 
 
 def _has_search_key() -> bool:
+    """Can the pipeline perform live web search? A search API key, or the
+    Claude CLI's built-in WebSearch tool running on the subscription."""
     return bool(
         os.environ.get("BRAVE_SEARCH_API_KEY")
         or os.environ.get("EXA_API_KEY")
         or os.environ.get("TAVILY_API_KEY")
+        or claude_cli_available()
     )
 
 
@@ -1223,6 +1281,14 @@ class MockAnthropicMessages:
             # final-pass copyeditor AND level-adapter", so "copyeditor"
             # routes it here.
             content = _mock_humanized_markdown(user_content)
+        elif "interviewer's debrief" in system:
+            content = (
+                "You showed a solid grasp of the fundamentals and your "
+                "strongest moment was the first answer. The most important "
+                "gap to close is depth on failure modes. Keep the concrete "
+                "examples; they work. Borderline, would advance with "
+                "reservations."
+            )
         elif user_content.strip().startswith("{"):
             # Diagram intent JSON (from generate_spec via mermaid_worker /
             # vhs_worker). Return a minimal valid Mermaid flowchart so the
@@ -1283,9 +1349,87 @@ class MockAnthropicMessages:
             # Static seed map in source_resolver still applies; the mock LLM
             # just adds nothing on top.
             return {"domains": []}
+        if tool_name == "submit_interview_questions":
+            return self._mock_interview_questions(user_content)
+        if tool_name == "submit_answer_evaluation":
+            return self._mock_answer_evaluation(user_content)
         # Unknown tool — return an empty dict; the caller's model_validate will
         # raise a clear Pydantic error rather than an obscure AttributeError.
         return {}
+
+    def _mock_interview_questions(self, user_content: str) -> dict:
+        """Two deterministic practice questions. Difficulty is read from the
+        'level:' line of the worker's user content so it matches whatever the
+        session requested (validation would fail on an unknown level)."""
+        level = "intermediate"
+        for line in user_content.splitlines():
+            if line.startswith("level:"):
+                candidate = line.split(":", 1)[1].strip()
+                if candidate in ("basic", "intermediate", "advanced"):
+                    level = candidate
+                break
+        topic = self.request.topic
+        # Article mode includes an outline; anchor the first question to a
+        # real heading when one exists so UI/section-pointer paths render.
+        anchor = ""
+        if "article_outline:" in user_content:
+            outline_block = user_content.split("article_outline:", 1)[1]
+            outline_block = outline_block.split("verified_findings:", 1)[0]
+            headings = [
+                line.strip()
+                for line in outline_block.splitlines()
+                if line.strip() and not line.strip().endswith(":")
+            ]
+            # Prefer a section heading over the article title (first heading).
+            if headings:
+                anchor = headings[1] if len(headings) > 1 else headings[0]
+        question = {
+            "difficulty": level,
+            "rubric_key_points": [
+                f"Defines what {topic} is",
+                f"Explains why {topic} matters in practice",
+                "Gives one concrete example",
+            ],
+            "model_answer": (
+                f"A strong answer defines {topic}, explains the problem it "
+                "solves, and walks through one concrete example of using it "
+                "in a real system."
+            ),
+        }
+        return {
+            "questions": [
+                {**question, "id": "q1", "section_anchor": anchor,
+                 "question": f"Explain what {topic} is and why it matters."},
+                {**question, "id": "q2", "section_anchor": "",
+                 "question": f"Describe a trade-off you weigh when using {topic}."},
+            ]
+        }
+
+    def _mock_answer_evaluation(self, user_content: str) -> dict:
+        """Deterministic, flow-controllable grading for tests and mock-mode UI:
+        follow-up round → final adequate; short first answer (<8 words) →
+        shallow + follow-up; anything longer → strong. All list fields are
+        non-empty so every UI rendering path is exercised in mock mode."""
+        base = {
+            "strengths": ["You correctly identified the core concept."],
+            "gaps": ["The failure-mode discussion is missing."],
+            "misconceptions": [],
+            "suggestions": ["Add a concrete example from a production system."],
+            "section_pointers": ["Why it matters"],
+        }
+        if "followup_answer:" in user_content:
+            return {**base, "score": 7, "verdict": "adequate",
+                    "needs_followup": False, "followup_question": ""}
+        answer = ""
+        if "candidate_answer:" in user_content:
+            answer = user_content.split("candidate_answer:", 1)[1]
+            answer = answer.split("followup_question:", 1)[0]
+        if len(answer.split()) < 8:
+            return {**base, "score": 4, "verdict": "shallow",
+                    "needs_followup": True,
+                    "followup_question": "Can you explain the underlying mechanism?"}
+        return {**base, "score": 8, "verdict": "strong",
+                "needs_followup": False, "followup_question": ""}
 
     def _mock_critic_verdict(self, user_content: str) -> dict:
         """Mock critic verdict. Default to approved=true so the mock pipeline

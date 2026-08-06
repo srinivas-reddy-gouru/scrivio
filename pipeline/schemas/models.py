@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, UUID4
 ExplanationLevel = Literal["basic", "intermediate", "advanced"]
 ArticleAngle = Literal["tutorial", "deep-dive", "comparison", "war-story", "contrarian", "explainer"]
 ModelPreset = Literal["balanced", "best", "fast"]
-LLMProvider = Literal["auto", "anthropic", "openai"]
+LLMProvider = Literal["auto", "anthropic", "openai", "claude-cli"]
 
 
 class ArticleRequest(BaseModel):
@@ -342,6 +342,178 @@ class PublishedArticle(BaseModel):
     assets: list[RenderAsset] = []
     verification_reports: list[VerificationReport] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ── Interview practice models ────────────────────────────────────────
+# The practice flow: generate interview questions (with a hidden rubric and
+# model answer written BEFORE any user answer — the anti-sycophancy anchor),
+# evaluate free-text answers against that rubric, optionally drill down with
+# ONE follow-up question, and persist the whole session on disk for history.
+
+class InterviewQuestion(BaseModel):
+    # model_answer is ours, not Pydantic's — silence the namespace warning.
+    model_config = ConfigDict(protected_namespaces=())
+
+    id: str = Field(
+        description="Stable slug 'q1'..'qN' in the order questions are asked."
+    )
+    question: str = Field(
+        description=(
+            "One free-text interview question. Open-ended — never answerable "
+            "with yes/no or a single word."
+        )
+    )
+    difficulty: ExplanationLevel = Field(
+        description="Must match the requested level of this practice session."
+    )
+    section_anchor: str = Field(
+        default="",
+        description=(
+            "When an article is provided: the EXACT heading text (without # "
+            "marks) of the article section this question tests, copied "
+            "verbatim from the outline. Empty string for topic-only sessions."
+        ),
+    )
+    rubric_key_points: list[str] = Field(
+        min_length=2,
+        description=(
+            "3-5 key points a strong answer must contain, written BEFORE "
+            "seeing any candidate answer. Never shown to the candidate while "
+            "the question is open."
+        ),
+    )
+    model_answer: str = Field(
+        description=(
+            "A concise ideal answer (80-200 words), written BEFORE seeing any "
+            "candidate answer. Revealed to the candidate only after they "
+            "finish the question."
+        )
+    )
+
+
+class InterviewQuestionSet(BaseModel):
+    """Tool schema for submit_interview_questions."""
+    questions: list[InterviewQuestion] = Field(min_length=1)
+
+
+AnswerVerdict = Literal["incorrect", "shallow", "adequate", "strong"]
+
+
+class AnswerEvaluation(BaseModel):
+    """Tool schema for submit_answer_evaluation."""
+    score: int = Field(
+        ge=0, le=10,
+        description=(
+            "Strictly rubric-based: 9-10 = every key point covered accurately; "
+            "6-8 = most key points; 3-5 = some points but superficial; "
+            "0-2 = wrong, empty, or 'I don't know'. Never inflated to be "
+            "encouraging."
+        ),
+    )
+    verdict: AnswerVerdict = Field(
+        description="Band matching the score: 0-2 incorrect, 3-5 shallow, 6-8 adequate, 9-10 strong."
+    )
+    strengths: list[str] = Field(
+        description=(
+            "Specific things the answer got right, quoting or closely "
+            "paraphrasing the candidate's own words. Empty if none — do not "
+            "invent praise."
+        )
+    )
+    gaps: list[str] = Field(
+        description="Rubric key points that are missing or under-explained."
+    )
+    misconceptions: list[str] = Field(
+        description=(
+            "Candidate statements that contradict the reference material. "
+            "Empty if none — do not invent misconceptions."
+        )
+    )
+    suggestions: list[str] = Field(
+        description=(
+            "Concrete pointers for a better answer. In article mode each "
+            "references an article section by its exact heading."
+        )
+    )
+    section_pointers: list[str] = Field(
+        description=(
+            "Exact article headings worth re-reading (article mode), or "
+            "short study pointers (topic mode)."
+        )
+    )
+    needs_followup: bool = Field(
+        description=(
+            "True ONLY for a first answer that is shallow-but-salvageable "
+            "(score 3-6). Never true when evaluating a follow-up answer."
+        )
+    )
+    followup_question: str = Field(
+        default="",
+        description="Exactly one drill-down question when needs_followup, else empty.",
+    )
+
+
+# Persistence-only models below (never used as LLM tool schemas).
+
+# practice: feedback after every answer, follow-ups allowed.
+# simulation: realistic screen — no feedback until the end, then a debrief.
+# drill: rapid-fire short questions, 60s each, compact feedback.
+InterviewMode = Literal["practice", "simulation", "drill"]
+
+
+class InterviewAnswerRecord(BaseModel):
+    answer: str
+    evaluation: AnswerEvaluation
+    answered_at: datetime = Field(default_factory=datetime.utcnow)
+    # Confidence calibration: the score the candidate predicted for
+    # themselves BEFORE seeing feedback. None = didn't predict.
+    predicted_score: int | None = Field(default=None, ge=0, le=10)
+
+
+InterviewQuestionStatus = Literal[
+    "pending", "awaiting_followup", "completed", "skipped"
+]
+
+
+class InterviewQuestionState(BaseModel):
+    question: InterviewQuestion
+    status: InterviewQuestionStatus = "pending"
+    first: InterviewAnswerRecord | None = None
+    # When a follow-up was asked, this record's evaluation is the FINAL
+    # combined evaluation of both answers together.
+    followup: InterviewAnswerRecord | None = None
+    final_score: int | None = None  # None until completed; stays None if skipped
+
+
+class InterviewSummary(BaseModel):
+    total_questions: int
+    answered: int
+    skipped: int
+    average_score: float | None  # None when every question was skipped
+    per_question: list[dict] = []  # [{id, question, final_score, status}]
+    # section_pointers ranked by frequency across final evaluations that
+    # scored <= 6 — the "re-read these" list and the seed for future
+    # weak-area tracking.
+    weak_sections: list[str] = []
+    top_gaps: list[str] = []
+    # Mean |predicted - actual| over answers that carried a prediction.
+    # None when nothing was predicted. Low = well-calibrated.
+    calibration_gap: float | None = None
+    # Simulation mode only: the interviewer's end-of-screen narrative
+    # verdict (one extra LLM call; empty string when unavailable).
+    debrief: str = ""
+
+
+class InterviewSession(BaseModel):
+    session_id: str
+    article_id: str | None = None  # None = topic-only session
+    topic: str
+    level: str
+    mode: InterviewMode = "practice"  # default keeps pre-mode session files valid
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    questions: list[InterviewQuestionState] = []
+    summary: InterviewSummary | None = None  # set once all questions are terminal
 
 
 ProgressEventType = Literal[

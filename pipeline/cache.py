@@ -37,7 +37,10 @@ from pydantic import BaseModel
 # v8: planner section-angle variation, banned-phrase fragment in drafter and
 #     polisher, diagram-spec negative patterns — cached plans/drafts predate
 #     the anti-template rules.
-_CACHE_VERSION = "v8"
+# v9: engagement-mechanics voice canon, anti-flatten polisher, global-arc
+# planner, trust-tier changes — cached stage outputs from v8 prompts must
+# not mix with the new voice.
+_CACHE_VERSION = "v9"
 
 _DEFAULT_CACHE_DIR = Path(".cache") / "article_pipeline"
 

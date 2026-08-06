@@ -130,7 +130,7 @@ def test_run_verification_loop_retries_weak_claim_and_reverifies(
     ]
     client = MockOpenAIClient(reports)
 
-    async def fake_corrective_search(claim, client_search, client_llm):
+    async def fake_corrective_search(claim, client_search, client_llm, **kwargs):
         return [new_span]
 
     monkeypatch.setattr(
@@ -426,7 +426,7 @@ def test_run_verification_loop_stops_after_two_failed_attempts(
     client = MockOpenAIClient(reports)
     corrective_calls = []
 
-    async def fake_corrective_search(claim, client_search, client_llm):
+    async def fake_corrective_search(claim, client_search, client_llm, **kwargs):
         corrective_calls.append(str(claim.claim_id))
         return [new_spans[len(corrective_calls) - 1]]
 

@@ -23,6 +23,29 @@ def _hermetic_llm_clients(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _hermetic_provider_environment(monkeypatch):
+    """Provider resolution must not depend on the HOST machine's state.
+
+    Two leaks bit us: (1) server.py's load_dotenv pulls the developer's
+    LLM_PROVIDER preference (e.g. claude-cli) into os.environ mid-suite,
+    flipping _resolve_provider outcomes based on test ORDER; (2) whether
+    the Claude Code CLI happens to be installed on the dev machine changed
+    auto-fallback results. Pin both: no provider preference, no CLI.
+    Tests that exercise the CLI paths re-patch _find_cli themselves."""
+    from pipeline.providers import claude_cli_adapter
+
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    # The user's saved model choices (settings UI → .env → load_dotenv →
+    # os.environ) must not steer test assertions about default models.
+    for var in (
+        "ANTHROPIC_STRONG_MODEL", "ANTHROPIC_LIGHT_MODEL",
+        "OPENAI_STRONG_MODEL", "OPENAI_LIGHT_MODEL", "CLAUDE_CLI_MODEL",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(claude_cli_adapter, "_find_cli", lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def _stub_official_source_resolution(monkeypatch):
     """generate_article resolves official-doc domains with an LLM call.
     Stub it to the static seed map for every test — deterministic and free."""

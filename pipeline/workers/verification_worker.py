@@ -8,8 +8,15 @@ from pipeline.schemas.models import (
     EvidenceSpan,
     VerificationReport,
 )
-from pipeline.workers.extraction_worker import process_search_result
+from pipeline.workers.extraction_worker import process_search_result, score_url
 from pipeline.workers.search_worker import multi_search
+
+
+# Corrective-search results below this trust score are discarded rather than
+# attached to a claim. Without a floor, the corrective loop is the one place
+# unranked self-confirming sources (SEO farms, forum echoes of the claim)
+# get laundered into "supported" citations.
+_CORRECTIVE_TRUST_FLOOR = 0.6
 
 
 _SYSTEM_PROMPT = load_prompt("verifier_v2.txt")
@@ -133,8 +140,15 @@ async def _call_with_rate_limit_retry(
 
 
 async def verify_all_claims(
-    plan: ArticlePlan, spans: list[EvidenceSpan], client
+    plan: ArticlePlan,
+    spans: list[EvidenceSpan],
+    client,
+    claims: list[Claim] | None = None,
 ) -> list[VerificationReport]:
+    """Verify claims against evidence. *claims* narrows the pass to a subset
+    (used by the corrective loop to re-judge only retried claims — a full
+    re-pass would let a nondeterministic verifier flip already-supported
+    claims to weak and silently drop good content)."""
     thesis = plan.brief.thesis if plan.brief else ""
     angle = plan.brief.angle if plan.brief else ""
     return list(
@@ -147,15 +161,27 @@ async def verify_all_claims(
                     article_thesis=thesis,
                     article_angle=angle,
                 )
-                for claim in plan.claims
+                for claim in (claims if claims is not None else plan.claims)
             )
         )
     )
 
 
 async def corrective_search(
-    claim: Claim, client_search, client_llm
+    claim: Claim,
+    client_search,
+    client_llm,
+    *,
+    official_domains: frozenset[str] = frozenset(),
+    exclude_urls: set[str] | None = None,
 ) -> list[EvidenceSpan]:
+    """Targeted search for extra evidence on a weak/unsupported claim.
+
+    The query is derived from the claim itself, which biases results toward
+    pages that echo the claim — so results are trust-ranked with the same
+    score_url tiers as the main search pass, low-trust hits are dropped, and
+    URLs already tried for this claim are excluded (otherwise each retry
+    re-fetches the identical results and the loop just burns budget)."""
     response = await client_llm.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -168,8 +194,22 @@ async def corrective_search(
     )
     query = _extract_chat_response_text(response).strip().strip('"')
     search_results = await multi_search([query])
+
+    excluded = exclude_urls or set()
+    ranked = sorted(
+        (
+            r for r in search_results
+            if r.url not in excluded
+            and score_url(r.url, official_domains) >= _CORRECTIVE_TRUST_FLOOR
+        ),
+        key=lambda r: score_url(r.url, official_domains),
+        reverse=True,
+    )
     span_groups = await asyncio.gather(
-        *(process_search_result(result) for result in search_results[:3])
+        *(
+            process_search_result(result, official_domains)
+            for result in ranked[:3]
+        )
     )
 
     return [span for group in span_groups for span in group]
@@ -180,12 +220,13 @@ async def run_verification_loop(
     all_spans,
     openai_client,
     max_retries=2,
+    official_domains: frozenset[str] = frozenset(),
 ) -> tuple:
     current_spans = list(all_spans)
-    reports = await verify_all_claims(plan, current_spans, openai_client)
+    initial_reports = await verify_all_claims(plan, current_spans, openai_client)
+    report_by_claim_id = {report.claim_id: report for report in initial_reports}
 
     while True:
-        report_by_claim_id = {report.claim_id: report for report in reports}
         retry_claims = [
             claim
             for claim in plan.claims
@@ -198,14 +239,34 @@ async def run_verification_loop(
             break
 
         for claim in retry_claims:
-            new_spans = await corrective_search(claim, None, openai_client)
+            # Don't re-fetch URLs already backing this claim: the query is
+            # regenerated from the same claim text, so without exclusion
+            # every retry returns the identical result set.
+            already_tried = {
+                span.source_url
+                for span in current_spans
+                if str(span.span_id) in set(claim.source_ids)
+            }
+            new_spans = await corrective_search(
+                claim, None, openai_client,
+                official_domains=official_domains,
+                exclude_urls=already_tried,
+            )
             current_spans.extend(new_spans)
             claim.source_ids.extend(str(span.span_id) for span in new_spans)
             claim.corrective_attempts += 1
 
-        reports = await verify_all_claims(plan, current_spans, openai_client)
+        # Re-verify ONLY the retried claims and merge; claims that already
+        # passed keep their verdicts (a full re-pass wastes 2-3x verifier
+        # spend and lets nondeterminism flip supported claims to weak).
+        fresh_reports = await verify_all_claims(
+            plan, current_spans, openai_client, claims=retry_claims
+        )
+        report_by_claim_id.update({r.claim_id: r for r in fresh_reports})
 
-    final_report_by_claim_id = {report.claim_id: report for report in reports}
+    # Stable output order: one report per claim, in plan order.
+    reports = [report_by_claim_id[str(c.claim_id)] for c in plan.claims]
+    final_report_by_claim_id = report_by_claim_id
     for claim in plan.claims:
         report = final_report_by_claim_id[str(claim.claim_id)]
         claim.support_status = report.support_status
@@ -260,11 +321,25 @@ def _matching_spans(claim: Claim, spans: list[EvidenceSpan]) -> list[EvidenceSpa
     return [span for span in spans if str(span.span_id) in source_ids]
 
 
-def _build_evidence_context(spans: list[EvidenceSpan], max_chars: int = 3000) -> str:
-    context = "\n\n".join(
-        f"[{span.span_id}] ({span.source_url})\n{span.content}" for span in spans
-    )
-    return context[:max_chars]
+def _build_evidence_context(
+    spans: list[EvidenceSpan],
+    max_spans: int = 5,
+    max_span_chars: int = 900,
+) -> str:
+    """Evidence block for the verifier: highest-trust spans first, capped by
+    span COUNT with per-span truncation on a sentence boundary. The previous
+    blind 3000-char slice of an unordered join could cut away the one span
+    that actually supported the claim, producing false 'unsupported' verdicts
+    that then dropped genuinely-backed content."""
+    ranked = sorted(spans, key=lambda s: s.trust_score, reverse=True)[:max_spans]
+    parts = []
+    for span in ranked:
+        text = span.content
+        if len(text) > max_span_chars:
+            cut = text.rfind(". ", 0, max_span_chars)
+            text = text[: cut + 1] if cut > max_span_chars // 2 else text[:max_span_chars]
+        parts.append(f"[{span.span_id}] ({span.source_url})\n{text}")
+    return "\n\n".join(parts)
 
 
 def _extract_chat_response_text(response) -> str:

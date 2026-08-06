@@ -10,6 +10,8 @@ so users can influence cost vs. quality from the UI without touching code.
 """
 from __future__ import annotations
 
+import os
+
 # Roles understood by the pipeline.
 # Adding a new worker? Add a role here and fill in all three presets below.
 # NOTE: "verify" uses OpenAI (gpt-4o-mini), not Anthropic — it is NOT
@@ -26,6 +28,8 @@ ROLES = (
     "diagram",         # Mermaid spec generation — structured, not prose
     "diagram_review",  # diagram ↔ section-text semantic check (tiny JSON call)
     "sources",         # topic → official-docs domain resolution (tiny JSON call)
+    "interviewer",     # interview-question + rubric generation (practice mode)
+    "evaluator",       # grades candidate answers against the rubric
 )
 
 # Model aliases — update these when Anthropic releases new models.
@@ -49,6 +53,8 @@ _PRESETS: dict[str, dict[str, str]] = {
         "diagram":   _HAIKU,    # structured spec, not prose — Haiku is fine
         "diagram_review": _HAIKU,   # cheap semantic check
         "sources":   _HAIKU,    # short factual lookup — Haiku is fine
+        "interviewer": _SONNET, # question + rubric quality drives the feature
+        "evaluator":   _SONNET, # grading is judgment; inflated scores defeat it
     },
     "best": {
         "brief":     _SONNET,
@@ -62,6 +68,8 @@ _PRESETS: dict[str, dict[str, str]] = {
         "diagram":   _SONNET,
         "diagram_review": _SONNET,   # cheap semantic check
         "sources":   _SONNET,
+        "interviewer": _SONNET,
+        "evaluator":   _SONNET,
     },
     "fast": {
         "brief":     _HAIKU,    # acceptable quality loss for speed
@@ -75,6 +83,8 @@ _PRESETS: dict[str, dict[str, str]] = {
         "diagram":   _HAIKU,
         "diagram_review": _HAIKU,   # cheap semantic check
         "sources":   _HAIKU,
+        "interviewer": _HAIKU,  # structured output; acceptable loss for speed
+        "evaluator":   _SONNET, # never downgrade the grader
     },
 }
 
@@ -86,6 +96,14 @@ def get_model(role: str, preset: str = "balanced") -> str:
 
     Unknown presets fall back to "balanced" so old cached ArticleRequests
     without a preset field still work after a code update.
+
+    User model selection: presets decide which TIER a stage uses
+    (strong vs light); the env overrides decide what model each tier IS —
+    ANTHROPIC_STRONG_MODEL replaces every strong-tier (Sonnet) slot and
+    ANTHROPIC_LIGHT_MODEL every light-tier (Haiku) slot. Read at call time
+    so the settings UI's hot-reload takes effect without a restart. These
+    also flow through the Claude CLI adapter (which passes unknown ids to
+    `claude --model` verbatim), so one pair of knobs covers both paths.
     """
     if preset not in _PRESETS:
         preset = "balanced"
@@ -94,4 +112,9 @@ def get_model(role: str, preset: str = "balanced") -> str:
         raise ValueError(
             f"Unknown role {role!r}. Valid roles: {', '.join(sorted(ROLES))}"
         )
-    return table[role]
+    model = table[role]
+    if model == _SONNET:
+        return os.environ.get("ANTHROPIC_STRONG_MODEL") or model
+    if model == _HAIKU:
+        return os.environ.get("ANTHROPIC_LIGHT_MODEL") or model
+    return model

@@ -20,7 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0f1616;
@@ -46,7 +46,7 @@
     --glow-opacity-focus: 0.6;
   }
   html[data-theme="light"] {
-    --bg: #fbfaf4;
+    --bg: #f8fafc;
     --surface: rgba(255,255,255,0.8);
     --surface-2: rgba(23,46,44,0.06);
     --stroke: rgba(23,46,44,0.11);
@@ -56,7 +56,7 @@
     --text-faint: #93a3a0;
     --panel: rgba(255,255,255,0.94);
     --inset: rgba(23,46,44,0.05);
-    --header-bg: rgba(251,250,244,0.82);
+    --header-bg: rgba(248,250,252,0.78);
     --track-off: rgba(23,46,44,0.16);
     --accent-text: #0f766e;
     --cyan: #0d9488;
@@ -75,19 +75,51 @@
     min-height: 100vh;
     overflow-x: hidden;
   }
-  /* ── Ambient background: gradient orbs + grid ── */
+  /* ── Ambient background: Apple-style drifting aurora ──
+     Four oversized, heavily-blurred color fields glide slowly on GPU
+     transforms (never opacity/filter animation — those repaint). The grid
+     overlay survives only in dark mode, where it reads as depth; light
+     mode is clean air, like a macOS wallpaper. */
   .backdrop {
     position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    background:
-      radial-gradient(600px 400px at 12% -8%, rgba(32,184,205,0.24), transparent 60%),
-      radial-gradient(700px 460px at 88% -12%, rgba(76,201,240,0.15), transparent 60%),
-      radial-gradient(800px 600px at 50% 115%, rgba(45,212,191,0.14), transparent 65%);
-    animation: aurora 16s ease-in-out infinite;
+    overflow: hidden;
   }
-  @keyframes aurora {
-    0%, 100% { filter: hue-rotate(0deg) saturate(1); }
-    50%      { filter: hue-rotate(-14deg) saturate(1.25); }
+  .blob {
+    position: absolute; border-radius: 50%;
+    filter: blur(90px); will-change: transform;
   }
+  .b1 { width: 52vw; height: 52vw; left: -12vw; top: -18vw;
+        background: radial-gradient(circle at 35% 35%, rgba(45,212,191,0.5), transparent 65%);
+        animation: drift-a 26s ease-in-out infinite alternate; }
+  .b2 { width: 44vw; height: 44vw; right: -10vw; top: -12vw;
+        background: radial-gradient(circle at 40% 40%, rgba(96,165,250,0.42), transparent 65%);
+        animation: drift-b 32s ease-in-out infinite alternate; }
+  .b3 { width: 40vw; height: 40vw; left: 18vw; bottom: -20vw;
+        background: radial-gradient(circle at 45% 45%, rgba(167,139,250,0.35), transparent 65%);
+        animation: drift-c 38s ease-in-out infinite alternate; }
+  .b4 { width: 26vw; height: 26vw; right: 12vw; bottom: -8vw;
+        background: radial-gradient(circle at 50% 50%, rgba(103,232,249,0.3), transparent 65%);
+        animation: drift-b 29s ease-in-out infinite alternate-reverse; }
+  @keyframes drift-a {
+    from { transform: translate3d(0,0,0) scale(1); }
+    to   { transform: translate3d(10vw, 7vh, 0) scale(1.18); }
+  }
+  @keyframes drift-b {
+    from { transform: translate3d(0,0,0) scale(1.1) rotate(0deg); }
+    to   { transform: translate3d(-8vw, 9vh, 0) scale(0.95) rotate(20deg); }
+  }
+  @keyframes drift-c {
+    from { transform: translate3d(0,0,0) scale(1); }
+    to   { transform: translate3d(9vw, -8vh, 0) scale(1.22); }
+  }
+  /* Dark mode: dim the fields so they glow instead of wash out. */
+  .blob { opacity: 0.5; }
+  html[data-theme="light"] .blob { opacity: 0.55; filter: blur(100px); }
+  html[data-theme="light"] .b1 { background: radial-gradient(circle at 35% 35%, #99f6e4, transparent 65%); }
+  html[data-theme="light"] .b2 { background: radial-gradient(circle at 40% 40%, #bae6fd, transparent 65%); }
+  html[data-theme="light"] .b3 { background: radial-gradient(circle at 45% 45%, #ddd6fe, transparent 65%); }
+  html[data-theme="light"] .b4 { background: radial-gradient(circle at 50% 50%, #fde68a, transparent 65%); }
+  /* Grid: dark mode only — depth cue on near-black, clutter on white. */
   .backdrop::after {
     content: ''; position: absolute; inset: 0;
     background-image:
@@ -97,19 +129,13 @@
     mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 30%, transparent 75%);
     -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 30%, transparent 75%);
   }
-  html[data-theme="light"] .backdrop {
-    background:
-      radial-gradient(600px 400px at 12% -8%, rgba(32,184,205,0.16), transparent 60%),
-      radial-gradient(700px 460px at 88% -12%, rgba(76,201,240,0.12), transparent 60%),
-      radial-gradient(800px 600px at 50% 115%, rgba(45,212,191,0.10), transparent 65%);
-  }
-  html[data-theme="light"] .backdrop::after {
-    background-image:
-      linear-gradient(rgba(23,46,44,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(23,46,44,0.04) 1px, transparent 1px);
-  }
+  html[data-theme="light"] .backdrop::after { display: none; }
+  @media (prefers-reduced-motion: reduce) { .blob { animation: none; } }
 
-  .font-display { font-family: 'Space Grotesk', 'Inter', sans-serif; }
+  /* Typography: Inter everywhere (SF Pro takes over on Apple devices via
+     the -apple-system fallback ahead of webfont load). Display = tighter
+     tracking + optical weight, the Apple headline recipe. */
+  .font-display { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: -0.025em; }
   .font-mono-ui { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 
   .grad-text {
@@ -267,6 +293,87 @@
   .q-input:focus { border-color: rgba(32,184,205,0.6); box-shadow: 0 0 0 3px rgba(32,184,205,0.15); }
   .q-input::placeholder { color: var(--text-faint); }
   select.q-input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2320b8cd' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.7rem center; padding-right: 2.3rem; }
+
+  /* ── Interview room (voice practice) ─────────────────────────── */
+  @keyframes orb-breathe { from { transform: scale(1); } to { transform: scale(1.06); } }
+  @keyframes orb-speak {
+    0%,100% { transform: scale(1); box-shadow: 0 0 32px rgba(32,184,205,0.35); }
+    50%     { transform: scale(1.1); box-shadow: 0 0 52px rgba(32,184,205,0.55); }
+  }
+  .orb {
+    width: 72px; height: 72px; border-radius: 9999px;
+    background: var(--grad); background-size: 200% 200%;
+    box-shadow: 0 0 40px rgba(32,184,205,0.35);
+    filter: saturate(1.1);
+    animation: orb-breathe 3s ease-in-out infinite alternate;
+  }
+  .orb.speaking { animation: orb-speak 0.9s ease-in-out infinite; }
+
+  @keyframes q-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .q-reveal { animation: q-fade-in 0.5s ease-out; }
+
+  .mic-wrap { position: relative; width: 96px; height: 96px; margin: 0 auto; }
+  .mic-btn {
+    position: absolute; inset: 10px; z-index: 2;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 9999px; cursor: pointer;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--stroke-strong);
+    transition: background 0.2s, color 0.2s, transform 0.1s;
+  }
+  .mic-btn:hover { transform: scale(1.04); }
+  .mic-btn.recording { background: var(--grad); color: #06282c; border-color: transparent; }
+  @keyframes ring-pulse { from { transform: scale(1); opacity: 0.5; } to { transform: scale(1.9); opacity: 0; } }
+  .mic-rings span {
+    position: absolute; inset: 10px; border-radius: 9999px;
+    border: 2px solid var(--accent-text); opacity: 0; pointer-events: none;
+  }
+  .recording-active .mic-rings span { animation: ring-pulse 1.6s ease-out infinite; }
+  .recording-active .mic-rings span:nth-child(2) { animation-delay: 0.5s; }
+  .recording-active .mic-rings span:nth-child(3) { animation-delay: 1s; }
+
+  .level-bars { display: flex; gap: 4px; align-items: center; justify-content: center; height: 26px; }
+  .level-bar {
+    width: 4px; height: 22px; border-radius: 2px;
+    background: var(--accent-text); transform: scaleY(0.15);
+    transform-origin: center; transition: transform 80ms linear;
+  }
+
+  .transcript-live {
+    min-height: 4.5rem; text-align: left;
+    background: var(--surface); border: 1px dashed var(--stroke-strong);
+    border-radius: 0.65rem; padding: 0.75rem 1rem;
+    font-size: 0.875rem; line-height: 1.6; color: var(--text);
+  }
+  .transcript-live .interim { color: var(--text-faint); }
+
+  @keyframes score-pop {
+    0% { transform: scale(0.5); opacity: 0; }
+    70% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+  .score-pop { animation: score-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-block; }
+
+  @keyframes rise-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .rise-in { animation: rise-in 0.5s ease-out both; }
+
+  .predict-range { width: 100%; max-width: 18rem; accent-color: var(--accent-text); }
+  .badge-chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.2rem 0.6rem; border-radius: 9999px;
+    font-size: 0.7rem; font-weight: 600;
+    background: rgba(32,184,205,0.12); color: var(--accent-text);
+    border: 1px solid rgba(32,184,205,0.3);
+  }
+  .badge-chip.ghost { opacity: 0.35; filter: grayscale(1); }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  .badge-toast {
+    position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 90;
+    background: var(--panel); border: 1px solid rgba(32,184,205,0.45);
+    border-radius: 0.9rem; padding: 0.8rem 1.1rem;
+    box-shadow: 0 14px 40px rgba(0,0,0,0.35), 0 0 24px rgba(32,184,205,0.2);
+    animation: toast-in 0.3s ease-out;
+  }
 
   /* ── Compose view: hero + composer sit vertically centered ──
      :not(.hidden) keeps the id selector from overriding the view-switcher's
@@ -504,7 +611,12 @@
 </style>
 </head>
 <body>
-<div class="backdrop"></div>
+<div class="backdrop" aria-hidden="true">
+  <span class="blob b1"></span>
+  <span class="blob b2"></span>
+  <span class="blob b3"></span>
+  <span class="blob b4"></span>
+</div>
 
 <!-- ══════════ HEADER ══════════ -->
 <header class="site-header">
@@ -530,6 +642,10 @@
         <button id="nav-history" class="nav-link">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <span class="hidden sm:inline">Library</span>
+        </button>
+        <button id="nav-practice" class="nav-link">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>
+          <span class="hidden sm:inline">Practice</span>
         </button>
         <button id="nav-settings" class="nav-link">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -802,6 +918,10 @@
       <div class="flex items-center gap-2">
         <label class="text-xs font-semibold uppercase tracking-wider" style="color:var(--text-dim)">Level</label>
         <select id="level-selector" class="q-input py-1.5 text-sm" style="width:auto;"></select>
+        <button type="button" id="result-practice-btn" class="btn-primary text-sm">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Practice interview
+        </button>
       </div>
     </div>
     <div class="paper px-6 sm:px-10 py-10">
@@ -849,7 +969,11 @@
           <label class="text-xs font-semibold uppercase tracking-wider" style="color:var(--text-dim)">Level</label>
           <select id="past-level-selector" class="q-input py-1.5 text-sm" style="width:auto;"></select>
         </div>
-        <button type="button" id="rerun-btn" class="btn-primary text-sm">
+        <button type="button" id="past-practice-btn" class="btn-primary text-sm">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Practice interview
+        </button>
+        <button type="button" id="rerun-btn" class="btn-outline text-sm">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           Re-run
         </button>
@@ -858,6 +982,166 @@
     <div class="paper px-6 sm:px-10 py-10">
       <article id="past-article" class="prose"></article>
     </div>
+  </section>
+
+  <!-- ── Practice ── -->
+  <section id="practice-panel" class="view hidden">
+
+    <!-- Home: start a session or resume a past one -->
+    <div id="practice-home">
+      <div class="text-center mb-8 mt-2 rise-in">
+        <h1 class="font-display text-3xl sm:text-4xl font-bold tracking-tight leading-tight">
+          Ready for your next <span class="grad-text">interview</span>?
+        </h1>
+        <p class="text-sm mt-3" style="color:var(--text-dim)">
+          Your interviewer speaks. You answer out loud. Honest scores, no sugar-coating.
+        </p>
+      </div>
+
+      <!-- Article-grounding notice (set by "Practice interview" in a reader) -->
+      <div id="practice-article-chip" class="hidden mb-3 status-chip rise-in" style="color:var(--accent-text);border-color:rgba(32,184,205,0.35);background:rgba(32,184,205,0.08)">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span id="practice-article-chip-text" class="min-w-0 truncate"></span>
+        <button type="button" id="practice-article-clear" class="ml-1 font-semibold hover:underline flex-shrink-0" style="color:var(--text-dim)">✕ topic only</button>
+      </div>
+
+      <!-- Composer-style starter: the topic IS the hero -->
+      <div class="composer mb-3 rise-in" style="animation-delay:.06s">
+        <textarea id="practice-topic" rows="2"
+          placeholder="What are you interviewing for? e.g. “Kafka consumer groups” or “React state management”"></textarea>
+        <div class="composer-toolbar">
+          <div class="flex items-center gap-1 flex-wrap min-w-0">
+            <!-- Mode -->
+            <div class="opt">
+              <button type="button" class="opt-pill" data-pop="pop-practice-mode" title="Interview mode">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span class="opt-value" id="pill-practice-mode">Practice</span>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="pop-practice-mode" class="popover hidden">
+                <div class="pop-title">Interview mode</div>
+                <div class="seg" id="seg-practice-mode">
+                  <button type="button" class="seg-btn on" data-value="practice">Practice</button>
+                  <button type="button" class="seg-btn" data-value="simulation">Simulation</button>
+                  <button type="button" class="seg-btn" data-value="drill">Drill</button>
+                </div>
+                <div class="ctl-hint" id="practice-mode-hint">Coaching mode: detailed feedback after every answer.</div>
+                <input type="hidden" id="practice-mode" value="practice" />
+              </div>
+            </div>
+            <!-- Difficulty -->
+            <div class="opt">
+              <button type="button" class="opt-pill" data-pop="pop-practice-level" title="Question difficulty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20M5 20V8.5L12 4l7 4.5V20"/><path d="M9 20v-6h6v6"/></svg>
+                <span class="opt-value" id="pill-practice-level">Intermediate</span>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="pop-practice-level" class="popover hidden">
+                <div class="pop-title">Difficulty</div>
+                <div class="seg" id="seg-practice-level">
+                  <button type="button" class="seg-btn" data-value="basic">Basic</button>
+                  <button type="button" class="seg-btn on" data-value="intermediate">Intermediate</button>
+                  <button type="button" class="seg-btn" data-value="advanced">Advanced</button>
+                </div>
+                <input type="hidden" id="practice-level" value="intermediate" />
+              </div>
+            </div>
+            <!-- Question count -->
+            <div class="opt">
+              <button type="button" class="opt-pill" data-pop="pop-practice-count" title="Number of questions">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                <span class="opt-value" id="pill-practice-count">5 questions</span>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="pop-practice-count" class="popover hidden">
+                <div class="pop-title">Questions</div>
+                <div class="seg" id="seg-practice-count">
+                  <button type="button" class="seg-btn" data-value="3">3</button>
+                  <button type="button" class="seg-btn on" data-value="5">5</button>
+                  <button type="button" class="seg-btn" data-value="8">8</button>
+                </div>
+                <input type="hidden" id="practice-count" value="5" />
+              </div>
+            </div>
+          </div>
+          <button type="button" id="practice-start-btn" class="btn-primary text-sm whitespace-nowrap">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            Start interview
+          </button>
+        </div>
+      </div>
+      <p id="practice-start-error" class="hidden text-sm mb-4 text-center" style="color:#f87171"></p>
+
+      <!-- Slim progress strip: numbers, trend, and ONE action for weak spots -->
+      <div id="practice-stats" class="hidden mb-8 rise-in" style="animation-delay:.12s">
+        <div class="card px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
+          <div class="flex items-center gap-5 text-sm" style="color:var(--text-dim)">
+            <span><span id="stat-sessions" class="font-bold text-base" style="color:var(--text)">0</span> sessions</span>
+            <span><span id="stat-answered" class="font-bold text-base" style="color:var(--text)">0</span> answered</span>
+            <span><span id="stat-avg" class="font-bold text-base" style="color:var(--accent-text)">—</span> avg</span>
+            <span id="stat-streak" class="hidden font-semibold" style="color:#fbbf24"></span>
+          </div>
+          <div class="flex items-center gap-4">
+            <svg id="stat-trend" width="110" height="30" viewBox="0 0 120 40" preserveAspectRatio="none"></svg>
+            <button type="button" id="practice-drill-btn" class="btn-outline text-xs hidden whitespace-nowrap">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+              Drill weak spots
+            </button>
+            <button type="button" id="practice-details-btn" class="btn-outline text-xs hidden whitespace-nowrap" title="Badges and topic mastery"></button>
+          </div>
+        </div>
+        <!-- Collapsed by default: first paint stays calm, one click opens depth -->
+        <div id="practice-details" class="hidden">
+          <div id="practice-badges" class="mt-3 flex flex-wrap gap-1.5"></div>
+          <div id="practice-mastery" class="hidden card px-5 py-4 mt-3"></div>
+        </div>
+      </div>
+
+      <div class="rise-in" style="animation-delay:.18s">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-display font-bold text-sm">Past sessions</h3>
+          <button type="button" id="practice-refresh-btn" class="btn-outline text-xs">Refresh</button>
+        </div>
+        <div id="practice-session-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+        <p id="practice-session-empty" class="hidden text-sm text-center py-10" style="color:var(--text-faint)">No sessions yet — start one above.</p>
+      </div>
+    </div>
+
+    <!-- Question flow: the interview room -->
+    <div id="practice-question" class="hidden max-w-3xl mx-auto">
+      <div class="flex items-center justify-between flex-wrap gap-3 mb-5">
+        <button type="button" id="practice-quit-btn" class="btn-outline text-sm">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          End session
+        </button>
+        <div class="flex items-center gap-2 text-xs" style="color:var(--text-dim)">
+          <span id="practice-progress" class="font-semibold"></span>
+          <span id="practice-timer-chip" class="hidden px-2 py-0.5 rounded-full font-bold" style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.3)"></span>
+          <span id="practice-difficulty" class="px-2 py-0.5 rounded-full font-semibold" style="background:rgba(32,184,205,0.15);color:var(--accent-text);border:1px solid rgba(32,184,205,0.3)"></span>
+          <button type="button" id="practice-tts-toggle" class="btn-outline text-xs" title="Toggle interviewer voice">🔊</button>
+        </div>
+      </div>
+
+      <div class="card interview-room px-6 py-8 mb-4 text-center">
+        <div id="practice-orb" class="orb mx-auto mb-5"></div>
+        <p id="practice-section-chip" class="hidden text-xs font-semibold mb-2" style="color:var(--text-faint)"></p>
+        <p id="practice-question-text" class="font-display text-xl font-bold leading-snug q-reveal"></p>
+      </div>
+
+      <div id="practice-answer-block">
+        <div id="practice-voice-mount"></div>
+        <div class="flex items-center justify-center gap-3 mt-4">
+          <button type="button" id="practice-submit-btn" class="btn-primary text-sm hidden">Submit answer</button>
+          <button type="button" id="practice-skip-btn" class="btn-outline text-sm">Skip question</button>
+          <span id="practice-answer-status" class="text-sm" style="color:var(--text-dim)"></span>
+        </div>
+      </div>
+
+      <div id="practice-feedback" class="hidden mt-4"></div>
+    </div>
+
+    <!-- Session summary -->
+    <div id="practice-summary" class="hidden max-w-3xl mx-auto"></div>
   </section>
 
   <!-- ── Settings ── -->
@@ -885,53 +1169,42 @@
       </div>
     </div>
 
-    <!-- API keys -->
-    <div class="card mb-4 overflow-hidden">
+    <!-- Models: scoped to the provider in use -->
+    <div class="card mb-4 overflow-hidden" id="models-card">
       <div class="px-5 py-4 flex items-center gap-2.5" style="border-bottom:1px solid var(--stroke)">
         <div class="w-6 h-6 rounded-md flex items-center justify-center" style="background:rgba(32,184,205,0.15)">
-          <svg class="w-3 h-3" style="color:var(--accent-text)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          <svg class="w-3 h-3" style="color:var(--accent-text)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg>
         </div>
         <div>
-          <h3 class="font-display font-bold text-sm">API keys</h3>
-          <p class="text-xs" style="color:var(--text-faint)">Green dot = present. Last 4 characters shown.</p>
+          <h3 class="font-display font-bold text-sm">Models</h3>
+          <p class="text-xs" id="models-card-hint" style="color:var(--text-faint)">The app describes the task size; which model handles it is your call.</p>
         </div>
       </div>
-      <div id="settings-keys" class="px-5"><p class="py-8 text-sm text-center" style="color:var(--text-dim)">Loading…</p></div>
+      <div id="settings-models" class="px-5"><p class="py-6 text-sm text-center" style="color:var(--text-dim)">Loading…</p></div>
       <div class="px-5 pb-4 flex items-center gap-3">
-        <button id="settings-save-btn" class="btn-primary text-sm">Save keys</button>
-        <span id="settings-save-status" class="text-sm" style="color:var(--text-dim)"></span>
+        <button id="models-save-btn" class="btn-primary text-sm">Save models</button>
+        <span id="models-save-status" class="text-sm" style="color:var(--text-dim)"></span>
       </div>
     </div>
 
-    <!-- Reference -->
-    <div class="card overflow-hidden">
-      <div class="px-5 py-4 flex items-center gap-2.5" style="border-bottom:1px solid var(--stroke)">
-        <div class="w-6 h-6 rounded-md flex items-center justify-center" style="background:rgba(32,184,205,0.15)">
-          <svg class="w-3 h-3" style="color:var(--accent-text)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <!-- Connections: secret keys, grouped by what they unlock.
+         Collapsed once a provider works — progressive disclosure. -->
+    <div class="card mb-4 overflow-hidden">
+      <button type="button" id="keys-toggle" class="w-full px-5 py-4 flex items-center gap-2.5 text-left" style="border-bottom:1px solid var(--stroke);background:transparent;cursor:pointer">
+        <div class="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0" style="background:rgba(32,184,205,0.15)">
+          <svg class="w-3 h-3" style="color:var(--accent-text)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
         </div>
-        <h3 class="font-display font-bold text-sm">Which keys do I need?</h3>
-      </div>
-      <div class="px-5 py-4 text-sm space-y-4" style="color:var(--text-dim)">
-        <div>
-          <p class="font-semibold mb-2" style="color:var(--text)">✓ Minimum — one LLM key generates articles</p>
-          <div class="pl-4 flex flex-col gap-1 text-xs">
-            <div><code class="font-mono-ui font-semibold px-1.5 py-0.5 rounded text-xs" style="background:var(--surface-2);color:var(--accent-text)">ANTHROPIC_API_KEY</code> — Claude (Anthropic)</div>
-            <div><code class="font-mono-ui font-semibold px-1.5 py-0.5 rounded text-xs" style="background:var(--surface-2);color:var(--accent-text)">OPENAI_API_KEY</code> — GPT (OpenAI)</div>
-          </div>
+        <div class="min-w-0 flex-1">
+          <h3 class="font-display font-bold text-sm" style="color:var(--text)">Connections</h3>
+          <p class="text-xs" id="keys-summary" style="color:var(--text-faint)">API keys, grouped by what they unlock.</p>
         </div>
-        <div class="pt-3" style="border-top:1px solid var(--stroke)">
-          <p class="font-semibold mb-2" style="color:var(--text)">+ Optional — unlocks more</p>
-          <div class="pl-4 flex flex-col gap-2 text-xs">
-            <div><code class="font-mono-ui font-semibold px-1.5 py-0.5 rounded text-xs" style="background:var(--surface-2);color:var(--accent-text)">TAVILY_API_KEY</code> — live web search for real citations</div>
-          </div>
-        </div>
-        <div class="pt-3" style="border-top:1px solid var(--stroke)">
-          <p class="font-semibold mb-2" style="color:var(--text)">Model quality presets</p>
-          <div class="pl-4 flex flex-col gap-1 text-xs">
-            <div><span class="font-semibold" style="color:var(--text)">Fast</span> — light models for most stages; strong models only where writing quality demands it. ~40% cheaper.</div>
-            <div><span class="font-semibold" style="color:var(--text)">Balanced</span> — light models for routing, strong models for all writing. <span style="color:var(--text-faint)">(default)</span></div>
-            <div><span class="font-semibold" style="color:var(--text)">Best</span> — strong models everywhere. Maximum quality.</div>
-          </div>
+        <svg id="keys-chevron" class="w-4 h-4 flex-shrink-0 transition-transform" style="color:var(--text-faint)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div id="keys-body" class="hidden">
+        <div id="settings-keys" class="px-5"><p class="py-8 text-sm text-center" style="color:var(--text-dim)">Loading…</p></div>
+        <div class="px-5 pb-4 flex items-center gap-3">
+          <button id="settings-save-btn" class="btn-primary text-sm">Save keys</button>
+          <span id="settings-save-status" class="text-sm" style="color:var(--text-dim)"></span>
         </div>
       </div>
     </div>
@@ -946,6 +1219,8 @@
     elapsedTimer: null, stages: new Map(), pendingRequest: null,
     articles: null, currentView: 'config', pastArticle: null, keyStatus: null,
     rerunOf: null, pipelineInfo: null,
+    lastArticleId: null,          // id of the most recently generated article
+    practice: null,               // { session, idx } while a quiz is running
   };
 
   mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
@@ -971,10 +1246,15 @@
     result:         ['result-panel'],
     history:        ['history-panel'],
     'past-article': ['past-article-panel'],
+    practice:       ['practice-panel'],
     settings:       ['settings-panel'],
   };
 
   function showView(view) {
+    // Leaving the practice view must release the mic and silence the
+    // interviewer voice (Voice is defined later in this script; every
+    // showView call happens after full script evaluation).
+    if (view !== 'practice' && typeof Voice !== 'undefined') Voice.abort();
     State.currentView = view;
     for (const list of Object.values(VIEWS))
       for (const id of list) $(id).classList.add('hidden');
@@ -988,6 +1268,7 @@
     $('nav-new').classList.toggle('active',
       ['config','clarification','execution','result'].includes(view));
     $('nav-history').classList.toggle('active', ['history','past-article'].includes(view));
+    $('nav-practice').classList.toggle('active', view === 'practice');
     $('nav-settings').classList.toggle('active', view === 'settings');
   }
 
@@ -1195,25 +1476,51 @@
 
   function renderProviderCard(ks) {
     const body = $('provider-card-body'), prefRow = $('provider-pref-row');
-    if (ks.resolved_provider === 'none') {
-      body.innerHTML = `<div class="flex items-start gap-3 p-4 rounded-xl" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3)"><svg class="w-5 h-5 shrink-0 mt-0.5" style="color:#f87171" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div><div class="text-sm font-semibold" style="color:#fca5a5">No LLM key configured</div><div class="text-xs mt-1" style="color:var(--text-dim)">Add <span class="font-mono-ui font-semibold">ANTHROPIC_API_KEY</span> or <span class="font-mono-ui font-semibold">OPENAI_API_KEY</span> below.</div></div></div>`;
+    // Every way Scrivio can reach an LLM is a provider — an API key is just
+    // one of them. The Claude Code CLI (subscription) needs no key at all.
+    const providers = [];
+    if (ks.has_claude_cli) providers.push({
+      id: 'claude-cli', name: 'Claude Code — your subscription',
+      desc: 'No API key needed. Runs on your Claude Pro/Max plan via the local CLI. Slower, but zero per-article cost.',
+    });
+    if (ks.has_anthropic) providers.push({
+      id: 'anthropic', name: 'Anthropic API — Claude',
+      desc: 'Pay per token · fastest · Sonnet for writing, Haiku for routing',
+    });
+    if (ks.has_openai) providers.push({
+      id: 'openai', name: 'OpenAI API — GPT',
+      desc: 'Pay per token · strong GPT for writing, light GPT for routing',
+    });
+
+    if (providers.length === 0) {
+      body.innerHTML = `<div class="flex items-start gap-3 p-4 rounded-xl" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3)"><svg class="w-5 h-5 shrink-0 mt-0.5" style="color:#f87171" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div><div class="text-sm font-semibold" style="color:#fca5a5">No LLM provider available</div><div class="text-xs mt-1" style="color:var(--text-dim)">Add an API key below — or use your Claude subscription with no key at all: <span class="font-mono-ui font-semibold">npm install -g @anthropic-ai/claude-code</span>, sign in, and restart Scrivio.</div></div></div>`;
       prefRow.classList.add('hidden'); return;
     }
-    if (ks.provider_auto) {
-      const isAnth = ks.resolved_provider === 'anthropic';
-      const name = isAnth ? 'Claude (Anthropic)' : 'GPT (OpenAI)';
-      const model = isAnth ? 'Sonnet for writing · Haiku for routing' : 'Strong GPT for writing · light GPT for routing';
-      const absent = isAnth ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
-      body.innerHTML = `<div class="flex items-start gap-3 p-4 rounded-xl" style="background:rgba(52,211,153,0.07);border:1px solid rgba(52,211,153,0.25)"><svg class="w-5 h-5 shrink-0 mt-0.5" style="color:#34d399" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg><div><div class="text-sm font-semibold" style="color:#6ee7b7">Auto-selected: ${escapeHtml(name)}</div><div class="text-xs mt-1" style="color:var(--text-dim)">${escapeHtml(model)}</div><div class="text-xs mt-2" style="color:var(--text-faint)">Add <span class="font-mono-ui font-semibold">${escapeHtml(absent)}</span> to enable the other provider.</div></div></div>`;
-      prefRow.classList.add('hidden');
-    } else {
-      const prefAnth = ks.provider_preference === 'anthropic';
-      const optStyle = sel => sel
-        ? 'border:1px solid rgba(32,184,205,0.55);background:rgba(32,184,205,0.12)'
-        : 'border:1px solid var(--stroke);background:var(--surface)';
-      body.innerHTML = `<p class="text-xs mb-3" style="color:var(--text-dim)">Both keys configured. Choose which provider writes your articles.</p><div class="space-y-2"><label id="prov-anthropic" class="provider-option flex items-start gap-3 p-3.5 rounded-xl cursor-pointer ${prefAnth?'selected':''}" style="${optStyle(prefAnth)}" onclick="selectProvider('anthropic', this)"><input type="radio" name="llm_provider" value="anthropic" ${prefAnth ? 'checked' : ''} class="mt-0.5 h-4 w-4 accent-teal-500 shrink-0" /><div><div class="text-sm font-semibold" style="color:var(--text)">Anthropic — Claude</div><div class="text-xs mt-0.5" style="color:var(--text-dim)">Sonnet for writing · Haiku for routing</div></div></label><label id="prov-openai" class="provider-option flex items-start gap-3 p-3.5 rounded-xl cursor-pointer ${!prefAnth?'selected':''}" style="${optStyle(!prefAnth)}" onclick="selectProvider('openai', this)"><input type="radio" name="llm_provider" value="openai" ${!prefAnth ? 'checked' : ''} class="mt-0.5 h-4 w-4 accent-teal-500 shrink-0" /><div><div class="text-sm font-semibold" style="color:var(--text)">OpenAI — GPT</div><div class="text-xs mt-0.5" style="color:var(--text-dim)">Strong GPT for writing · light GPT for routing</div></div></label></div>`;
-      prefRow.classList.remove('hidden');
+
+    if (providers.length === 1) {
+      const p = providers[0];
+      body.innerHTML = `<div class="flex items-start gap-3 p-4 rounded-xl" style="background:rgba(52,211,153,0.07);border:1px solid rgba(52,211,153,0.25)"><svg class="w-5 h-5 shrink-0 mt-0.5" style="color:#34d399" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg><div><div class="text-sm font-semibold" style="color:#6ee7b7">Using: ${escapeHtml(p.name)}</div><div class="text-xs mt-1" style="color:var(--text-dim)">${escapeHtml(p.desc)}</div></div></div>`;
+      prefRow.classList.add('hidden'); return;
     }
+
+    const selected = providers.some(p => p.id === ks.resolved_provider)
+      ? ks.resolved_provider : providers[0].id;
+    const optStyle = sel => sel
+      ? 'border:1px solid rgba(32,184,205,0.55);background:rgba(32,184,205,0.12)'
+      : 'border:1px solid var(--stroke);background:var(--surface)';
+    body.innerHTML =
+      `<p class="text-xs mb-3" style="color:var(--text-dim)">${providers.length} providers available. Choose which one runs Scrivio.</p>` +
+      `<div class="space-y-2">` +
+      providers.map(p => `
+        <label class="provider-option flex items-start gap-3 p-3.5 rounded-xl cursor-pointer ${selected === p.id ? 'selected' : ''}" style="${optStyle(selected === p.id)}" onclick="selectProvider('${p.id}', this)">
+          <input type="radio" name="llm_provider" value="${p.id}" ${selected === p.id ? 'checked' : ''} class="mt-0.5 h-4 w-4 accent-teal-500 shrink-0" />
+          <div>
+            <div class="text-sm font-semibold" style="color:var(--text)">${escapeHtml(p.name)}</div>
+            <div class="text-xs mt-0.5" style="color:var(--text-dim)">${escapeHtml(p.desc)}</div>
+          </div>
+        </label>`).join('') +
+      `</div>`;
+    prefRow.classList.remove('hidden');
   }
 
   function selectProvider(provider, container) {
@@ -1479,6 +1786,9 @@
   function onComplete(outputDir) {
     stopElapsedTimer();
     $('output-dir').textContent = outputDir ? `saved to ${outputDir}` : '';
+    // The directory name doubles as the article id for /articles and
+    // /interviews — remember it so "Practice interview" can attach to it.
+    State.lastArticleId = outputDir ? outputDir.replace(/\/+$/, '').split('/').pop() : null;
     showView('result'); $('stop-btn').disabled = true;
     const availableLevels = State.articles ? Object.keys(State.articles) : [];
     const selector = $('level-selector');
@@ -1570,47 +1880,1141 @@
     } catch (err) { $('past-article').innerHTML = `<p style="color:#dc2626">Failed: ${escapeHtml(err.message)}</p>`; }
   }
 
+  /* ── Voice input (STT) + interviewer voice (TTS) ─────────────── */
+  const SR_CLS = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // Safari exposes webkitSpeechRecognition but drops interim results and
+  // fires onend erratically — a broken live transcript is worse than a
+  // short "Transcribing…" wait, so Safari always uses the server path.
+  const IS_SAFARI = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  function sttMode() {
+    if (!SR_CLS || IS_SAFARI) return 'server';
+    return localStorage.getItem('scrivio-stt') === 'server' ? 'server' : 'speech';
+  }
+
+  const Voice = {
+    state: 'idle', mode: null, stream: null, recognition: null,
+    mediaRecorder: null, chunks: [], mime: '', audioCtx: null,
+    rafId: null, timerId: null, startedAt: 0, finalTranscript: '', cb: {},
+    MAX_MS: 180000,  // 3-minute cap per recording
+
+    async start(cb) {
+      if (this.state !== 'idle') return;
+      this.cb = cb || {}; this.chunks = []; this.finalTranscript = '';
+      this.mode = sttMode();
+      this._setState('requesting');
+      stopSpeaking(); // never record the interviewer's own voice
+      const canCapture = navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+      if (!canCapture && this.mode === 'server') {
+        this._fail('Voice needs HTTPS or localhost — type your answer instead.', true);
+        return;
+      }
+      if (canCapture) {
+        try {
+          this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (err) {
+          if (this.mode === 'server') {
+            this._fail(err.name === 'NotFoundError'
+              ? 'No microphone found — type your answer instead.'
+              : 'Microphone blocked — type your answer instead.', true);
+            return;
+          }
+          this.stream = null; // speech path can run without the level meter
+        }
+      }
+      if (this.mode === 'speech') {
+        if (!this._startRecognition()) return;
+      } else {
+        if (!this._startRecorder()) return;
+      }
+      if (this.stream) this._startMeter();
+      this.startedAt = Date.now();
+      this.timerId = setInterval(() => this._tick(), 1000);
+      this._setState('recording');
+    },
+
+    _startRecognition() {
+      const rec = new SR_CLS();
+      rec.continuous = true; rec.interimResults = true;
+      rec.lang = navigator.language || 'en-US';
+      rec.onresult = (e) => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i];
+          if (r.isFinal) this.finalTranscript += r[0].transcript + ' ';
+          else interim += r[0].transcript;
+        }
+        if (this.cb.onPartial) this.cb.onPartial(this.finalTranscript, interim);
+      };
+      // Chrome stops recognition after ~6s of silence; restart while the
+      // user is still in a recording. try/catch guards the "already
+      // started" race when stop() and onend overlap.
+      rec.onend = () => {
+        if (this.state === 'recording') { try { rec.start(); } catch (_) {} }
+      };
+      rec.onerror = (e) => {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed')
+          this._fail('Microphone blocked — type your answer instead.', true);
+        else if (e.error === 'network')
+          this._fail('Browser dictation unavailable — type your answer, or enable high-accuracy mode.', false);
+        // 'no-speech' / 'aborted' are routine: onend handles the restart.
+      };
+      this.recognition = rec;
+      try { rec.start(); } catch (_) {
+        this._fail('Dictation could not start — type your answer instead.', false);
+        return false;
+      }
+      return true;
+    },
+
+    _startRecorder() {
+      if (!window.MediaRecorder) {
+        this._fail('Recording not supported in this browser — type your answer instead.', true);
+        return false;
+      }
+      let mime = '';
+      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mime = 'audio/webm;codecs=opus';
+      else if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/mp4')) mime = 'audio/mp4';
+      const mr = mime ? new MediaRecorder(this.stream, { mimeType: mime }) : new MediaRecorder(this.stream);
+      this.mime = mr.mimeType || mime || 'audio/webm';
+      mr.ondataavailable = (e) => { if (e.data && e.data.size) this.chunks.push(e.data); };
+      mr.onstop = () => this._transcribeChunks();
+      this.mediaRecorder = mr;
+      mr.start(1000); // 1s timeslices so audio survives interruptions
+      return true;
+    },
+
+    async _transcribeChunks() {
+      if (this.state !== 'transcribing') return; // aborted mid-recording
+      const blob = new Blob(this.chunks, { type: this.mime });
+      this.chunks = [];
+      if (!blob.size) { this._empty(); return; }
+      let b64;
+      try {
+        b64 = await new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(String(fr.result).split(',')[1] || '');
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        });
+      } catch (_) { this._fail('Could not read the recording — try again or type instead.', false); return; }
+      try {
+        const r = await fetch('/transcribe', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio_b64: b64, mime_type: this.mime }),
+        });
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({ detail: `HTTP ${r.status}` }));
+          this._fail(d.detail || `HTTP ${r.status}`, false);
+          return;
+        }
+        const { text } = await r.json();
+        if (!text || !text.trim()) { this._empty(); return; }
+        this._setState('review');
+        if (this.cb.onDone) this.cb.onDone(text.trim());
+      } catch (err) {
+        this._fail('Transcription request failed — type your answer instead.', false);
+      }
+    },
+
+    _startMeter() {
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        this.audioCtx = new Ctx();
+        const analyser = this.audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        this.audioCtx.createMediaStreamSource(this.stream).connect(analyser);
+        const buf = new Uint8Array(analyser.fftSize);
+        const loop = () => {
+          analyser.getByteTimeDomainData(buf);
+          let sum = 0;
+          for (let i = 0; i < buf.length; i++) { const d = (buf[i] - 128) / 128; sum += d * d; }
+          if (this.cb.onLevel) this.cb.onLevel(Math.min(1, Math.sqrt(sum / buf.length) * 4));
+          this.rafId = requestAnimationFrame(loop);
+        };
+        this.rafId = requestAnimationFrame(loop);
+      } catch (_) { /* meter is cosmetic — never fail the recording for it */ }
+    },
+
+    _tick() {
+      const left = this.MAX_MS - (Date.now() - this.startedAt);
+      if (this.cb.onTimer) this.cb.onTimer(left);
+      if (left <= 0) this.stop();
+    },
+
+    stop() {
+      if (this.state !== 'recording') return;
+      if (this.mode === 'server') {
+        this._setState('transcribing');
+        try { this.mediaRecorder && this.mediaRecorder.state !== 'inactive' && this.mediaRecorder.stop(); } catch (_) {}
+        this._teardownCapture(); // tracks/meter/timer; onstop fires after
+      } else {
+        const text = this.finalTranscript.trim();
+        this._setState(text ? 'review' : 'idle');
+        try { this.recognition && this.recognition.stop(); } catch (_) {}
+        this._teardownCapture();
+        if (text) { if (this.cb.onDone) this.cb.onDone(text); }
+        else this._empty();
+      }
+    },
+
+    abort() {
+      const wasActive = this.state !== 'idle';
+      this.state = 'idle';
+      try { this.recognition && this.recognition.stop(); } catch (_) {}
+      try { this.mediaRecorder && this.mediaRecorder.state !== 'inactive' && this.mediaRecorder.stop(); } catch (_) {}
+      this.recognition = null; this.mediaRecorder = null; this.chunks = [];
+      this._teardownCapture();
+      stopSpeaking();
+      if (wasActive && this.cb.onState) this.cb.onState('idle');
+    },
+
+    _teardownCapture() {
+      if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = null; }
+      if (this.timerId) { clearInterval(this.timerId); this.timerId = null; }
+      if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; }
+      if (this.audioCtx) { try { this.audioCtx.close(); } catch (_) {} this.audioCtx = null; }
+    },
+
+    _setState(s) { this.state = s; if (this.cb.onState) this.cb.onState(s); },
+    _empty() { this._setState('idle'); if (this.cb.onEmpty) this.cb.onEmpty(); },
+    _fail(message, fatal) {
+      this.abort();
+      if (this.cb.onError) this.cb.onError(message, { fatal: !!fatal });
+    },
+  };
+
+  /* Interviewer voice: natural server TTS (OpenAI) with browser fallback */
+  let _ttsVoices = [];
+  function _loadTtsVoices() { _ttsVoices = 'speechSynthesis' in window ? speechSynthesis.getVoices() : []; }
+  if ('speechSynthesis' in window) {
+    _loadTtsVoices();
+    if (speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', _loadTtsVoices);
+  }
+  function ttsMuted() { return localStorage.getItem('scrivio-tts') === 'off'; }
+
+  let _speakAudio = null;       // currently playing server-TTS clip
+  let _serverTtsDown = false;   // 503 once → stop retrying this page load
+  function stopSpeaking() {
+    if (_speakAudio) { try { _speakAudio.pause(); } catch (_) {} _speakAudio = null; }
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    const orb = $('practice-orb');
+    if (orb) orb.classList.remove('speaking');
+  }
+
+  // Browser voices ranked by how human they sound; the bare default is
+  // usually the robotic one, so hunt for a known-good voice first.
+  const PREFERRED_VOICES = [
+    'Google US English', 'Samantha', 'Ava (Premium)', 'Ava', 'Zoe (Premium)',
+    'Karen', 'Daniel', 'Google UK English Female', 'Google UK English Male',
+  ];
+  function _speakBrowser(text) {
+    if (!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    const byName = PREFERRED_VOICES
+      .map(name => _ttsVoices.find(v => v.name === name)).find(Boolean);
+    const v = byName
+      || _ttsVoices.find(v => v.lang && v.lang.startsWith('en') && v.default)
+      || _ttsVoices.find(v => v.lang && v.lang.startsWith('en'));
+    if (v) u.voice = v;
+    u.rate = 1.0;
+    const orb = $('practice-orb');
+    u.onstart = () => orb && orb.classList.add('speaking');
+    u.onend = u.onerror = () => orb && orb.classList.remove('speaking');
+    speechSynthesis.speak(u);
+  }
+
+  async function speakQuestion(text) {
+    if (ttsMuted() || !text) return;
+    stopSpeaking();
+    const orb = $('practice-orb');
+    if (!_serverTtsDown) {
+      try {
+        const r = await fetch('/speak', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        if (r.ok) {
+          const blob = await r.blob();
+          const audio = new Audio(URL.createObjectURL(blob));
+          _speakAudio = audio;
+          audio.onplay = () => orb && orb.classList.add('speaking');
+          audio.onended = audio.onerror = () => {
+            if (orb) orb.classList.remove('speaking');
+            if (_speakAudio === audio) _speakAudio = null;
+            URL.revokeObjectURL(audio.src);
+          };
+          // Autoplay policy can reject when no recent user gesture exists
+          // (e.g. resume via console) — fall back to silence, not a crash.
+          await audio.play().catch(() => {});
+          return;
+        }
+        if (r.status === 503) _serverTtsDown = true; // no key — stop trying
+      } catch (_) { /* network hiccup → browser voice below */ }
+    }
+    _speakBrowser(text);
+  }
+  function updateTtsToggle() {
+    const btn = $('practice-tts-toggle');
+    if (btn) btn.textContent = ttsMuted() ? '🔇' : '🔊';
+  }
+
+  const MIC_SVG = '<svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
+  const STOP_SVG = '<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+
+  /* Renders the mic + live transcript + typing fallback into `container`.
+     The injected <textarea id=opts.textareaId> stays the single source of
+     truth that submitPracticeAnswer reads — voice only fills it. */
+  function mountVoiceInput(container, opts) {
+    Voice.abort(); // main-answer and follow-up recordings must never overlap
+    container.innerHTML = `
+      <div class="mic-wrap">
+        <div class="mic-rings"><span></span><span></span><span></span></div>
+        <button type="button" class="mic-btn" title="Tap to answer out loud">${MIC_SVG}</button>
+      </div>
+      <div class="level-bars mt-2">${'<span class="level-bar"></span>'.repeat(5)}</div>
+      <p class="voice-hint text-xs mt-2 text-center" style="color:var(--text-faint)">Tap the mic and answer out loud, like a real interview</p>
+      <p class="voice-timer text-xs mt-1 text-center hidden" style="color:#fbbf24"></p>
+      <div class="transcript-live hidden mt-3"></div>
+      <div class="text-center mt-2">
+        <button type="button" class="type-toggle text-xs hover:underline" style="color:var(--text-faint)">or type your answer</button>
+      </div>
+      <textarea id="${opts.textareaId}" rows="5" class="q-input w-full text-sm hidden mt-2" placeholder="Your answer…"></textarea>
+      <div class="predict-wrap hidden mt-3 text-center">
+        <label class="block text-xs mb-1" style="color:var(--text-faint)">Your call before the verdict: <span class="predict-val font-bold" style="color:var(--accent-text)">—</span>/10</label>
+        <input type="range" min="0" max="10" value="5" class="predict-range" />
+      </div>`;
+
+    const el = {
+      wrap: container.querySelector('.mic-wrap'),
+      mic: container.querySelector('.mic-btn'),
+      bars: Array.from(container.querySelectorAll('.level-bar')),
+      hint: container.querySelector('.voice-hint'),
+      timer: container.querySelector('.voice-timer'),
+      live: container.querySelector('.transcript-live'),
+      typeToggle: container.querySelector('.type-toggle'),
+      ta: container.querySelector('textarea'),
+    };
+    const submitBtn = $(opts.submitBtnId);
+    if (submitBtn) submitBtn.classList.add('hidden');
+
+    function showReview(text) {
+      if (text) el.ta.value = (el.ta.value ? el.ta.value.trim() + ' ' : '') + text;
+      el.ta.classList.remove('hidden');
+      el.live.classList.add('hidden');
+      if (submitBtn) submitBtn.classList.remove('hidden');
+      if (opts.predict) container.querySelector('.predict-wrap').classList.remove('hidden');
+      el.hint.textContent = 'Review your answer, edit if needed, then submit — or tap the mic to add more.';
+    }
+    const predictRange = container.querySelector('.predict-range');
+    predictRange.addEventListener('input', () => {
+      predictRange.dataset.touched = '1';
+      container.querySelector('.predict-val').textContent = predictRange.value;
+    });
+
+    const callbacks = {
+      onState(s) {
+        el.mic.classList.toggle('recording', s === 'recording');
+        el.wrap.classList.toggle('recording-active', s === 'recording');
+        el.mic.innerHTML = s === 'recording' ? STOP_SVG : MIC_SVG;
+        if (s === 'recording') {
+          el.live.classList.remove('hidden');
+          el.live.innerHTML = '<span class="interim">Listening…</span>';
+          el.hint.textContent = 'Tap again when you\'re done';
+        } else if (s === 'transcribing') {
+          el.hint.textContent = 'Transcribing…';
+        } else if (s === 'idle') {
+          el.bars.forEach(b => b.style.transform = 'scaleY(0.15)');
+          el.timer.classList.add('hidden');
+        }
+      },
+      onPartial(finalText, interim) {
+        el.live.innerHTML = `${escapeHtml(finalText)}<span class="interim">${escapeHtml(interim)}</span>`;
+      },
+      onLevel(level) {
+        el.bars.forEach((b, i) => {
+          const jitter = 0.7 + 0.3 * Math.sin(Date.now() / 90 + i * 1.7);
+          b.style.transform = `scaleY(${Math.max(0.15, Math.min(1, level * jitter + 0.1))})`;
+        });
+      },
+      onTimer(msLeft) {
+        if (msLeft <= 30000) {
+          el.timer.classList.remove('hidden');
+          el.timer.textContent = `Auto-stop in ${Math.max(0, Math.ceil(msLeft / 1000))}s`;
+        }
+      },
+      onDone(text) { showReview(text); },
+      onEmpty() {
+        el.hint.textContent = 'Didn\'t catch anything — try again, or type instead.';
+        el.live.classList.add('hidden');
+      },
+      onError(message, { fatal }) {
+        el.live.classList.add('hidden');
+        showReview('');
+        el.hint.textContent = message; // after showReview, which sets its own hint
+        if (fatal) { el.wrap.classList.add('hidden'); container.querySelector('.level-bars').classList.add('hidden'); }
+      },
+    };
+
+    el.mic.addEventListener('click', () => {
+      if (Voice.state === 'idle') Voice.start(callbacks);
+      else if (Voice.state === 'recording') Voice.stop();
+      // requesting/transcribing: ignore clicks (kills double-click races)
+    });
+    el.typeToggle.addEventListener('click', () => showReview(''));
+    return el;
+  }
+
+  /* ── Interview practice ─────────────────────── */
+  const VERDICT_STYLES = {
+    strong:    'background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.35)',
+    adequate:  'background:rgba(32,184,205,0.15);color:var(--accent-text);border:1px solid rgba(32,184,205,0.35)',
+    shallow:   'background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.35)',
+    incorrect: 'background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.35)',
+  };
+  // Prefill for the next session started from the home form. Set by the
+  // "Practice interview" buttons in the two article readers.
+  let _practicePrefill = null;
+
+  function _practiceShow(block) {
+    for (const id of ['practice-home', 'practice-question', 'practice-summary'])
+      $(id).classList.toggle('hidden', id !== block);
+  }
+
+  function openPracticeHome(prefill = null) {
+    Voice.abort();
+    _practicePrefill = prefill;
+    showView('practice');
+    _practiceShow('practice-home');
+    loadPracticeStats();
+    const chip = $('practice-article-chip');
+    if (prefill && prefill.articleId) {
+      chip.classList.remove('hidden');
+      $('practice-article-chip-text').textContent =
+        `Grounded in article: ${prefill.topic || prefill.articleId}`;
+    } else {
+      chip.classList.add('hidden');
+    }
+    if (prefill) {
+      if (prefill.topic) $('practice-topic').value = prefill.topic;
+      // Drive the seg button, not just the hidden input, so the pill label
+      // and highlight stay in sync.
+      if (prefill.level) setSegmentValue('seg-practice-level', prefill.level);
+    }
+    $('practice-topic').disabled = !!(prefill && prefill.articleId);
+    loadPracticeSessions();
+  }
+
+  async function loadPracticeStats() {
+    try {
+      const r = await fetch('/interviews/stats');
+      if (!r.ok) return;
+      const s = await r.json();
+      const wrap = $('practice-stats');
+      if (!s.total_sessions) { wrap.classList.add('hidden'); return; }
+      wrap.classList.remove('hidden');
+      $('stat-sessions').textContent = s.total_sessions;
+      $('stat-answered').textContent = s.total_answered;
+      $('stat-avg').textContent = s.average_score != null ? s.average_score : '—';
+      renderTrendSparkline(s.recent_scores || []);
+      // Weak areas power ONE quiet action instead of a wall of chips:
+      // "Drill weak spots" prefills the composer with the missed topics.
+      State.practiceWeakSections = (s.weak_sections || []).map(w => w.section);
+      const drill = $('practice-drill-btn');
+      if (State.practiceWeakSections.length) {
+        drill.classList.remove('hidden');
+        drill.title = 'Start a session on: ' +
+          State.practiceWeakSections.slice(0, 3).map(_cleanPointer).join(' · ');
+      } else {
+        drill.classList.add('hidden');
+      }
+
+      // Streak flame
+      const streakEl = $('stat-streak');
+      if (s.streak_days > 0) {
+        streakEl.textContent = `🔥 ${s.streak_days}-day streak`;
+        streakEl.classList.remove('hidden');
+      } else {
+        streakEl.classList.add('hidden');
+      }
+
+      // Badges + mastery live in a collapsed panel — the strip shows only
+      // a compact "🏅 n/8 · progress" toggle so the first paint stays calm.
+      const badgesEl = $('practice-badges');
+      const badges = s.badges || [];
+      const detailsBtn = $('practice-details-btn');
+      if (badges.length) {
+        badgesEl.innerHTML = badges.map(b =>
+          `<span class="badge-chip ${b.earned ? '' : 'ghost'}" title="${escapeHtml(b.label)}${b.earned ? ' — earned' : ' — not yet'}">${_badgeIcon(b.id)} ${escapeHtml(b.label)}</span>`
+        ).join('');
+        _lastBadges = new Set(badges.filter(b => b.earned).map(b => b.id));
+        detailsBtn.textContent = `🏅 ${badges.filter(b => b.earned).length}/${badges.length} · progress`;
+        detailsBtn.classList.remove('hidden');
+        if (localStorage.getItem('scrivio-progress-open') === '1') {
+          $('practice-details').classList.remove('hidden');
+        }
+      }
+
+      // Per-topic mastery bars (top 5 by session count)
+      const masteryEl = $('practice-mastery');
+      const topics = (s.per_topic || [])
+        .filter(t => t.mastery > 0)
+        .sort((a, b) => b.sessions - a.sessions)
+        .slice(0, 5);
+      if (topics.length) {
+        masteryEl.classList.remove('hidden');
+        masteryEl.innerHTML =
+          '<p class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-faint)">Topic mastery</p>' +
+          topics.map(t => `
+            <div class="mb-2.5">
+              <div class="flex items-center justify-between text-xs mb-1">
+                <span class="min-w-0 truncate" style="color:var(--text-dim)">${escapeHtml(t.topic)}</span>
+                <span class="font-bold flex-shrink-0" style="color:${t.mastery >= 80 ? '#4ade80' : 'var(--accent-text)'}">${t.mastery}%</span>
+              </div>
+              <div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${t.mastery}%;border-radius:3px;background:var(--grad);transition:width .6s ease-out"></div>
+              </div>
+            </div>`).join('');
+      } else {
+        masteryEl.classList.add('hidden');
+      }
+    } catch (_) { /* dashboard is progressive enhancement — never block the form */ }
+  }
+
+  let _lastBadges = new Set();
+  function _badgeIcon(id) {
+    return { 'first-session': '🎬', 'first-strong': '💪', 'five-sessions': '🖐',
+             'streak-3': '🔥', 'streak-7': '🌋', 'topic-mastered': '🏆',
+             'well-calibrated': '🎯', 'drill-sergeant': '⚡' }[id] || '⭐';
+  }
+
+  async function checkNewBadges() {
+    try {
+      const r = await fetch('/interviews/stats');
+      if (!r.ok) return;
+      const s = await r.json();
+      const earned = (s.badges || []).filter(b => b.earned);
+      for (const b of earned) {
+        if (!_lastBadges.has(b.id)) {
+          const toast = document.createElement('div');
+          toast.className = 'badge-toast';
+          toast.innerHTML = `<p class="text-sm font-bold" style="color:var(--text)">${_badgeIcon(b.id)} Badge earned</p><p class="text-xs mt-0.5" style="color:var(--text-dim)">${escapeHtml(b.label)}</p>`;
+          document.body.appendChild(toast);
+          setTimeout(() => toast.remove(), 4500);
+        }
+      }
+      _lastBadges = new Set(earned.map(b => b.id));
+    } catch (_) {}
+  }
+
+  // Study pointers arrive as sentences ("Read up on X", "Study Y") — strip
+  // the imperative verb so they compose into a natural topic string.
+  function _cleanPointer(s) {
+    const cleaned = s.replace(/^(read up on|study|review|learn about|understand|explain|revisit)\s+/i, '').trim();
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+
+  function startDrill() {
+    const areas = (State.practiceWeakSections || []).slice(0, 3).map(_cleanPointer);
+    if (!areas.length) return;
+    _practicePrefill = null;
+    $('practice-article-chip').classList.add('hidden');
+    const ta = $('practice-topic');
+    ta.disabled = false;
+    ta.value = areas.join('; ');
+    ta.focus();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function renderTrendSparkline(scores) {
+    const svg = $('stat-trend');
+    if (!scores.length) { svg.innerHTML = '<text x="60" y="26" text-anchor="middle" fill="var(--text-faint)" font-size="11">no data yet</text>'; return; }
+    const pts = scores.length === 1 ? [scores[0], scores[0]] : scores;
+    const stepX = 112 / (pts.length - 1);
+    const coords = pts.map((v, i) => `${(4 + i * stepX).toFixed(1)},${(36 - (v / 10) * 32).toFixed(1)}`);
+    svg.innerHTML = `
+      <defs><linearGradient id="trendGrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#0fb5aa"/><stop offset="100%" stop-color="#4cc9f0"/>
+      </linearGradient></defs>
+      <polyline points="${coords.join(' ')}" fill="none" stroke="url(#trendGrad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="${coords[coords.length-1].split(',')[0]}" cy="${coords[coords.length-1].split(',')[1]}" r="3" fill="#4cc9f0"/>`;
+  }
+
+  async function loadPracticeSessions() {
+    const list = $('practice-session-list');
+    list.innerHTML = '<p class="text-sm py-4" style="color:var(--text-dim)">Loading…</p>';
+    $('practice-session-empty').classList.add('hidden');
+    try {
+      const r = await fetch('/interviews');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const sessions = await r.json();
+      list.innerHTML = '';
+      if (sessions.length === 0) { $('practice-session-empty').classList.remove('hidden'); return; }
+      // First paint shows only the 4 most recent; "Show all" reveals the rest.
+      const visible = _showAllSessions ? sessions : sessions.slice(0, 4);
+      for (const s of visible) {
+        const card = document.createElement('button');
+        card.className = 'history-card';
+        const score = s.average_score != null ? `${s.average_score}/10` : '—';
+        card.style.borderLeft = `3px solid ${s.complete ? SCORE_COLORS(s.average_score) : 'var(--stroke-strong)'}`;
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <h3 class="font-display font-bold line-clamp-2 leading-snug text-sm" style="color:var(--text)">${escapeHtml(s.topic)}</h3>
+            <span class="px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0" style="${s.complete ? VERDICT_STYLES.adequate : VERDICT_STYLES.shallow}">${s.complete ? score : '▸ resume'}</span>
+          </div>
+          <div class="flex items-center justify-between text-xs" style="color:var(--text-faint)">
+            <span>${escapeHtml(s.level)} · ${s.answered}/${s.total} answered${s.article_id ? ' · from article' : ''}</span>
+            <span>${escapeHtml(formatTimestamp(s.created_at))}</span>
+          </div>`;
+        card.addEventListener('click', () => resumePracticeSession(s.session_id));
+        list.appendChild(card);
+      }
+      if (!_showAllSessions && sessions.length > 4) {
+        const more = document.createElement('button');
+        more.className = 'btn-outline text-xs';
+        more.style.justifySelf = 'start';
+        more.textContent = `Show all ${sessions.length} sessions`;
+        more.addEventListener('click', () => { _showAllSessions = true; loadPracticeSessions(); });
+        list.appendChild(more);
+      }
+    } catch (err) {
+      list.innerHTML = `<p class="text-sm py-4" style="color:#f87171">Failed to load sessions: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+  let _showAllSessions = false;
+
+  let _practiceMode = 'practice';
+
+  async function startPractice() {
+    const btn = $('practice-start-btn');
+    const errEl = $('practice-start-error');
+    errEl.classList.add('hidden');
+    const body = {
+      level: $('practice-level').value,
+      num_questions: parseInt($('practice-count').value, 10),
+      mode: _practiceMode,
+    };
+    if (_practicePrefill && _practicePrefill.articleId) {
+      body.article_id = _practicePrefill.articleId;
+    } else {
+      let topic = $('practice-topic').value.trim();
+      // Drill with an empty topic seeds itself from your weak spots.
+      if (!topic && _practiceMode === 'drill' && (State.practiceWeakSections || []).length) {
+        topic = State.practiceWeakSections.slice(0, 3).map(_cleanPointer).join('; ');
+        $('practice-topic').value = topic;
+      }
+      body.topic = topic;
+      if (!body.topic) { errEl.textContent = 'Enter a topic first.'; errEl.classList.remove('hidden'); return; }
+    }
+    btn.disabled = true;
+    const oldLabel = btn.textContent;
+    btn.textContent = 'Writing questions…';
+    try {
+      const r = await fetch('/interviews', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      if (!r.ok) { const d = await r.json().catch(()=>({detail:r.statusText})); throw new Error(d.detail || `HTTP ${r.status}`); }
+      const session = await r.json();
+      State.practice = { session, idx: firstOpenQuestion(session) };
+      renderPracticeQuestion();
+    } catch (err) {
+      errEl.textContent = 'Could not start: ' + err.message;
+      errEl.classList.remove('hidden');
+    } finally {
+      btn.disabled = false; btn.textContent = oldLabel;
+    }
+  }
+
+  async function resumePracticeSession(sessionId) {
+    try {
+      const r = await fetch(`/interviews/${sessionId}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const session = await r.json();
+      State.practice = { session, idx: firstOpenQuestion(session) };
+      if (session.complete) renderPracticeSummary(session.summary);
+      else renderPracticeQuestion();
+    } catch (err) { alert('Could not open session: ' + err.message); }
+  }
+
+  function firstOpenQuestion(session) {
+    const i = session.questions.findIndex(q => q.status === 'pending' || q.status === 'awaiting_followup');
+    return i === -1 ? session.questions.length - 1 : i;
+  }
+
+  /* Mode timers: simulation shows elapsed time; drill counts down 60s per
+     question and auto-skips at zero. Always cleared on any navigation. */
+  let _practiceTimer = null;
+  const DRILL_SECONDS = 60;
+
+  function clearPracticeTimer() {
+    if (_practiceTimer) { clearInterval(_practiceTimer); _practiceTimer = null; }
+    $('practice-timer-chip').classList.add('hidden');
+  }
+
+  function startModeTimer() {
+    clearPracticeTimer();
+    const chip = $('practice-timer-chip');
+    const mode = State.practice.session.mode;
+    if (mode === 'simulation') {
+      State.practice.startedAt = State.practice.startedAt || Date.now();
+      chip.classList.remove('hidden');
+      const tick = () => {
+        const s = Math.floor((Date.now() - State.practice.startedAt) / 1000);
+        chip.textContent = `⏱ ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+      };
+      tick();
+      _practiceTimer = setInterval(tick, 1000);
+    } else if (mode === 'drill') {
+      let left = DRILL_SECONDS;
+      chip.classList.remove('hidden');
+      chip.textContent = `⏱ ${left}s`;
+      _practiceTimer = setInterval(() => {
+        left -= 1;
+        chip.textContent = `⏱ ${left}s`;
+        if (left <= 0) {
+          clearPracticeTimer();
+          $('practice-answer-status').textContent = "Time's up — skipped.";
+          submitPracticeAnswer({ skip: true });
+        }
+      }, 1000);
+    }
+  }
+
+  function renderPracticeQuestion() {
+    const { session, idx } = State.practice;
+    const q = session.questions[idx];
+    _practiceShow('practice-question');
+    updateTtsToggle();
+    $('practice-progress').textContent = `Question ${idx + 1} of ${session.questions.length}`;
+    $('practice-difficulty').textContent = q.difficulty;
+    const chip = $('practice-section-chip');
+    if (q.section_anchor) { chip.textContent = `§ ${q.section_anchor}`; chip.classList.remove('hidden'); }
+    else chip.classList.add('hidden');
+    const qText = $('practice-question-text');
+    qText.textContent = q.question;
+    // Re-trigger the fade-in per question (reflow hack).
+    qText.classList.remove('q-reveal'); void qText.offsetWidth; qText.classList.add('q-reveal');
+    // Voice input owns the answer textarea (injects #practice-answer).
+    // The confidence slider appears only in practice mode (simulation
+    // defers all feedback; drills are about speed).
+    mountVoiceInput($('practice-voice-mount'), {
+      textareaId: 'practice-answer', submitBtnId: 'practice-submit-btn',
+      predict: session.mode === 'practice',
+    });
+    $('practice-answer-status').textContent = '';
+    $('practice-answer-block').classList.remove('hidden');
+    const fb = $('practice-feedback');
+    fb.classList.add('hidden'); fb.innerHTML = '';
+    startModeTimer();
+    // Resuming a question that already got interim feedback + a follow-up.
+    if (q.status === 'awaiting_followup') {
+      renderPracticeFeedback(q.first_evaluation, q, q.followup_question);
+    } else {
+      speakQuestion(q.question);
+    }
+  }
+
+  function _listBlock(title, items, color) {
+    if (!items || items.length === 0) return '';
+    return `
+      <div class="mb-3">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:${color}">${title}</p>
+        <ul class="text-sm space-y-1" style="color:var(--text-dim)">
+          ${items.map(i => `<li class="flex gap-2"><span style="color:${color}">•</span><span>${escapeHtml(i)}</span></li>`).join('')}
+        </ul>
+      </div>`;
+  }
+
+  function renderPracticeFeedback(evaluation, question, followupQuestion) {
+    const fb = $('practice-feedback');
+    const style = VERDICT_STYLES[evaluation.verdict] || VERDICT_STYLES.adequate;
+    // One quiet footer line, not a wall of chips (capped at 3, verbs stripped).
+    const pointerLine = (evaluation.section_pointers || [])
+      .slice(0, 3).map(_cleanPointer).join('  ·  ');
+    let tail;
+    if (followupQuestion) {
+      // One drill-down round: hide the original answer box, collect the
+      // follow-up answer through the same submit path — spoken, like the
+      // main question.
+      $('practice-answer-block').classList.add('hidden');
+      tail = `
+        <div class="pt-3 mt-1" style="border-top:1px solid var(--stroke)">
+          <p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--accent-text)">Follow-up question</p>
+          <p class="text-sm font-semibold mb-3" style="color:var(--text)">${escapeHtml(followupQuestion)}</p>
+          <div id="practice-followup-voice"></div>
+          <div class="flex items-center justify-center gap-3 mt-2">
+            <button type="button" id="practice-followup-btn" class="btn-primary text-sm hidden">Submit follow-up</button>
+            <span id="practice-followup-status" class="text-sm" style="color:var(--text-dim)"></span>
+          </div>
+        </div>`;
+    } else {
+      $('practice-answer-block').classList.add('hidden');
+      const modelAnswer = question.model_answer
+        ? `<div class="pt-3 mt-1" style="border-top:1px solid var(--stroke)">
+             <p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-faint)">What an interviewer wants to hear</p>
+             <div class="prose-feedback text-sm leading-relaxed" style="color:var(--text-dim)">${marked.parse(question.model_answer)}</div>
+           </div>`
+        : '';
+      tail = `${modelAnswer}
+        <div class="mt-4">
+          <button type="button" id="practice-next-btn" class="btn-primary text-sm">Next question</button>
+        </div>`;
+    }
+    // Confidence calibration read-back: prediction was locked in before
+    // the verdict, so this comparison is honest.
+    const predicted = State.practice ? State.practice.lastPredicted : null;
+    let calibrationLine = '';
+    if (predicted != null && !followupQuestion) {
+      const diff = predicted - evaluation.score;
+      const note = diff === 0 ? 'spot on — well calibrated'
+        : Math.abs(diff) <= 1 ? 'close — well calibrated'
+        : diff > 0 ? `overconfident by ${diff}`
+        : `underconfident by ${-diff}`;
+      calibrationLine = `<p class="text-xs mb-3" style="color:var(--text-faint)">You predicted <b style="color:var(--text-dim)">${predicted}/10</b> — ${escapeHtml(note)}.</p>`;
+    }
+    fb.innerHTML = `
+      <div class="card px-6 py-5">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="px-2.5 py-1 rounded-full text-sm font-bold score-pop" style="${style}">${evaluation.score}/10</span>
+          <span class="text-sm font-semibold capitalize" style="color:var(--text)">${escapeHtml(evaluation.verdict)}</span>
+        </div>
+        ${calibrationLine || '<div class="mb-2"></div>'}
+        ${_listBlock('Strengths', evaluation.strengths, '#4ade80')}
+        ${_listBlock('Gaps', evaluation.gaps, '#fbbf24')}
+        ${_listBlock('Misconceptions', evaluation.misconceptions, '#f87171')}
+        ${_listBlock('Suggestions', evaluation.suggestions, 'var(--accent-text)')}
+        ${pointerLine ? `<p class="text-xs mb-3" style="color:var(--text-faint)">Worth re-reading: <span style="color:var(--text-dim)">${escapeHtml(pointerLine)}</span></p>` : ''}
+        ${tail}
+      </div>`;
+    fb.classList.remove('hidden');
+    const followupBtn = $('practice-followup-btn');
+    if (followupBtn) {
+      followupBtn.addEventListener('click', () => submitPracticeAnswer({ followup: true }));
+      mountVoiceInput($('practice-followup-voice'), {
+        textareaId: 'practice-followup-answer', submitBtnId: 'practice-followup-btn',
+      });
+      speakQuestion(followupQuestion);
+    }
+    const nextBtn = $('practice-next-btn');
+    if (nextBtn) nextBtn.addEventListener('click', advancePractice);
+  }
+
+  async function submitPracticeAnswer({ skip = false, followup = false } = {}) {
+    Voice.abort(); // skip mid-recording, or leftover state — release the mic
+    clearPracticeTimer();
+    const { session, idx } = State.practice;
+    const q = session.questions[idx];
+    const answerEl = followup ? $('practice-followup-answer') : $('practice-answer');
+    const statusEl = followup ? $('practice-followup-status') : $('practice-answer-status');
+    const answer = skip ? '' : (answerEl ? answerEl.value.trim() : '');
+    if (!skip && !answer) { statusEl.textContent = 'Write an answer or skip.'; return; }
+    // Confidence prediction: only if the user actually moved the slider.
+    let predicted = null;
+    if (!skip && !followup) {
+      const range = document.querySelector('#practice-voice-mount .predict-range');
+      if (range && range.dataset.touched === '1') predicted = parseInt(range.value, 10);
+    }
+    State.practice.lastPredicted = predicted;
+    const buttons = ['practice-submit-btn', 'practice-skip-btn', 'practice-followup-btn']
+      .map($).filter(Boolean);
+    buttons.forEach(b => b.disabled = true);
+    statusEl.textContent = skip ? '' : (session.mode === 'simulation' ? 'Noted.' : 'Grading…');
+    try {
+      const r = await fetch(`/interviews/${session.session_id}/answers`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ question_id: q.id, answer, skip, predicted_score: predicted }),
+      });
+      if (!r.ok) { const d = await r.json().catch(()=>({detail:r.statusText})); throw new Error(d.detail || `HTTP ${r.status}`); }
+      const result = await r.json();
+      session.questions[idx] = result.question;
+      session.complete = result.session_complete;
+      if (result.summary) session.summary = result.summary;
+      if (skip) { advancePractice(); return; }
+      if (session.mode === 'simulation' && !result.session_complete) {
+        // Real conditions: no feedback mid-screen. Brief beat, next question.
+        setTimeout(advancePractice, 700);
+        return;
+      }
+      if (session.mode === 'simulation' && result.session_complete) {
+        renderPracticeSummary(session.summary);
+        return;
+      }
+      renderPracticeFeedback(
+        result.evaluation, result.question, result.followup_question
+      );
+    } catch (err) {
+      statusEl.textContent = '✗ ' + err.message;
+    } finally {
+      buttons.forEach(b => b.disabled = false);
+    }
+  }
+
+  function advancePractice() {
+    const { session } = State.practice;
+    const next = session.questions.findIndex(q => q.status === 'pending' || q.status === 'awaiting_followup');
+    if (next === -1) {
+      renderPracticeSummary(session.summary);
+    } else {
+      State.practice.idx = next;
+      renderPracticeQuestion();
+    }
+  }
+
+  const SCORE_COLORS = (score) =>
+    score == null ? 'var(--stroke-strong)'
+    : score >= 9 ? '#4ade80'
+    : score >= 6 ? 'var(--accent-text)'
+    : score >= 3 ? '#fbbf24'
+    : '#f87171';
+
+  function renderPracticeSummary(summary) {
+    Voice.abort();
+    clearPracticeTimer();
+    _practiceShow('practice-summary');
+    checkNewBadges();
+    const el = $('practice-summary');
+    if (!summary) {
+      el.innerHTML = '<p class="text-sm py-10 text-center" style="color:var(--text-dim)">Session finished.</p>';
+      return;
+    }
+    const avg = summary.average_score != null ? summary.average_score : null;
+    const rows = (summary.per_question || []).map(p => {
+      const score = p.final_score != null ? `${p.final_score}/10` : 'skipped';
+      const band = p.final_score == null ? VERDICT_STYLES.shallow
+        : p.final_score >= 9 ? VERDICT_STYLES.strong
+        : p.final_score >= 6 ? VERDICT_STYLES.adequate
+        : p.final_score >= 3 ? VERDICT_STYLES.shallow
+        : VERDICT_STYLES.incorrect;
+      const width = p.final_score != null ? p.final_score * 10 : 0;
+      return `
+        <div class="py-2.5" style="border-bottom:1px solid var(--stroke)">
+          <div class="flex items-center justify-between gap-3 mb-1.5">
+            <p class="text-sm min-w-0 truncate" style="color:var(--text-dim)">${escapeHtml(p.question)}</p>
+            <span class="px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0" style="${band}">${score}</span>
+          </div>
+          <div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${width}%;border-radius:3px;background:${SCORE_COLORS(p.final_score)};transition:width .6s ease-out"></div>
+          </div>
+        </div>`;
+    }).join('');
+    // Quiet single line instead of an amber chip wall (capped, verbs stripped).
+    const weak = (summary.weak_sections || []).slice(0, 4).map(_cleanPointer).join('  ·  ');
+    const donut = avg != null ? `
+      <svg width="140" height="140" viewBox="0 0 140 140" class="mx-auto mb-3">
+        <defs><linearGradient id="scoreGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#0fb5aa"/><stop offset="100%" stop-color="#4cc9f0"/>
+        </linearGradient></defs>
+        <circle cx="70" cy="70" r="58" fill="none" stroke="var(--stroke)" stroke-width="10"/>
+        <circle id="summary-donut-fill" cx="70" cy="70" r="58" fill="none" stroke="url(#scoreGrad)"
+          stroke-width="10" stroke-linecap="round" transform="rotate(-90 70 70)"
+          stroke-dasharray="364.4" stroke-dashoffset="364.4" style="transition: stroke-dashoffset .8s ease-out"/>
+        <text x="70" y="68" text-anchor="middle" fill="var(--text)" font-size="30" font-weight="700">${avg}</text>
+        <text x="70" y="90" text-anchor="middle" fill="var(--text-faint)" font-size="12">/ 10 average</text>
+      </svg>` : '';
+    const isSim = State.practice && State.practice.session.mode === 'simulation';
+    const debrief = summary.debrief
+      ? `<div class="card px-6 py-5 mb-4" style="border-color:rgba(32,184,205,0.35)">
+           <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--accent-text)">Interviewer's notes</p>
+           <p class="text-sm leading-relaxed" style="color:var(--text)">${escapeHtml(summary.debrief)}</p>
+         </div>`
+      : '';
+    const calibration = summary.calibration_gap != null
+      ? ` · calibration off by ${summary.calibration_gap} on average`
+      : '';
+    el.innerHTML = `
+      <div class="text-center mb-6 mt-2">
+        <h2 class="font-display text-3xl font-bold mb-4">${isSim ? 'Interview <span class="grad-text">debrief</span>' : 'Session <span class="grad-text">complete</span>'}</h2>
+        ${donut}
+        <p class="text-sm" style="color:var(--text-dim)">${summary.answered} answered · ${summary.skipped} skipped${calibration}</p>
+      </div>
+      ${debrief}
+      <div class="card px-6 py-5 mb-4">${rows || '<p class="text-sm" style="color:var(--text-dim)">No questions.</p>'}</div>
+      ${weak ? `<div class="card px-6 py-4 mb-4"><p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-faint)">Before the real interview, revisit</p><p class="text-sm" style="color:var(--text-dim)">${escapeHtml(weak)}</p></div>` : ''}
+      <div class="flex items-center justify-center gap-3 mt-6">
+        <button type="button" id="practice-again-btn" class="btn-primary text-sm">Practice again</button>
+        <button type="button" id="practice-home-btn" class="btn-outline text-sm">All sessions</button>
+      </div>`;
+    const fill = $('summary-donut-fill');
+    if (fill && avg != null) {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        fill.style.strokeDashoffset = (364.4 * (1 - avg / 10)).toFixed(1);
+      }));
+    }
+    $('practice-again-btn').addEventListener('click', () => openPracticeHome(_practicePrefill));
+    $('practice-home-btn').addEventListener('click', () => openPracticeHome(null));
+  }
+
   let _pendingKeyUpdates = {};
   async function loadSettings() {
     showView('settings');
     $('settings-keys').innerHTML = '<p class="py-8 text-sm text-center" style="color:var(--text-dim)">Loading…</p>';
+    $('settings-models').innerHTML = '<p class="py-6 text-sm text-center" style="color:var(--text-dim)">Loading…</p>';
     $('settings-save-status').textContent = ''; $('provider-save-status').textContent = '';
+    $('models-save-status').textContent = '';
     _pendingKeyUpdates = {};
     try {
       const r = await fetch('/settings');
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       State.keyStatus = data;
-      renderProviderCard(data); renderSettingsKeys(data.keys);
+      renderProviderCard(data);
+      renderModelSettings(data.keys, data);
+      renderSettingsKeys(data.keys);
+      // Progressive disclosure: keys stay folded once a provider works.
+      const secretKeys = data.keys.filter(k => !k.plain && !MODEL_CHOICES[k.key]);
+      const configured = secretKeys.filter(k => k.present).length;
+      $('keys-summary').textContent =
+        `${configured} of ${secretKeys.length} configured` +
+        (data.resolved_provider === 'claude-cli' ? ' · all optional on your subscription' : '');
+      const open = data.resolved_provider === 'none';
+      $('keys-body').classList.toggle('hidden', !open);
+      $('keys-chevron').style.transform = open ? 'rotate(180deg)' : '';
     } catch (err) { $('settings-keys').innerHTML = `<p class="py-8 text-sm text-center" style="color:#f87171">Failed: ${escapeHtml(err.message)}</p>`; }
   }
+
+  // Latest models per provider for the settings dropdowns. "Other…" reveals
+  // a free-text input for anything not listed (new releases, dated ids).
+  const MODEL_CHOICES = {
+    ANTHROPIC_STRONG_MODEL: ['claude-fable-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+    ANTHROPIC_LIGHT_MODEL:  ['claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-sonnet-4-6'],
+    OPENAI_STRONG_MODEL:    ['gpt-5', 'gpt-4o', 'gpt-5-mini'],
+    OPENAI_LIGHT_MODEL:     ['gpt-5-mini', 'gpt-4o-mini'],
+    CLAUDE_CLI_MODEL:       ['sonnet', 'haiku', 'opus', 'claude-fable-5', 'claude-opus-5', 'claude-sonnet-5'],
+  };
+
+  function _modelSelectMarkup(k) {
+    const choices = MODEL_CHOICES[k.key];
+    const current = k.masked_value || '';
+    const isCustom = current && !choices.includes(current);
+    const options = [
+      `<option value="" ${!current ? 'selected' : ''}>— default —</option>`,
+      ...choices.map(m => `<option value="${escapeHtml(m)}" ${current === m ? 'selected' : ''}>${escapeHtml(m)}</option>`),
+      `<option value="__other__" ${isCustom ? 'selected' : ''}>Other…</option>`,
+    ].join('');
+    return `
+      <div class="flex items-center gap-2 flex-wrap">
+        <select data-key="${escapeHtml(k.key)}" data-original="${escapeHtml(current)}" class="settings-model q-input text-sm" style="width:auto">${options}</select>
+        <input data-other-for="${escapeHtml(k.key)}" type="text" autocomplete="off" spellcheck="false"
+          value="${isCustom ? escapeHtml(current) : ''}" placeholder="model id"
+          class="q-input font-mono-ui text-sm ${isCustom ? '' : 'hidden'}" style="width:16rem" />
+      </div>`;
+  }
+
+  // Model settings are scoped to the provider actually in use — picking
+  // Anthropic shows Claude model choices only, OpenAI shows GPT choices,
+  // the CLI shows Claude choices plus its global override.
+  const PROVIDER_MODEL_KEYS = {
+    'anthropic':  ['ANTHROPIC_STRONG_MODEL', 'ANTHROPIC_LIGHT_MODEL'],
+    'openai':     ['OPENAI_STRONG_MODEL', 'OPENAI_LIGHT_MODEL'],
+    'claude-cli': ['ANTHROPIC_STRONG_MODEL', 'ANTHROPIC_LIGHT_MODEL', 'CLAUDE_CLI_MODEL'],
+  };
+
+  // Human titles for the models card — the env var name is a footnote.
+  const MODEL_LABELS = {
+    ANTHROPIC_STRONG_MODEL: 'Large tasks',
+    ANTHROPIC_LIGHT_MODEL:  'Small tasks',
+    OPENAI_STRONG_MODEL:    'Large tasks',
+    OPENAI_LIGHT_MODEL:     'Small tasks',
+    CLAUDE_CLI_MODEL:       'Force one model (optional)',
+  };
+  const PROVIDER_NAMES = {
+    'anthropic': 'Anthropic API', 'openai': 'OpenAI API',
+    'claude-cli': 'Claude Code subscription',
+  };
+
+  function renderModelSettings(keys, state) {
+    const container = $('settings-models');
+    container.innerHTML = '';
+    const provider = state && state.resolved_provider;
+    const visible = PROVIDER_MODEL_KEYS[provider] || [];
+    $('models-card-hint').textContent = provider && PROVIDER_NAMES[provider]
+      ? `For ${PROVIDER_NAMES[provider]} — the app describes the task size; the model choice is yours.`
+      : 'Pick a provider above first.';
+    if (!visible.length) {
+      container.innerHTML = '<p class="py-6 text-sm text-center" style="color:var(--text-dim)">Choose a provider above to configure its models.</p>';
+      return;
+    }
+    for (const k of keys) {
+      if (!visible.includes(k.key)) continue;
+      const row = document.createElement('div');
+      row.className = 'py-3';
+      row.style.borderBottom = '1px solid var(--stroke)';
+      row.innerHTML = `
+        <div class="flex items-center gap-2 mb-1 flex-wrap">
+          <span class="text-sm font-semibold" style="color:var(--text)">${escapeHtml(MODEL_LABELS[k.key] || k.key)}</span>
+          <code class="text-xs font-mono-ui px-1.5 py-0.5 rounded" style="background:var(--surface-2);color:var(--text-faint)">${escapeHtml(k.key)}</code>
+        </div>
+        <p class="text-xs mb-2 leading-relaxed" style="color:var(--text-dim)">${escapeHtml(k.description)}</p>
+        ${_modelSelectMarkup(k)}`;
+      container.appendChild(row);
+    }
+    wireModelSelects(container);
+  }
+
+  // Secret keys only, grouped by what each connection unlocks.
+  const KEY_GROUPS = [
+    { title: 'LLM access', hint: 'Needed for API providers. Optional when using your Claude subscription.',
+      keys: ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY'] },
+    { title: 'Web search', hint: 'Live citations for articles and real interview-question patterns.',
+      keys: ['TAVILY_API_KEY'] },
+    { title: 'Page fetching', hint: 'Fallback fetcher for sites that block scrapers.',
+      keys: ['JINA_API_KEY', 'USE_JINA_READER'] },
+  ];
 
   function renderSettingsKeys(keys) {
     const container = $('settings-keys');
     container.innerHTML = '';
-    for (const k of keys) {
-      const row = document.createElement('div');
-      row.className = 'key-row';
-      const isBool = k.key === 'USE_JINA_READER';
-      row.innerHTML = `
-        <div class="key-status ${k.present ? 'present' : 'missing'}" title="${k.present ? 'Present' : 'Not set'}"></div>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-1 flex-wrap">
-            <code class="text-xs font-mono-ui font-semibold px-1.5 py-0.5 rounded" style="background:var(--surface-2);color:var(--accent-text)">${escapeHtml(k.key)}</code>
-            ${k.present && k.masked_value ? `<span class="text-xs font-mono-ui" style="color:var(--text-faint)">${escapeHtml(k.masked_value)}</span>` : ''}
-            ${!k.present ? `<span class="text-xs font-semibold" style="color:#fbbf24">not set</span>` : ''}
-          </div>
-          <p class="text-xs mb-2 leading-relaxed" style="color:var(--text-dim)">${escapeHtml(k.description)}</p>
-          ${isBool
-            ? `<select data-key="${escapeHtml(k.key)}" class="settings-input q-input text-sm" style="width:auto"><option value="" ${!k.present?'selected':''}>— keep current —</option><option value="true" ${k.masked_value==='true'?'selected':''}>true</option><option value="false" ${k.masked_value==='false'?'selected':''}>false</option></select>`
-            : `<input data-key="${escapeHtml(k.key)}" type="password" autocomplete="off" spellcheck="false" placeholder="${k.present?'Enter new value to update':'Paste your API key here'}" class="settings-input q-input font-mono-ui text-sm" />`
-          }
-        </div>`;
-      container.appendChild(row);
+    const byKey = Object.fromEntries(keys.map(k => [k.key, k]));
+    for (const group of KEY_GROUPS) {
+      const header = document.createElement('div');
+      header.className = 'pt-4 pb-1';
+      header.innerHTML = `
+        <p class="text-xs font-semibold uppercase tracking-wider" style="color:var(--text-faint)">${escapeHtml(group.title)}</p>
+        <p class="text-xs mt-0.5" style="color:var(--text-dim)">${escapeHtml(group.hint)}</p>`;
+      container.appendChild(header);
+      for (const keyName of group.keys) {
+        const k = byKey[keyName];
+        if (!k) continue;
+        const isBool = k.key === 'USE_JINA_READER';
+        const row = document.createElement('div');
+        row.className = 'key-row';
+        row.innerHTML = `
+          <div class="key-status ${k.present ? 'present' : 'missing'}" title="${k.present ? 'Present' : 'Not set'}"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <code class="text-xs font-mono-ui font-semibold px-1.5 py-0.5 rounded" style="background:var(--surface-2);color:var(--accent-text)">${escapeHtml(k.key)}</code>
+              ${k.present && k.masked_value ? `<span class="text-xs font-mono-ui" style="color:var(--text-faint)">${escapeHtml(k.masked_value)}</span>` : ''}
+              ${!k.present ? `<span class="text-xs font-semibold" style="color:#fbbf24">not set</span>` : ''}
+            </div>
+            ${isBool
+              ? `<select data-key="${escapeHtml(k.key)}" class="settings-input q-input text-sm" style="width:auto"><option value="" ${!k.present?'selected':''}>— keep current —</option><option value="true" ${k.masked_value==='true'?'selected':''}>true</option><option value="false" ${k.masked_value==='false'?'selected':''}>false</option></select>`
+              : `<input data-key="${escapeHtml(k.key)}" type="password" autocomplete="off" spellcheck="false" placeholder="${k.present?'Enter new value to update':'Paste key here'}" class="settings-input q-input font-mono-ui text-sm" />`
+            }
+          </div>`;
+        container.appendChild(row);
+      }
     }
     container.querySelectorAll('.settings-input').forEach(input => {
-      input.addEventListener('input', () => { const k = input.dataset.key; if (input.value) _pendingKeyUpdates[k]=input.value; else delete _pendingKeyUpdates[k]; });
+      input.addEventListener('input', () => {
+        const k = input.dataset.key;
+        if (input.value) _pendingKeyUpdates[k] = input.value;
+        else delete _pendingKeyUpdates[k];
+      });
       if (input.tagName === 'SELECT') input.addEventListener('change', () => { const k = input.dataset.key; if (input.value) _pendingKeyUpdates[k]=input.value; else delete _pendingKeyUpdates[k]; });
+    });
+  }
+
+  // Model dropdowns: "Other…" reveals a free-text id input; the pending
+  // value is the effective choice (never the literal "__other__").
+  function wireModelSelects(container) {
+    container.querySelectorAll('select.settings-model').forEach(sel => {
+      const key = sel.dataset.key;
+      const other = container.querySelector(`input[data-other-for="${key}"]`);
+      const update = () => {
+        other.classList.toggle('hidden', sel.value !== '__other__');
+        const val = sel.value === '__other__' ? other.value.trim() : sel.value;
+        if (val !== sel.dataset.original) _pendingKeyUpdates[key] = val;
+        else delete _pendingKeyUpdates[key];
+      };
+      sel.addEventListener('change', () => { update(); if (sel.value === '__other__') other.focus(); });
+      other.addEventListener('input', update);
     });
   }
 
@@ -1627,16 +3031,24 @@
     finally { btn.disabled = false; }
   });
 
-  $('settings-save-btn').addEventListener('click', async () => {
-    if (Object.keys(_pendingKeyUpdates).length === 0) { $('settings-save-status').textContent = 'Nothing to save.'; return; }
-    $('settings-save-btn').disabled = true; $('settings-save-status').textContent = 'Saving…';
+  async function saveSettingsUpdates(btnId, statusId) {
+    const btn = $(btnId), status = $(statusId);
+    if (Object.keys(_pendingKeyUpdates).length === 0) { status.textContent = 'Nothing to save.'; return; }
+    btn.disabled = true; status.textContent = 'Saving…';
     try {
       const r = await fetch('/settings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ updates:_pendingKeyUpdates }) });
       if (!r.ok) { const d = await r.json().catch(()=>({detail:r.statusText})); throw new Error(d.detail||r.statusText); }
-      $('settings-save-status').textContent = '✓ Saved successfully';
+      status.textContent = '✓ Saved';
       await loadSettings(); await refreshKeyStatus();
-    } catch (err) { $('settings-save-status').textContent = '✗ '+err.message; }
-    finally { $('settings-save-btn').disabled = false; }
+    } catch (err) { status.textContent = '✗ '+err.message; }
+    finally { btn.disabled = false; }
+  }
+  $('settings-save-btn').addEventListener('click', () => saveSettingsUpdates('settings-save-btn', 'settings-save-status'));
+  $('models-save-btn').addEventListener('click', () => saveSettingsUpdates('models-save-btn', 'models-save-status'));
+  $('keys-toggle').addEventListener('click', () => {
+    const body = $('keys-body');
+    body.classList.toggle('hidden');
+    $('keys-chevron').style.transform = body.classList.contains('hidden') ? '' : 'rotate(180deg)';
   });
 
   async function submitGenerate(request) {
@@ -1770,7 +3182,67 @@
   $('history-refresh-btn').addEventListener('click', loadHistory);
   $('nav-new').addEventListener('click', e => { e.preventDefault(); resetToConfig(); });
   $('nav-history').addEventListener('click', e => { e.preventDefault(); loadHistory(); });
+  $('nav-practice').addEventListener('click', e => { e.preventDefault(); openPracticeHome(null); });
   $('nav-settings').addEventListener('click', e => { e.preventDefault(); loadSettings(); });
+  $('result-practice-btn').addEventListener('click', () => {
+    const level = $('level-selector').value || 'intermediate';
+    const topic = State.pendingRequest ? State.pendingRequest.topic : '';
+    openPracticeHome({ articleId: State.lastArticleId, topic, level });
+  });
+  $('past-practice-btn').addEventListener('click', () => {
+    const a = State.pastArticle; if (!a) return;
+    openPracticeHome({ articleId: a.id, topic: a.topic || a.title, level: $('past-level-selector').value || a.level });
+  });
+  $('practice-start-btn').addEventListener('click', startPractice);
+  $('practice-refresh-btn').addEventListener('click', loadPracticeSessions);
+  $('practice-drill-btn').addEventListener('click', startDrill);
+  $('practice-topic').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startPractice(); }
+  });
+  // Practice composer pills: clicking a seg option updates the hidden
+  // input + pill label and closes the popover (open/close is handled by
+  // the generic .opt-pill[data-pop] wiring above).
+  function wirePracticeSeg(segId, inputId, pillId, label) {
+    $(segId).querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $(segId).querySelectorAll('.seg-btn').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        $(inputId).value = btn.dataset.value;
+        $(pillId).textContent = label ? label(btn.dataset.value) : btn.textContent;
+        closeAllPopovers();
+      });
+    });
+  }
+  wirePracticeSeg('seg-practice-level', 'practice-level', 'pill-practice-level');
+  wirePracticeSeg('seg-practice-count', 'practice-count', 'pill-practice-count', v => `${v} questions`);
+  $('practice-article-clear').addEventListener('click', () => openPracticeHome(
+    _practicePrefill ? { topic: _practicePrefill.topic, level: _practicePrefill.level } : null
+  ));
+  $('practice-submit-btn').addEventListener('click', () => submitPracticeAnswer());
+  $('practice-skip-btn').addEventListener('click', () => submitPracticeAnswer({ skip: true }));
+  $('practice-quit-btn').addEventListener('click', () => { clearPracticeTimer(); openPracticeHome(_practicePrefill); });
+  const MODE_HINTS = {
+    practice:   'Coaching mode: detailed feedback after every answer, one follow-up when you\'re close.',
+    simulation: 'Real conditions: no feedback until the end, then the interviewer\'s full debrief.',
+    drill:      'Rapid fire: short questions, 60 seconds each. Seeds from your weak spots when the topic is empty.',
+  };
+  wirePracticeSeg('seg-practice-mode', 'practice-mode', 'pill-practice-mode');
+  $('seg-practice-mode').querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _practiceMode = btn.dataset.value;
+      $('practice-mode-hint').textContent = MODE_HINTS[_practiceMode];
+    });
+  });
+  $('practice-details-btn').addEventListener('click', () => {
+    const panel = $('practice-details');
+    panel.classList.toggle('hidden');
+    localStorage.setItem('scrivio-progress-open', panel.classList.contains('hidden') ? '' : '1');
+  });
+  $('practice-tts-toggle').addEventListener('click', () => {
+    if (ttsMuted()) localStorage.removeItem('scrivio-tts');
+    else { localStorage.setItem('scrivio-tts', 'off'); stopSpeaking(); }
+    updateTtsToggle();
+  });
   $('brand-link').addEventListener('click', e => { e.preventDefault(); resetToConfig(); });
   $('level-selector').addEventListener('change', e => renderArticle(e.target.value));
   $('past-level-selector').addEventListener('change', e => { if (State.pastArticle) loadPastArticle(State.pastArticle.id, e.target.value); });

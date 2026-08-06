@@ -127,10 +127,14 @@ def test_score_url_qa_forums_rank_below_articles() -> None:
 def test_score_url_docs_heuristic_for_unlisted_domains() -> None:
     """URLs that look like official documentation on domains we've never
     curated still beat blogs: docs.* hosts, readthedocs, /docs paths."""
-    assert score_url("https://docs.streamlit.io/library/api-reference") == 0.8
-    assert score_url("https://celery.readthedocs.io/en/stable/") == 0.8
-    assert score_url("https://vendor-nobody-knows.com/docs/getting-started") == 0.8
-    assert score_url("https://developer.android.com/reference") == 0.8
+    # Docs-shaped HOSTS earn near-curated trust; PATH-only matches cap at
+    # the github tier (any SEO farm can put /docs/ in a slug), and /guide
+    # paths earn no docs trust at all (the classic content-farm segment).
+    assert score_url("https://docs.streamlit.io/library/api-reference") == 0.75
+    assert score_url("https://celery.readthedocs.io/en/stable/") == 0.75
+    assert score_url("https://vendor-nobody-knows.com/docs/getting-started") == 0.7
+    assert score_url("https://developer.android.com/reference") == 0.75
+    assert score_url("https://seo-farm-nobody-knows.com/guide/ultimate-kafka-guide") == 0.6
 
 
 def test_score_url_medium_and_devto_are_blog_tier() -> None:

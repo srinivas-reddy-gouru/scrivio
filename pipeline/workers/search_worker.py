@@ -169,6 +169,25 @@ _PROVIDERS: dict[str, tuple[str, object]] = {
 }
 
 
+async def _claude_cli_search(
+    query: str, include_domains: list[str] | None = None
+) -> list[SearchResult]:
+    """Search via the Claude CLI's WebSearch tool (subscription-powered).
+    Domain restriction is expressed with site: operators, same as Brave."""
+    from pipeline.providers.claude_cli_adapter import cli_web_search
+
+    results = await cli_web_search(_brave_domain_query(query, include_domains))
+    return [
+        SearchResult(
+            url=r["url"],
+            title=str(r.get("title") or ""),
+            snippet=str(r.get("snippet") or ""),
+            published_at=r.get("published_at") or None,
+        )
+        for r in results
+    ]
+
+
 async def multi_search(
     queries: list[str],
     provider: str | None = None,
@@ -202,7 +221,17 @@ async def multi_search(
         ]
 
     if not search_fns:
-        return []
+        # BYO-subscription fallback: with no search API key, real web
+        # search runs through the Claude CLI's built-in WebSearch tool
+        # (slower and model-mediated, but genuinely live). Only when the
+        # CLI is installed; otherwise search degrades to nothing, as before.
+        from pipeline.providers.claude_cli_adapter import (
+            claude_cli_available as _cli_ok,
+        )
+        if _cli_ok():
+            search_fns = [_claude_cli_search]
+        else:
+            return []
 
     tasks = [
         fn(q, include_domains=include_domains) for fn in search_fns for q in queries

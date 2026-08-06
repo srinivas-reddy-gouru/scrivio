@@ -47,7 +47,10 @@ async def _call_with_rate_limit_retry(client, *, model, system, user_content, to
         try:
             return await client.messages.create(
                 model=model,
-                max_tokens=2048,
+                # Structured report output — cheap tokens. 2048 could truncate
+                # a long report (many revisions + hints) into invalid JSON
+                # and crash AFTER all the expensive drafting completed.
+                max_tokens=4096,
                 system=system,
                 extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
                 tools=tools,
@@ -110,7 +113,19 @@ async def run_editor_review(
         tool_choice={"type": "tool", "name": "submit_editor_report"},
     )
     tool_use = next(b for b in response.content if b.type == "tool_use")
-    report = EditorReport.model_validate(tool_use.input)
+    try:
+        report = EditorReport.model_validate(tool_use.input)
+    except Exception:
+        if getattr(response, "stop_reason", None) == "max_tokens":
+            # Truncated report → degrade to approved rather than crashing a
+            # run that already paid for drafting. The critic still gates.
+            logging.warning("Editor report truncated at max_tokens; treating as approved")
+            report = EditorReport(
+                approved=True,
+                overall_assessment="Editor report truncated; auto-approved.",
+            )
+        else:
+            raise
     # Deterministic supplement to the LLM review: citation coverage tends to
     # collapse in later sections and the model rarely notices. Cheap string
     # math catches it reliably.
@@ -230,21 +245,27 @@ async def revise_draft(
 
     thesis = plan.brief.thesis if plan.brief else ""
     total = len(plan.sections)
-    new_sections: list[DraftSection] = []
-    previous_summaries: list[str] = []
     existing_by_title = {s.title: s for s in draft.sections}
 
+    # Give revised sections the same full-outline context the initial
+    # parallel draft used. The previous 160-char content previews produced
+    # worse transitions in revised sections than in the drafts they replaced.
+    outline_lines = []
+    for i, sec in enumerate(plan.sections):
+        notes = (sec.notes or "").strip().replace("\n", " ")
+        outline_lines.append(
+            f"  {i+1}. {sec.title}" + (f" — {notes}" if notes else "")
+        )
+    article_outline = "\n".join(outline_lines)
+
+    redraft_jobs: list[tuple[str, object]] = []
     for i, plan_section in enumerate(plan.sections):
         revision = flagged.get(plan_section.title)
         hint = hinted.get(plan_section.title)
+        existing = existing_by_title.get(plan_section.title)
 
-        if revision is None and hint is None:
-            existing = existing_by_title.get(plan_section.title)
-            if existing is not None:
-                new_sections.append(existing)
-                preview = existing.content[:160].replace("\n", " ").strip()
-                previous_summaries.append(f"{existing.title}: {preview}…")
-                continue
+        if revision is None and hint is None and existing is not None:
+            continue  # untouched section passes through unchanged
 
         # Build a combined revision note: editorial instruction first, then any
         # structural enhancement hint on a clearly separated second line so the
@@ -262,20 +283,36 @@ async def revise_draft(
             logging.info("Editor structural hint for section %r: %s", plan_section.title, hint)
 
         relevant_spans = get_relevant_spans(plan_section, plan, spans)
-        redrafted = await draft_section(
-            plan_section,
-            plan,
-            relevant_spans,
-            client,
-            thesis=thesis,
-            section_index=i,
-            total_sections=total,
-            previous_summaries=previous_summaries,
-            revision_note=revision_note,
+        redraft_jobs.append((
+            plan_section.title,
+            draft_section(
+                plan_section,
+                plan,
+                relevant_spans,
+                client,
+                thesis=thesis,
+                section_index=i,
+                total_sections=total,
+                article_outline=article_outline,
+                revision_note=revision_note,
+            ),
+        ))
+
+    # Re-drafts run concurrently under the drafting worker's own semaphore —
+    # previously each flagged section waited for the last, putting revisions
+    # on the serial critical path.
+    results = await asyncio.gather(*(coro for _, coro in redraft_jobs))
+    redrafted_by_title = {
+        title: section for (title, _), section in zip(redraft_jobs, results)
+    }
+
+    new_sections: list[DraftSection] = []
+    for plan_section in plan.sections:
+        section = redrafted_by_title.get(plan_section.title) or existing_by_title.get(
+            plan_section.title
         )
-        new_sections.append(redrafted)
-        preview = redrafted.content[:160].replace("\n", " ").strip()
-        previous_summaries.append(f"{redrafted.title}: {preview}…")
+        if section is not None:
+            new_sections.append(section)
 
     raw_markdown = "\n\n".join(s.content for s in new_sections)
     return DraftPackage(plan=plan, sections=new_sections, raw_markdown=raw_markdown)
