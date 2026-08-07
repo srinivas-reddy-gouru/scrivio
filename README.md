@@ -1,15 +1,15 @@
 # Scrivio
 
 > **Learn it. Prove it. Get the job.**
-> Deep-researched technical articles, voice-first interview practice, and job-targeted mock interviews with recruiter-grade scorecards — running on the AI subscription you already pay for.
+> Deep-researched technical articles, voice-first interview practice, job-targeted mock interviews with recruiter-grade scorecards, and honest ATS-aware resume tailoring — running on the AI subscription you already pay for.
 
-Scrivio started as an article generator and grew into an interview-preparation platform. It researches like a journalist (live web sources, every claim fact-checked), interviews like a senior engineer (spoken questions, strict rubric grading, real follow-ups), and gives feedback like a hiring panel (competency scorecards, hire signals, cited study plans).
+Scrivio started as an article generator and grew into an interview-preparation platform. It researches like a journalist (live web sources, every claim fact-checked), interviews like a senior engineer (spoken questions, strict rubric grading, real follow-ups), gives feedback like a hiring panel (competency scorecards, hire signals, cited study plans), and edits your resume like a writer with ethics (explainable ATS checks, tailoring that refuses to invent).
 
 ![Scrivio home](docs/home.png)
 
 ---
 
-## The three studios
+## The four studios
 
 ### ✏️ Article studio
 
@@ -41,6 +41,16 @@ Upload your resume and a job description; interview for *that* job:
 - **Fit analysis** — 5–8 competencies derived from the JD itself, each mapped against your resume's evidence (strong / partial / missing), with the gaps a sharp interviewer would probe
 - **A realistic 30–45 minute screen** — warm-up → resume deep-dive (it grills *your own claims* by name) → technical → behavioral (STAR required) → gap-probe → closing, using questions real interviewers ask for that role and company
 - **Recruiter-grade scorecard** — hire signal calibrated to the role's seniority, per-competency scores with quoted evidence from your answers, JD requirement coverage (met/partial/missing), panel notes, and a **study plan with trust-ranked citations** for every weak area
+
+### 📄 Resume studio
+
+![Resume studio](docs/resume-studio.png)
+
+Upload or paste your resume; get a report you can argue with, then a rewrite you can trust:
+
+- **Explainable ATS score, not a magic number** — a weighted checklist computed in plain Python (contact info placement, standard headers, quantified bullets, date consistency, single-column parse safety, stuffing detection…), each row showing exactly why it passed or failed. With a JD attached (paste, URL, or a saved job target from Job prep), a deterministic **keyword-match** percentage joins the score: 70% checks + 30% coverage
+- **Structured, not a text blob** — the resume is extracted once into the [JSON Resume](https://jsonresume.org) open standard (the architecture lesson borrowed from [Reactive Resume](https://github.com/AmruthPillai/Reactive-Resume)); every check, edit, and export operates on that structure. Import an existing `resume.json`, export to **PDF (what application portals want), Word (.docx), Markdown, or JSON Resume** — the JSON round-trips into Reactive Resume and the rest of that ecosystem
+- **Honest tailoring is the whole point** — the rewrite reorders, rephrases, and surfaces your *existing* experience in the JD's vocabulary, with a per-field change log (`work[0].highlights[2]: …why…`). It will not invent employers, titles, dates, degrees, or skills: missing metrics become `[METRIC]` placeholders for you to fill, unclaimable keywords are listed as *"cannot honestly claim"*, and a deterministic post-guard strips any invention a model might sneak through — employers, titles, and dates must pass byte-identical
 
 ---
 
@@ -120,7 +130,7 @@ python main.py --topic "How does Kafka handle backpressure?" --level intermediat
 python main.py --topic "pytest best practices" --level basic --no-web --no-diagrams
 ```
 
-Output lands in `./output/<timestamp>__<slug>__<id>/` with the article markdown and a `meta.json` of verification reports. Interview sessions persist under `output/interviews/`, job targets under `output/job_profiles/`.
+Output lands in `./output/<timestamp>__<slug>__<id>/` with the article markdown and a `meta.json` of verification reports. Interview sessions persist under `output/interviews/`, job targets under `output/job_profiles/`, resume reports under `output/resumes/`.
 
 ## Claude Code skill
 
@@ -131,7 +141,7 @@ A standalone version of the article pipeline ships as a Claude Code skill — no
 ## Development
 
 ```bash
-python3 -m pytest tests/ -q     # 355 tests, fully hermetic (no network, no keys)
+python3 -m pytest tests/ -q     # 388 tests, fully hermetic (no network, no keys)
 ```
 
 The suite is deliberately isolated from the host machine: mock LLM clients for every pipeline stage, and fixtures that neutralize the developer's own `.env` preferences, installed CLIs, and saved model overrides (all three have caused order-dependent failures before — see `tests/conftest.py`).

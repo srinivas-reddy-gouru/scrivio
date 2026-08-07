@@ -40,6 +40,8 @@ from pipeline.schemas.models import (
     JobAnalysis,
     JobProfile,
     ProgressEvent,
+    ResumeDoc,
+    StructuredResume,
 )
 from pipeline.workers.answer_evaluator_worker import evaluate_answer, generate_debrief
 from pipeline.workers.job_interviewer_worker import (
@@ -50,6 +52,17 @@ from pipeline.workers.job_interviewer_worker import (
     research_job_questions,
 )
 from pipeline.workers.resume_parser import ResumeParseError, parse_resume
+from pipeline.workers.resume_studio_worker import (
+    extract_resume,
+    from_jsonresume,
+    render_docx,
+    render_markdown,
+    render_pdf,
+    review_resume,
+    run_ats_checks,
+    tailor_resume,
+    to_jsonresume,
+)
 from pipeline.workers.interviewer_worker import (
     find_real_question_patterns,
     generate_interview_questions,
@@ -1864,6 +1877,272 @@ def _job_context_for(profile: JobProfile, question) -> str:
         f"competency under test: {competency}\n\n"
         f"job_description (excerpt):\n{profile.job_description[:4000]}\n\n"
         f"candidate_resume (excerpt):\n{profile.resume_text[:4000]}"
+    )
+
+
+# ── Resume studio ────────────────────────────────────────────────────
+# Upload/paste a resume → JSON Resume structure (extracted once, the
+# substrate for everything) → transparent ATS checklist + recruiter
+# review → optional honest JD tailoring with an auditable change log →
+# Markdown/DOCX/JSON Resume downloads.
+
+_RESUMES_DIR = "resumes"
+
+
+def _resumes_root() -> Path:
+    return OUTPUT_ROOT / _RESUMES_DIR
+
+
+def _resume_path(resume_id: str) -> Path:
+    return _resumes_root() / f"{resume_id}.json"
+
+
+def _load_resume_doc(resume_id: str) -> ResumeDoc:
+    if not _SESSION_ID_PATTERN.match(resume_id):
+        raise HTTPException(status_code=404, detail="Resume not found")
+    path = _resume_path(resume_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Resume not found")
+    try:
+        return ResumeDoc.model_validate_json(path.read_text(encoding="utf-8"))
+    except Exception:
+        raise HTTPException(status_code=410, detail="Resume document unreadable")
+
+
+def _save_resume_doc(doc: ResumeDoc) -> None:
+    root = _resumes_root()
+    root.mkdir(parents=True, exist_ok=True)
+    doc.updated_at = datetime.utcnow()
+    path = _resume_path(doc.resume_id)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(doc.model_dump_json(indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+class ResumeCreateRequest(BaseModel):
+    # Resume: pasted text OR an uploaded file. A .json upload is treated
+    # as a JSON Resume document (Reactive Resume-compatible import) and
+    # skips LLM extraction entirely.
+    resume_text: str = ""
+    resume_file_b64: str = ""
+    resume_filename: str = ""
+    # JD, all optional (the report runs without one): pasted text, a URL
+    # to fetch, or a saved job target from the Job prep studio.
+    jd_text: str = ""
+    jd_url: str = ""
+    job_profile_id: str | None = None
+
+
+class ResumeSummaryItem(BaseModel):
+    resume_id: str
+    name: str
+    jd_label: str
+    score: int | None = None
+    tailored_score: int | None = None
+    created_at: str
+
+
+async def _resolve_resume_jd(body: ResumeCreateRequest) -> tuple[str, str]:
+    """Returns (jd_text, jd_label). Empty text = no JD, which is fine."""
+    if body.job_profile_id:
+        profile, _analysis = _load_job_profile(body.job_profile_id)
+        label = profile.role_title + (f" @ {profile.company}" if profile.company else "")
+        return profile.job_description, label
+    if body.jd_text.strip():
+        return body.jd_text.strip()[:30_000], "pasted JD"
+    if body.jd_url.strip():
+        from pipeline.workers.extraction_worker import (
+            fetch_with_retry, injection_filter, remove_boilerplate,
+        )
+        try:
+            raw, _strategy = await fetch_with_retry(body.jd_url.strip())
+            text = injection_filter(remove_boilerplate(raw)).strip()
+        except Exception:
+            raise HTTPException(
+                status_code=422,
+                detail="Could not fetch the job posting URL — paste the JD text instead.",
+            )
+        if len(text) < 200:
+            raise HTTPException(
+                status_code=422,
+                detail="The job posting page yielded almost no text (likely behind "
+                       "a login or rendered by JavaScript) — paste the JD text instead.",
+            )
+        return text[:30_000], body.jd_url.strip()
+    return "", ""
+
+
+def _resolve_resume_input(body: ResumeCreateRequest) -> tuple[str, StructuredResume | None]:
+    """Returns (resume_text, structure). structure is non-None only for a
+    JSON Resume upload, which needs no LLM extraction."""
+    if body.resume_text.strip():
+        return body.resume_text.strip()[:30_000], None
+    if body.resume_file_b64:
+        try:
+            data = base64.b64decode(body.resume_file_b64, validate=True)
+        except (binascii.Error, ValueError):
+            raise HTTPException(status_code=422, detail="resume_file_b64 is not valid base64")
+        if (body.resume_filename or "").lower().endswith(".json"):
+            try:
+                structured = from_jsonresume(json.loads(data.decode("utf-8")))
+            except Exception:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Could not read this file as a JSON Resume document "
+                           "(jsonresume.org format).",
+                )
+            return render_markdown(structured), structured
+        try:
+            return parse_resume(data, body.resume_filename), None
+        except ResumeParseError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+    raise HTTPException(status_code=422, detail="Provide a resume (file upload or pasted text)")
+
+
+@app.post("/resumes", response_model=ResumeDoc)
+async def create_resume(body: ResumeCreateRequest) -> ResumeDoc:
+    resume_text, structured = _resolve_resume_input(body)
+    jd_text, jd_label = await _resolve_resume_jd(body)
+
+    client, preset = _client_for_session({}, "resume")
+    if structured is None:
+        try:
+            structured = await extract_resume(resume_text, client, preset)
+        except Exception:
+            # A failed extraction degrades to text-only checks — the report
+            # still ships, minus the structure-aware rows and tailoring.
+            logging.exception("Resume extraction failed; continuing text-only")
+            structured = None
+
+    report = run_ats_checks(resume_text, jd_text or None, structured)
+    review = await review_resume(resume_text, jd_text, client, preset)
+
+    doc = ResumeDoc(
+        resume_id=(datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]),
+        original_text=resume_text,
+        structured=structured,
+        jd_text=jd_text,
+        jd_label=jd_label,
+        report=report,
+        review=review,
+    )
+    _save_resume_doc(doc)
+    return doc
+
+
+@app.get("/resumes", response_model=list[ResumeSummaryItem])
+async def list_resumes() -> list[ResumeSummaryItem]:
+    root = _resumes_root()
+    if not root.is_dir():
+        return []
+    items: list[tuple[ResumeSummaryItem, float]] = []
+    for path in root.glob("*.json"):
+        try:
+            doc = ResumeDoc.model_validate_json(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        items.append((ResumeSummaryItem(
+            resume_id=doc.resume_id,
+            name=doc.structured.basics.name if doc.structured else "",
+            jd_label=doc.jd_label,
+            score=doc.report.score if doc.report else None,
+            tailored_score=doc.tailored_report.score if doc.tailored_report else None,
+            created_at=doc.created_at.isoformat(),
+        ), path.stat().st_mtime))
+    items.sort(key=lambda pair: pair[1], reverse=True)
+    return [item for item, _ in items]
+
+
+@app.get("/resumes/{resume_id}", response_model=ResumeDoc)
+async def get_resume(resume_id: str) -> ResumeDoc:
+    return _load_resume_doc(resume_id)
+
+
+@app.delete("/resumes/{resume_id}")
+async def delete_resume(resume_id: str) -> dict:
+    if not _SESSION_ID_PATTERN.match(resume_id):
+        raise HTTPException(status_code=404, detail="Resume not found")
+    path = _resume_path(resume_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Resume not found")
+    path.unlink()
+    return {"deleted": resume_id}
+
+
+@app.post("/resumes/{resume_id}/tailor", response_model=ResumeDoc)
+async def tailor_resume_endpoint(resume_id: str) -> ResumeDoc:
+    doc = _load_resume_doc(resume_id)
+    if not doc.jd_text:
+        raise HTTPException(
+            status_code=422,
+            detail="This resume has no job description — re-analyze with a JD to tailor.",
+        )
+    if doc.structured is None:
+        raise HTTPException(
+            status_code=422,
+            detail="No structured resume available (extraction failed) — tailoring "
+                   "needs the structure. Try re-uploading.",
+        )
+    client, preset = _client_for_session({}, "resume")
+    doc.tailored = await tailor_resume(
+        structured=doc.structured,
+        jd_text=doc.jd_text,
+        review=doc.review,
+        report=doc.report,
+        client=client,
+        preset=preset,
+    )
+    # Before/after on identical footing: re-run the same deterministic
+    # checks on the tailored structure's canonical rendering.
+    doc.tailored_report = run_ats_checks(
+        render_markdown(doc.tailored.resume), doc.jd_text, doc.tailored.resume
+    )
+    _save_resume_doc(doc)
+    return doc
+
+
+_RESUME_DOWNLOADS = {
+    "pdf": ("application/pdf", "pdf"),
+    "md": ("text/markdown", "md"),
+    "docx": (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "docx",
+    ),
+    "json": ("application/json", "json"),
+}
+
+
+@app.get("/resumes/{resume_id}/download")
+async def download_resume(
+    resume_id: str, fmt: str = "md", version: str = "original"
+) -> Response:
+    if fmt not in _RESUME_DOWNLOADS:
+        raise HTTPException(status_code=422, detail="fmt must be pdf, docx, md, or json")
+    if version not in ("original", "tailored"):
+        raise HTTPException(status_code=422, detail="version must be original or tailored")
+    doc = _load_resume_doc(resume_id)
+    if version == "tailored":
+        if doc.tailored is None:
+            raise HTTPException(status_code=404, detail="No tailored version yet")
+        structured = doc.tailored.resume
+    else:
+        if doc.structured is None:
+            raise HTTPException(status_code=422, detail="No structured resume available")
+        structured = doc.structured
+    media_type, ext = _RESUME_DOWNLOADS[fmt]
+    if fmt == "pdf":
+        payload: bytes = render_pdf(structured)
+    elif fmt == "md":
+        payload = render_markdown(structured).encode("utf-8")
+    elif fmt == "docx":
+        payload = render_docx(structured)
+    else:
+        payload = json.dumps(to_jsonresume(structured), indent=2).encode("utf-8")
+    filename = f"resume-{version}-{resume_id}.{ext}"
+    return Response(
+        content=payload,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

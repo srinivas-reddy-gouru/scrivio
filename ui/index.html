@@ -677,6 +677,10 @@
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
           <span class="hidden sm:inline">Job prep</span>
         </button>
+        <button id="nav-resume" class="nav-link">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+          <span class="hidden sm:inline">Resume</span>
+        </button>
         <button id="nav-practice" class="nav-link">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>
           <span class="hidden sm:inline">Practice</span>
@@ -715,7 +719,7 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 max-w-6xl mx-auto">
 
       <button type="button" class="feature-card rise-in" style="animation-delay:.06s" id="home-card-article">
         <div class="feature-icon">
@@ -750,7 +754,6 @@
       </button>
 
       <button type="button" class="feature-card rise-in" style="animation-delay:.18s" id="home-card-job">
-        <span class="feature-badge">New</span>
         <div class="feature-icon">
           <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
         </div>
@@ -764,6 +767,23 @@
           <li>✓ Hire signal + cited study plan for gaps</li>
         </ul>
         <span class="btn-primary text-sm w-full justify-center">Prep for a job</span>
+      </button>
+
+      <button type="button" class="feature-card rise-in" style="animation-delay:.24s" id="home-card-resume">
+        <span class="feature-badge">New</span>
+        <div class="feature-icon">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+        </div>
+        <h3 class="font-display font-bold text-lg mb-2">Resume studio</h3>
+        <p class="text-sm leading-relaxed mb-4" style="color:var(--text-dim)">
+          A transparent ATS readiness report — every point explained — then an honest rewrite tailored to the job description.
+        </p>
+        <ul class="text-xs space-y-1.5 mb-5 text-left" style="color:var(--text-faint)">
+          <li>✓ Explainable checks, not a magic number</li>
+          <li>✓ Tailors honestly — never invents experience</li>
+          <li>✓ PDF, Word, Markdown &amp; JSON export</li>
+        </ul>
+        <span class="btn-primary text-sm w-full justify-center">Fix my resume</span>
       </button>
     </div>
   </section>
@@ -1339,6 +1359,62 @@
     </div>
   </section>
 
+  <!-- ── Resume studio ── -->
+  <section id="resume-panel" class="view hidden">
+    <div class="text-center mb-8 mt-2 rise-in">
+      <h1 class="font-display text-3xl sm:text-4xl font-bold tracking-tight leading-tight">
+        Make your resume <span class="grad-text">earn the screen</span>
+      </h1>
+      <p class="text-sm mt-3" style="color:var(--text-dim)">
+        An explainable ATS report — every point accounted for — then an honest rewrite tailored to the JD. Nothing invented, ever.
+      </p>
+    </div>
+
+    <!-- Setup -->
+    <div class="card px-6 py-6 mb-6 rise-in" style="animation-delay:.06s" id="resume-setup-card">
+      <div class="mb-4">
+        <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Resume * <span class="normal-case font-normal" style="color:var(--text-faint)">— PDF, DOCX, TXT, JSON Resume, or paste</span></label>
+        <div class="flex items-center gap-3 mb-2 flex-wrap">
+          <label class="btn-outline text-sm cursor-pointer">
+            <input id="resume-file" type="file" accept=".pdf,.docx,.txt,.md,.json" class="hidden" />
+            Upload file
+          </label>
+          <span id="resume-file-status" class="text-xs" style="color:var(--text-faint)">no file selected</span>
+        </div>
+        <textarea id="resume-text" rows="5" class="q-input w-full text-sm" placeholder="…or paste your resume text here"></textarea>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Target job <span class="normal-case font-normal" style="color:var(--text-faint)">— optional, unlocks keyword match + tailoring</span></label>
+        <select id="resume-jd-profile" class="q-input w-full text-sm mb-2">
+          <option value="">No saved job target</option>
+        </select>
+        <input id="resume-jd-url" type="text" class="q-input w-full text-sm mb-2" placeholder="https://… (optional — fetches the posting)" />
+        <textarea id="resume-jd" rows="4" class="q-input w-full text-sm" placeholder="…or paste the job description here"></textarea>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button type="button" id="resume-analyze-btn" class="btn-primary text-sm">Check my resume</button>
+        <span id="resume-setup-status" class="text-sm" style="color:var(--text-dim)"></span>
+      </div>
+    </div>
+
+    <!-- Report -->
+    <div id="resume-report" class="hidden card px-6 py-6 mb-6" style="border-color:rgba(32,184,205,0.35)"></div>
+
+    <!-- Tailored -->
+    <div id="resume-tailored" class="hidden card px-6 py-6 mb-6" style="border-color:rgba(52,211,153,0.35)"></div>
+
+    <!-- Past resumes -->
+    <div class="rise-in" style="animation-delay:.12s">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-display font-bold text-sm">Past reports</h3>
+      </div>
+      <div id="resume-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+      <p id="resume-list-empty" class="hidden text-sm text-center py-8" style="color:var(--text-faint)">No reports yet — check your first resume above.</p>
+    </div>
+  </section>
+
   <!-- ── Settings ── -->
   <section id="settings-panel" class="view hidden max-w-2xl mx-auto">
     <div class="mb-6">
@@ -1444,6 +1520,7 @@
     'past-article': ['past-article-panel'],
     practice:       ['practice-panel'],
     job:            ['job-panel'],
+    resume:         ['resume-panel'],
     settings:       ['settings-panel'],
   };
 
@@ -1467,6 +1544,7 @@
     $('nav-history').classList.toggle('active', ['history','past-article'].includes(view));
     $('nav-practice').classList.toggle('active', view === 'practice');
     $('nav-job').classList.toggle('active', view === 'job');
+    $('nav-resume').classList.toggle('active', view === 'resume');
     $('nav-settings').classList.toggle('active', view === 'settings');
   }
 
@@ -3304,6 +3382,287 @@
     $('job-back-btn').addEventListener('click', openJobPrep);
   }
 
+  /* ── Resume studio ───────────────────────────
+     Setup → explainable ATS report (deterministic checks + recruiter
+     review) → honest tailoring with an auditable change log. */
+  let _resumeFile = null;   // { b64, filename } from the upload input
+  let _resumeDoc = null;    // the ResumeDoc currently on screen
+
+  function openResumeStudio() {
+    Voice.abort();
+    showView('resume');
+    loadResumeList();
+    loadResumeJobTargets();
+  }
+
+  async function loadResumeJobTargets() {
+    const sel = $('resume-jd-profile');
+    const current = sel.value;
+    try {
+      const r = await fetch('/job-profiles');
+      if (!r.ok) return;
+      const profiles = await r.json();
+      sel.innerHTML = '<option value="">No saved job target</option>' + profiles.map(p =>
+        `<option value="${escapeHtml(p.profile_id)}">${escapeHtml(p.role_title)}${p.company ? ' @ ' + escapeHtml(p.company) : ''}</option>`
+      ).join('');
+      sel.value = current;
+    } catch (_) { /* dropdown is an enhancement */ }
+  }
+
+  async function loadResumeList() {
+    const list = $('resume-list');
+    try {
+      const r = await fetch('/resumes');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const items = await r.json();
+      list.innerHTML = '';
+      $('resume-list-empty').classList.toggle('hidden', items.length > 0);
+      for (const item of items) {
+        const card = document.createElement('div');
+        card.className = 'history-card';
+        card.style.cursor = 'default';
+        const scoreChip = item.score != null
+          ? `<span class="px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0" style="color:${atsColor(item.score)};background:color-mix(in srgb, ${atsColor(item.score)} 12%, transparent);border:1px solid color-mix(in srgb, ${atsColor(item.score)} 35%, transparent)">${item.score}${item.tailored_score != null ? ' → ' + item.tailored_score : ''}</span>`
+          : '';
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <h3 class="font-display font-bold text-sm leading-snug" style="color:var(--text)">${escapeHtml(item.name || 'Resume')}</h3>
+            <div class="flex items-center gap-2">${scoreChip}
+              <button type="button" class="resume-del text-xs flex-shrink-0" title="Delete" style="color:var(--text-faint)">✕</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between text-xs" style="color:var(--text-faint)">
+            <span class="min-w-0 truncate">${escapeHtml(item.jd_label || 'no target JD')} · ${escapeHtml(formatTimestamp(item.created_at))}</span>
+            <button type="button" class="resume-open btn-outline text-xs flex-shrink-0">Open</button>
+          </div>`;
+        card.querySelector('.resume-open').addEventListener('click', async () => {
+          const rr = await fetch(`/resumes/${item.resume_id}`);
+          if (!rr.ok) return;
+          const doc = await rr.json();
+          renderResumeReport(doc);
+          if (doc.tailored) renderResumeTailored(doc); else $('resume-tailored').classList.add('hidden');
+        });
+        card.querySelector('.resume-del').addEventListener('click', async () => {
+          await fetch(`/resumes/${item.resume_id}`, { method: 'DELETE' });
+          if (_resumeDoc && _resumeDoc.resume_id === item.resume_id) {
+            _resumeDoc = null;
+            $('resume-report').classList.add('hidden');
+            $('resume-tailored').classList.add('hidden');
+          }
+          loadResumeList();
+        });
+        list.appendChild(card);
+      }
+    } catch (_) { /* list is enhancement; the form still works */ }
+  }
+
+  async function analyzeResume() {
+    const btn = $('resume-analyze-btn'), status = $('resume-setup-status');
+    const body = {
+      resume_text: $('resume-text').value.trim(),
+      jd_text: $('resume-jd').value.trim(),
+      jd_url: $('resume-jd-url').value.trim(),
+      job_profile_id: $('resume-jd-profile').value || null,
+    };
+    if (_resumeFile && !body.resume_text) {
+      body.resume_file_b64 = _resumeFile.b64;
+      body.resume_filename = _resumeFile.filename;
+    }
+    if (!body.resume_text && !body.resume_file_b64) {
+      status.textContent = 'Upload or paste your resume.'; return;
+    }
+    btn.disabled = true;
+    status.textContent = 'Reading your resume like a recruiter… (~20s)';
+    $('resume-tailored').classList.add('hidden');
+    try {
+      const r = await fetch('/resumes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({detail: r.statusText})); throw new Error(d.detail || `HTTP ${r.status}`); }
+      const doc = await r.json();
+      status.textContent = '';
+      renderResumeReport(doc);
+      loadResumeList();
+    } catch (err) {
+      status.textContent = '✗ ' + err.message;
+    } finally { btn.disabled = false; }
+  }
+
+  function atsColor(score) {
+    return score >= 80 ? '#34d399' : score >= 60 ? '#fbbf24' : '#f87171';
+  }
+
+  function _resumeScoreRing(score, label) {
+    const color = atsColor(score);
+    return `
+      <div class="flex flex-col items-center flex-shrink-0">
+        <div style="width:96px;height:96px;border-radius:50%;background:conic-gradient(${color} ${score * 3.6}deg, var(--surface-2) 0);display:grid;place-items:center">
+          <div style="width:76px;height:76px;border-radius:50%;background:var(--bg);display:grid;place-items:center">
+            <span class="font-display font-bold text-2xl" style="color:${color}">${score}</span>
+          </div>
+        </div>
+        <span class="text-xs mt-2 font-semibold uppercase tracking-wider" style="color:var(--text-faint)">${label}</span>
+      </div>`;
+  }
+
+  const _DL_ICON = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+
+  function _downloadLinks(rid, version) {
+    const label = version === 'tailored' ? 'Download tailored' : 'Download';
+    return `<span class="text-xs font-semibold uppercase tracking-wider self-center mr-1" style="color:var(--text-faint)">${label}:</span>` +
+      ['pdf', 'docx', 'md', 'json'].map(fmt =>
+        `<a class="btn-outline text-xs" style="display:inline-flex;align-items:center;gap:5px" href="/resumes/${rid}/download?fmt=${fmt}&version=${version}" download="resume-${version}.${fmt}" title="Download the ${version} resume as ${{pdf: 'a PDF (what most application portals want)', docx: 'a Word document', md: 'Markdown', json: 'JSON Resume (imports into Reactive Resume)'}[fmt]}">${_DL_ICON}${{pdf: 'PDF', docx: 'Word', md: 'Markdown', json: 'JSON Resume'}[fmt]}</a>`
+      ).join('');
+  }
+
+  function renderResumeReport(doc) {
+    _resumeDoc = doc;
+    const el = $('resume-report');
+    const report = doc.report || { score: 0, checks: [], keyword_coverage: null };
+    // Failures first, heaviest first — what to fix, in order of payoff.
+    const checks = [...report.checks].sort((a, b) => (a.passed - b.passed) || (b.weight - a.weight));
+    const checkRows = checks.map(c => `
+      <div class="flex items-start gap-2.5 py-2" style="border-bottom:1px solid var(--stroke)">
+        <span class="flex-shrink-0 mt-0.5 font-bold" style="color:${c.passed ? '#34d399' : '#f87171'}">${c.passed ? '✓' : '✗'}</span>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold" style="color:var(--text)">${escapeHtml(c.label)}</span>
+            <span class="text-xs" style="color:var(--text-faint)">weight ${c.weight}</span>
+          </div>
+          <p class="text-xs mt-0.5 leading-relaxed" style="color:var(--text-dim)">${escapeHtml(c.detail)}</p>
+        </div>
+      </div>`).join('');
+
+    const cov = report.keyword_coverage;
+    const covHtml = cov ? `
+      <div class="mt-5">
+        <div class="flex items-center justify-between mb-1.5">
+          <p class="text-xs font-semibold uppercase tracking-wider" style="color:var(--text-faint)">JD keyword match</p>
+          <span class="text-xs font-bold" style="color:${atsColor(cov.percent)}">${cov.percent}%</span>
+        </div>
+        <div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:10px">
+          <div style="height:100%;width:${cov.percent}%;background:${atsColor(cov.percent)};border-radius:3px;transition:width .6s ease-out"></div>
+        </div>
+        <div>${cov.found.map(k => `<span class="px-2 py-0.5 rounded-full text-xs font-medium mr-1 mb-1 inline-block" style="color:#34d399;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3)">${escapeHtml(k)}</span>`).join('')}
+        ${cov.missing.map(k => `<span class="px-2 py-0.5 rounded-full text-xs font-medium mr-1 mb-1 inline-block" style="color:#f87171;background:rgba(248,113,113,0.08);border:1px dashed rgba(248,113,113,0.4)" title="Missing from the resume">${escapeHtml(k)}</span>`).join('')}</div>
+      </div>` : '';
+
+    const review = doc.review;
+    const CATEGORY_COLORS = { impact: '#fbbf24', clarity: '#60a5fa', structure: '#a78bfa', relevance: '#34d399', 'red-flag': '#f87171' };
+    const reviewHtml = review ? `
+      <div class="mt-6 pt-5" style="border-top:1px solid var(--stroke)">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--accent-text)">Recruiter's read</p>
+        <p class="text-sm leading-relaxed mb-4" style="color:var(--text)">${escapeHtml(review.summary)}</p>
+        ${review.strengths.length ? `<p class="text-xs mb-3" style="color:#4ade80">✓ ${review.strengths.map(escapeHtml).join('<br/>✓ ')}</p>` : ''}
+        ${review.issues.map(i => `
+          <div class="mb-3 pl-3" style="border-left:2px solid ${CATEGORY_COLORS[i.category] || 'var(--stroke)'}">
+            <p class="text-xs font-semibold uppercase tracking-wider" style="color:${CATEGORY_COLORS[i.category] || 'var(--text-faint)'}">${escapeHtml(i.category)}</p>
+            <p class="text-sm mt-0.5" style="color:var(--text-dim)">${escapeHtml(i.detail)}</p>
+            <p class="text-xs mt-1" style="color:var(--text)"><span class="font-semibold" style="color:var(--accent-text)">Fix:</span> ${escapeHtml(i.fix)}</p>
+          </div>`).join('')}
+        ${review.missing_keywords.length ? `<p class="text-xs mt-3" style="color:var(--text-faint)">Also missing vs the JD: <span style="color:var(--text-dim)">${review.missing_keywords.map(escapeHtml).join(' · ')}</span></p>` : ''}
+      </div>` : '';
+
+    const canTailor = !!doc.jd_text && !!doc.structured;
+    el.innerHTML = `
+      <div class="flex items-start justify-between flex-wrap gap-4 mb-5">
+        <div class="min-w-0">
+          <h3 class="font-display font-bold">ATS readiness${doc.jd_label ? ` — vs ${escapeHtml(doc.jd_label)}` : ''}</h3>
+          <p class="text-xs mt-1" style="color:var(--text-faint)">Every point below is a rule you can verify — no black box.</p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">${doc.structured ? _downloadLinks(doc.resume_id, 'original') : '<span class="text-xs" style="color:var(--text-faint)">Downloads unavailable — structure extraction failed.</span>'}</div>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-6 items-start">
+        ${_resumeScoreRing(report.score, cov ? '70% checks + 30% keywords' : 'weighted checks')}
+        <div class="min-w-0 flex-1">${checkRows}</div>
+      </div>
+      ${covHtml}
+      ${reviewHtml}
+      <div class="flex items-center gap-3 mt-6 pt-5" style="border-top:1px solid var(--stroke)">
+        <button type="button" id="resume-tailor-btn" class="btn-primary text-sm" ${canTailor ? '' : 'disabled'}>Tailor to this JD</button>
+        <span id="resume-tailor-status" class="text-sm" style="color:var(--text-dim)">${canTailor ? '' : 'Add a job description above to unlock tailoring.'}</span>
+      </div>`;
+    el.classList.remove('hidden');
+    if (canTailor) $('resume-tailor-btn').addEventListener('click', runResumeTailor);
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function runResumeTailor() {
+    if (!_resumeDoc) return;
+    const btn = $('resume-tailor-btn'), status = $('resume-tailor-status');
+    btn.disabled = true;
+    status.textContent = 'Rewriting honestly — nothing invented… (~40s)';
+    try {
+      const r = await fetch(`/resumes/${_resumeDoc.resume_id}/tailor`, { method: 'POST' });
+      if (!r.ok) { const d = await r.json().catch(() => ({detail: r.statusText})); throw new Error(d.detail || `HTTP ${r.status}`); }
+      const doc = await r.json();
+      _resumeDoc = doc;
+      status.textContent = '';
+      await renderResumeTailored(doc);
+      loadResumeList();
+    } catch (err) {
+      status.textContent = '✗ ' + err.message;
+    } finally { btn.disabled = false; }
+  }
+
+  const CHANGE_KIND_LABELS = {
+    rephrased: 'Rephrased', reordered: 'Reordered', 'added-keyword': 'Keyword added',
+    condensed: 'Condensed', placeholder: 'Needs your number',
+  };
+
+  async function renderResumeTailored(doc) {
+    const el = $('resume-tailored');
+    const t = doc.tailored;
+    if (!t) { el.classList.add('hidden'); return; }
+    const before = doc.report ? doc.report.score : null;
+    const after = doc.tailored_report ? doc.tailored_report.score : null;
+
+    let mdHtml = '';
+    try {
+      const r = await fetch(`/resumes/${doc.resume_id}/download?fmt=md&version=tailored`);
+      if (r.ok) mdHtml = marked.parse(await r.text());
+    } catch (_) {}
+
+    const byKind = {};
+    for (const c of t.changes) (byKind[c.kind] = byKind[c.kind] || []).push(c);
+    const changesHtml = Object.entries(byKind).map(([kind, changes]) => `
+      <div class="mb-3">
+        <p class="text-xs font-semibold mb-1" style="color:var(--text)">${escapeHtml(CHANGE_KIND_LABELS[kind] || kind)} <span style="color:var(--text-faint)" class="font-normal">(${changes.length})</span></p>
+        ${changes.map(c => `<p class="text-xs py-0.5" style="color:var(--text-dim)"><code class="font-mono-ui text-xs px-1 py-0.5 rounded" style="background:var(--surface-2);color:var(--accent-text)">${escapeHtml(c.where)}</code> ${escapeHtml(c.what)}</p>`).join('')}
+      </div>`).join('');
+
+    const warningsHtml = t.warnings.length ? `
+      <div class="mt-4 p-4 rounded-xl" style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.3)">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:#fbbf24">Honesty notes — read before sending</p>
+        ${t.warnings.map(w => `<p class="text-xs py-0.5 leading-relaxed" style="color:var(--text-dim)">• ${escapeHtml(w).replace(/\[METRIC\]/g, '<mark style="background:rgba(251,191,36,0.25);color:#fbbf24;padding:0 4px;border-radius:3px;font-weight:600">[METRIC]</mark>')}</p>`).join('')}
+      </div>` : '';
+
+    el.innerHTML = `
+      <div class="flex items-start justify-between flex-wrap gap-4 mb-5">
+        <div>
+          <h3 class="font-display font-bold">Tailored resume</h3>
+          <p class="text-xs mt-1" style="color:var(--text-faint)">Reorganized and rephrased for the JD — employers, titles, and dates untouched by design.</p>
+        </div>
+        ${before != null && after != null ? `
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-1 rounded-full text-sm font-bold" style="color:${atsColor(before)};background:color-mix(in srgb, ${atsColor(before)} 12%, transparent)">${before}</span>
+            <span style="color:var(--text-faint)">→</span>
+            <span class="px-2.5 py-1 rounded-full text-sm font-bold" style="color:${atsColor(after)};background:color-mix(in srgb, ${atsColor(after)} 12%, transparent)">${after}</span>
+          </div>` : ''}
+      </div>
+      ${mdHtml ? `<div class="paper px-6 sm:px-8 py-7 mb-5"><article class="prose text-sm">${mdHtml}</article></div>` : ''}
+      <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--text-faint)">What changed, and why</p>
+      ${changesHtml || '<p class="text-xs" style="color:var(--text-faint)">No changes logged.</p>'}
+      ${warningsHtml}
+      <div class="flex items-center gap-2 mt-5 flex-wrap">
+        ${_downloadLinks(doc.resume_id, 'tailored')}
+        <span class="text-xs ml-1" style="color:var(--text-faint)">Fill every [METRIC] with your real number before you send it.</span>
+      </div>`;
+    el.classList.remove('hidden');
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   let _pendingKeyUpdates = {};
   async function loadSettings() {
     showView('settings');
@@ -3684,6 +4043,19 @@
     };
     reader.readAsDataURL(file);
   });
+  $('nav-resume').addEventListener('click', e => { e.preventDefault(); openResumeStudio(); });
+  $('resume-analyze-btn').addEventListener('click', analyzeResume);
+  $('resume-file').addEventListener('change', () => {
+    const file = $('resume-file').files[0];
+    if (!file) { _resumeFile = null; $('resume-file-status').textContent = 'no file selected'; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      _resumeFile = { b64: String(reader.result).split(',')[1] || '', filename: file.name };
+      $('resume-file-status').textContent = `${file.name} (${Math.round(file.size / 1024)} KB) ready`;
+      $('resume-text').value = ''; // file wins over paste until cleared
+    };
+    reader.readAsDataURL(file);
+  });
   $('nav-settings').addEventListener('click', e => { e.preventDefault(); loadSettings(); });
   $('result-practice-btn').addEventListener('click', () => {
     const level = $('level-selector').value || 'intermediate';
@@ -3748,6 +4120,7 @@
   $('home-card-article').addEventListener('click', resetToConfig);
   $('home-card-practice').addEventListener('click', () => openPracticeHome(null));
   $('home-card-job').addEventListener('click', openJobPrep);
+  $('home-card-resume').addEventListener('click', openResumeStudio);
   $('level-selector').addEventListener('change', e => renderArticle(e.target.value));
   $('past-level-selector').addEventListener('change', e => { if (State.pastArticle) loadPastArticle(State.pastArticle.id, e.target.value); });
 

@@ -1359,6 +1359,12 @@ class MockAnthropicMessages:
             return self._mock_job_analysis()
         if tool_name == "submit_job_debrief":
             return self._mock_job_debrief()
+        if tool_name == "submit_resume_extraction":
+            return self._mock_resume_extraction()
+        if tool_name == "submit_resume_review":
+            return self._mock_resume_review(user_content)
+        if tool_name == "submit_tailored_resume":
+            return self._mock_tailored_resume()
         # Unknown tool — return an empty dict; the caller's model_validate will
         # raise a clear Pydantic error rather than an obscure AttributeError.
         return {}
@@ -1461,6 +1467,89 @@ class MockAnthropicMessages:
             "requirement_coverage": [
                 {"requirement": "Kafka pipeline experience", "status": "met"},
                 {"requirement": "Kubernetes in production", "status": "missing"},
+            ],
+        }
+
+    def _mock_resume_extraction(self) -> dict:
+        """Deterministic JSON Resume structure: one employer with quantified
+        bullets, education, grouped skills — enough surface for every
+        structure-aware check and render path to be exercised in mock mode."""
+        return {
+            "basics": {
+                "name": "Jordan Rivera",
+                "label": "Backend Engineer",
+                "email": "jordan@example.com",
+                "phone": "+1 555 010 1234",
+                "url": "",
+                "location": "Austin, TX",
+                "summary": "Backend engineer focused on event-driven systems.",
+            },
+            "work": [{
+                "name": "Acme Corp",
+                "position": "Software Engineer",
+                "startDate": "Jan 2021",
+                "endDate": "Present",
+                "summary": "",
+                "highlights": [
+                    "Built Kafka pipelines processing 2M events/day",
+                    "Cut p99 latency 40% by rewriting the consumer group logic",
+                    "Mentored two junior engineers",
+                ],
+            }],
+            "education": [{
+                "institution": "State University",
+                "area": "Computer Science",
+                "studyType": "B.S.",
+                "startDate": "2015", "endDate": "2019", "score": "",
+            }],
+            "skills": [
+                {"name": "Languages", "keywords": ["Python", "Go"]},
+                {"name": "Infrastructure", "keywords": ["Kafka", "PostgreSQL"]},
+            ],
+            "projects": [],
+            "certificates": ["AWS Solutions Architect Associate"],
+        }
+
+    def _mock_resume_review(self, user_content: str) -> dict:
+        """Missing keywords only appear when a JD was actually provided —
+        mirrors the real prompt's contract."""
+        has_jd = "(none provided" not in user_content
+        return {
+            "strengths": [
+                "'Built Kafka pipelines processing 2M events/day' leads with scale."
+            ],
+            "issues": [{
+                "category": "impact",
+                "detail": "'Mentored two junior engineers' states an activity, not an outcome.",
+                "fix": "Add the result: 'Mentored two junior engineers to independent on-call rotation in 3 months.'",
+            }],
+            "missing_keywords": ["Kubernetes"] if has_jd else [],
+            "summary": "Solid backend resume with real quantified wins; the "
+                       "mentoring and infra bullets need outcomes to earn a "
+                       "senior screen.",
+        }
+
+    def _mock_tailored_resume(self) -> dict:
+        """Honest tailoring of the mock extraction: same employers, titles,
+        and dates (so enforce_honesty passes clean), one rephrase, one
+        [METRIC] placeholder, one cannot-honestly-claim warning."""
+        structured = self._mock_resume_extraction()
+        structured["work"][0]["highlights"] = [
+            "Built Kafka event pipelines processing 2M events/day across 3 services",
+            "Cut p99 latency 40% by rewriting the consumer group logic",
+            "Mentored two junior engineers, reducing onboarding time by [METRIC]%",
+        ]
+        return {
+            "resume": structured,
+            "changes": [
+                {"kind": "rephrased", "where": "work[0].highlights[0]",
+                 "what": "Named event pipelines explicitly to mirror the JD's streaming vocabulary."},
+                {"kind": "placeholder", "where": "work[0].highlights[2]",
+                 "what": "Added a [METRIC] placeholder for the mentoring outcome."},
+            ],
+            "warnings": [
+                "Cannot honestly claim Kubernetes — no supporting experience on the resume.",
+                "[METRIC] in work[0].highlights[2] needs your real onboarding figure.",
             ],
         }
 

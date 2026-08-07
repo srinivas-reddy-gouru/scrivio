@@ -14,3 +14,4 @@ uvicorn[standard]
 pytest
 pypdf
 python-docx
+fpdf2

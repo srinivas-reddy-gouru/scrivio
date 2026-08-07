@@ -603,6 +603,141 @@ class JobScorecard(BaseModel):
 InterviewSummary.model_rebuild()
 
 
+# ── Resume studio models ─────────────────────────────────────────────
+# The structured resume uses JSON Resume-standard section and field names
+# (jsonresume.org) — the open format Reactive Resume and its ecosystem
+# import/export. Everything downstream (ATS checks, tailoring, DOCX/MD/
+# JSON rendering) operates on this structure, never on raw text.
+
+class ResumeBasics(BaseModel):
+    name: str = Field(default="", description="Full name exactly as written.")
+    label: str = Field(default="", description="Professional headline, e.g. 'Senior Backend Engineer'.")
+    email: str = ""
+    phone: str = ""
+    url: str = ""
+    location: str = ""
+    summary: str = Field(default="", description="Professional summary verbatim from the resume; empty if absent.")
+
+
+class ResumeWorkItem(BaseModel):
+    name: str = Field(default="", description="Employer name exactly as written.")
+    position: str = Field(default="", description="Job title exactly as written.")
+    startDate: str = Field(default="", description="As written, e.g. 'Jan 2022'. Empty if absent.")
+    endDate: str = Field(default="", description="As written, e.g. 'Present'. Empty if absent.")
+    summary: str = ""
+    highlights: list[str] = Field(
+        default_factory=list,
+        description="Bullet points verbatim, one per entry.",
+    )
+
+
+class ResumeEducationItem(BaseModel):
+    institution: str = ""
+    area: str = Field(default="", description="Field of study.")
+    studyType: str = Field(default="", description="Degree type, e.g. 'B.Tech'.")
+    startDate: str = ""
+    endDate: str = ""
+    score: str = ""
+
+
+class ResumeSkill(BaseModel):
+    name: str = Field(default="", description="Skill group name, e.g. 'Languages'.")
+    keywords: list[str] = Field(default_factory=list)
+
+
+class ResumeProject(BaseModel):
+    name: str = ""
+    description: str = ""
+    url: str = ""
+    highlights: list[str] = Field(default_factory=list)
+
+
+class StructuredResume(BaseModel):
+    """Tool schema for submit_resume_extraction (JSON Resume shape)."""
+    basics: ResumeBasics = Field(default_factory=ResumeBasics)
+    work: list[ResumeWorkItem] = []
+    education: list[ResumeEducationItem] = []
+    skills: list[ResumeSkill] = []
+    projects: list[ResumeProject] = []
+    certificates: list[str] = []
+
+
+class AtsCheck(BaseModel):
+    """One deterministic, code-computed check — never LLM opinion."""
+    id: str
+    label: str
+    passed: bool
+    weight: int
+    detail: str
+
+
+class KeywordCoverage(BaseModel):
+    found: list[str] = []
+    missing: list[str] = []
+    percent: int = 0
+
+
+class AtsReport(BaseModel):
+    score: int  # 0-100; weighted checks, +30% keyword coverage when JD present
+    checks: list[AtsCheck] = []
+    keyword_coverage: KeywordCoverage | None = None
+
+
+class ResumeIssue(BaseModel):
+    category: Literal["impact", "clarity", "structure", "relevance", "red-flag"] = Field(
+        description="impact = weak/unquantified achievement; clarity = hard to parse; structure = organization; relevance = misaligned with the JD; red-flag = something a recruiter would question."
+    )
+    detail: str = Field(description="The issue, quoting the resume's own words.")
+    fix: str = Field(description="Concrete rewrite or action, not generic advice.")
+
+
+class ResumeReview(BaseModel):
+    """Tool schema for submit_resume_review."""
+    strengths: list[str] = Field(description="What genuinely works, quoting the resume.")
+    issues: list[ResumeIssue]
+    missing_keywords: list[str] = Field(
+        default_factory=list,
+        description="JD requirements the resume does not evidence, including semantic gaps (JD says Kubernetes, resume only says 'containers'). Empty when no JD was given.",
+    )
+    summary: str = Field(description="2-3 sentence recruiter's first impression.")
+
+
+ResumeChangeKind = Literal[
+    "rephrased", "reordered", "added-keyword", "condensed", "placeholder"
+]
+
+
+class ResumeChange(BaseModel):
+    kind: ResumeChangeKind
+    where: str = Field(description="Path in the structure, e.g. 'work[0].highlights[2]' or 'basics.summary'.")
+    what: str = Field(description="One sentence: what changed and why it serves the JD.")
+
+
+class TailoredResume(BaseModel):
+    """Tool schema for submit_tailored_resume."""
+    resume: StructuredResume
+    changes: list[ResumeChange] = []
+    warnings: list[str] = Field(
+        default_factory=list,
+        description="Honesty notes: keywords that could NOT be claimed truthfully, and every [METRIC] placeholder needing a real number from the candidate.",
+    )
+
+
+class ResumeDoc(BaseModel):
+    """Persisted resume-studio document (output/resumes/<id>.json)."""
+    resume_id: str
+    original_text: str
+    structured: StructuredResume | None = None
+    jd_text: str = ""
+    jd_label: str = ""  # "role @ company" when sourced from a saved job target
+    report: AtsReport | None = None
+    review: ResumeReview | None = None
+    tailored: TailoredResume | None = None
+    tailored_report: AtsReport | None = None  # before/after comparison
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class InterviewSession(BaseModel):
     session_id: str
     article_id: str | None = None  # None = topic-only session

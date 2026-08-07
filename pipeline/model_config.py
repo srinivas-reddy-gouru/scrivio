@@ -30,6 +30,9 @@ ROLES = (
     "sources",         # topic → official-docs domain resolution (tiny JSON call)
     "interviewer",     # interview-question + rubric generation (practice mode)
     "evaluator",       # grades candidate answers against the rubric
+    "resume_extract",  # resume text → JSON Resume structure (faithful mapping)
+    "resume_review",   # recruiter-lens resume critique — judgment, keep strong
+    "resume_tailor",   # JD-targeted rewrite — the honesty-critical call
 )
 
 # Model aliases — update these when Anthropic releases new models.
@@ -55,6 +58,9 @@ _PRESETS: dict[str, dict[str, str]] = {
         "sources":   _HAIKU,    # short factual lookup — Haiku is fine
         "interviewer": _SONNET, # question + rubric quality drives the feature
         "evaluator":   _SONNET, # grading is judgment; inflated scores defeat it
+        "resume_extract": _HAIKU,  # mechanical text→structure mapping
+        "resume_review":  _SONNET, # critique quality drives the feature
+        "resume_tailor":  _SONNET, # honesty guardrails need the strong model
     },
     "best": {
         "brief":     _SONNET,
@@ -70,6 +76,9 @@ _PRESETS: dict[str, dict[str, str]] = {
         "sources":   _SONNET,
         "interviewer": _SONNET,
         "evaluator":   _SONNET,
+        "resume_extract": _SONNET,
+        "resume_review":  _SONNET,
+        "resume_tailor":  _SONNET,
     },
     "fast": {
         "brief":     _HAIKU,    # acceptable quality loss for speed
@@ -85,6 +94,9 @@ _PRESETS: dict[str, dict[str, str]] = {
         "sources":   _HAIKU,
         "interviewer": _HAIKU,  # structured output; acceptable loss for speed
         "evaluator":   _SONNET, # never downgrade the grader
+        "resume_extract": _HAIKU,
+        "resume_review":  _SONNET, # never downgrade the critic
+        "resume_tailor":  _SONNET, # never downgrade the honesty-critical call
     },
 }
 
