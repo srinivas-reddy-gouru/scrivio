@@ -152,7 +152,14 @@ header {
 .metric-chip.filled { border-style: solid; border-color: var(--green); background: rgba(52,211,153,0.12); color: #14532D; }
 
 /* ── The rail ── */
-.rail { display: flex; flex-direction: column; gap: 0.9rem; position: sticky; top: 76px; }
+.rail { display: flex; flex-direction: column; gap: 0.9rem; }
+/* The primary action never scrolls away: it floats at the viewport's
+   bottom edge while the findings scroll behind it. */
+.rail .cta-panel {
+  position: sticky; bottom: 1rem; z-index: 10;
+  background: rgba(17,26,24,0.92); backdrop-filter: blur(8px);
+  box-shadow: 0 -8px 30px rgba(12,19,18,0.6), 0 4px 24px rgba(0,0,0,0.4);
+}
 .panel {
   background: var(--rail-bg); border: 1px solid var(--stroke);
   border-radius: 14px; padding: 1rem 1.15rem;
@@ -416,7 +423,7 @@ Requirements:
         </p>
       </div>
 
-      <div class="panel" style="border-color:rgba(32,184,205,0.35)">
+      <div class="panel cta-panel" style="border-color:rgba(32,184,205,0.35)">
         <button class="btn" style="width:100%" id="tailor-btn">Tailor it to this JD</button>
         <p style="font-size:0.72rem;color:var(--text-faint);margin-top:0.5rem;text-align:center">
           Rewrites honestly. Employers, titles, and dates cannot change.</p>
@@ -488,7 +495,7 @@ Requirements:
           They stay off the paper; address them in the cover letter or interview.</p>
       </div>
 
-      <div class="panel" style="border-color:rgba(32,184,205,0.35)">
+      <div class="panel cta-panel" style="border-color:rgba(32,184,205,0.35)">
         <button class="btn" style="width:100%" id="send-btn">Looks right, package it</button>
       </div>
     </aside>
