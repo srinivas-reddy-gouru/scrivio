@@ -68,7 +68,7 @@ async def extract_resume(text: str, client, preset: str = "balanced") -> Structu
         messages=[{"role": "user", "content": f"resume_text:\n{text}"}],
     )
     tool_use = next(b for b in response.content if b.type == "tool_use")
-    return StructuredResume.model_validate(tool_use.input)
+    return scrub_structure_dashes(StructuredResume.model_validate(tool_use.input))
 
 
 async def review_resume(
@@ -128,7 +128,9 @@ async def tailor_resume(
     )
     tool_use = next(b for b in response.content if b.type == "tool_use")
     tailored = TailoredResume.model_validate(tool_use.input)
-    return enforce_honesty(structured, tailored)
+    tailored = enforce_honesty(structured, tailored)
+    scrub_structure_dashes(tailored.resume)
+    return tailored
 
 
 # ── Honesty post-guard ──────────────────────────────────────────────────────
@@ -191,6 +193,51 @@ def enforce_honesty(
 
     tailored.warnings = warnings
     return tailored
+
+
+# ── Dash policy ─────────────────────────────────────────────────────────────
+# No em/en dashes anywhere in resume output (user rule; they also read as
+# an AI tell). Context-aware replacement: digit ranges get a bare hyphen
+# ("2015-2019"), clause-break em dashes get a spaced hyphen, everything
+# is normalized so no double spaces remain. Applied at every chokepoint
+# where text enters a structure: extraction, tailoring, JSON import.
+
+_DIGIT_RANGE_DASH_RE = re.compile(r"(?<=\d)\s*[–—]\s*(?=\d)")
+_ANY_DASH_RE = re.compile(r"\s*[–—―]\s*")
+
+
+def _clean_dashes(text: str) -> str:
+    if "–" not in text and "—" not in text and "―" not in text:
+        return text
+    text = _DIGIT_RANGE_DASH_RE.sub("-", text)
+    text = _ANY_DASH_RE.sub(" - ", text)
+    return re.sub(r" {2,}", " ", text).strip()
+
+
+def scrub_structure_dashes(s: StructuredResume) -> StructuredResume:
+    """Strip em/en dashes from every text field, in place."""
+    b = s.basics
+    b.name, b.label, b.summary, b.location = (
+        _clean_dashes(b.name), _clean_dashes(b.label),
+        _clean_dashes(b.summary), _clean_dashes(b.location),
+    )
+    for w in s.work:
+        w.name, w.position = _clean_dashes(w.name), _clean_dashes(w.position)
+        w.startDate, w.endDate = _clean_dashes(w.startDate), _clean_dashes(w.endDate)
+        w.summary = _clean_dashes(w.summary)
+        w.highlights = [_clean_dashes(h) for h in w.highlights]
+    for e in s.education:
+        e.institution, e.area = _clean_dashes(e.institution), _clean_dashes(e.area)
+        e.studyType, e.score = _clean_dashes(e.studyType), _clean_dashes(e.score)
+        e.startDate, e.endDate = _clean_dashes(e.startDate), _clean_dashes(e.endDate)
+    for sk in s.skills:
+        sk.name = _clean_dashes(sk.name)
+        sk.keywords = [_clean_dashes(k) for k in sk.keywords]
+    for p in s.projects:
+        p.name, p.description = _clean_dashes(p.name), _clean_dashes(p.description)
+        p.highlights = [_clean_dashes(h) for h in p.highlights]
+    s.certificates = [_clean_dashes(c) for c in s.certificates]
+    return s
 
 
 # ── [METRIC] placeholder filling ────────────────────────────────────────────
@@ -314,7 +361,7 @@ def from_jsonresume(data: dict) -> StructuredResume:
             certs.append(str(c["name"]))
         elif isinstance(c, str) and c:
             certs.append(c)
-    return StructuredResume(
+    return scrub_structure_dashes(StructuredResume(
         basics=basics,
         work=[ResumeWorkItem.model_validate(w) for w in data.get("work") or []],
         education=[
@@ -323,14 +370,14 @@ def from_jsonresume(data: dict) -> StructuredResume:
         skills=[ResumeSkill.model_validate(k) for k in data.get("skills") or []],
         projects=[ResumeProject.model_validate(p) for p in data.get("projects") or []],
         certificates=certs,
-    )
+    ))
 
 
 # ── Rendering (pure functions, no LLM) ──────────────────────────────────────
 
 def _date_range(start: str, end: str) -> str:
     if start and end:
-        return f"{start} – {end}"
+        return f"{start} - {end}"
     return start or end or ""
 
 
@@ -348,7 +395,7 @@ def render_markdown(s: StructuredResume) -> str:
     if s.work:
         lines += ["", "## Experience"]
         for w in s.work:
-            heading = " — ".join(p for p in (w.position, w.name) if p)
+            heading = ", ".join(p for p in (w.position, w.name) if p)
             lines += ["", f"### {heading}" if heading else "### Role"]
             dates = _date_range(w.startDate, w.endDate)
             if dates:
@@ -369,7 +416,7 @@ def render_markdown(s: StructuredResume) -> str:
         lines += ["", "## Education"]
         for e in s.education:
             degree = " in ".join(p for p in (e.studyType, e.area) if p)
-            heading = " — ".join(p for p in (degree, e.institution) if p)
+            heading = ", ".join(p for p in (degree, e.institution) if p)
             lines += ["", f"### {heading}" if heading else "### Education"]
             tail = " · ".join(
                 p for p in (_date_range(e.startDate, e.endDate), e.score) if p
@@ -406,7 +453,7 @@ def render_docx(s: StructuredResume) -> bytes:
     if s.work:
         doc.add_heading("Experience", level=1)
         for w in s.work:
-            heading = " — ".join(p for p in (w.position, w.name) if p)
+            heading = ", ".join(p for p in (w.position, w.name) if p)
             doc.add_heading(heading or "Role", level=2)
             dates = _date_range(w.startDate, w.endDate)
             if dates:
@@ -427,7 +474,7 @@ def render_docx(s: StructuredResume) -> bytes:
         doc.add_heading("Education", level=1)
         for e in s.education:
             degree = " in ".join(p for p in (e.studyType, e.area) if p)
-            heading = " — ".join(p for p in (degree, e.institution) if p)
+            heading = ", ".join(p for p in (degree, e.institution) if p)
             doc.add_heading(heading or "Education", level=2)
             tail = " · ".join(
                 p for p in (_date_range(e.startDate, e.endDate), e.score) if p
@@ -460,7 +507,7 @@ def _pdf_safe(text: str) -> str:
     resumes actually contain for renderable equivalents rather than
     embedding a font (keeps the dependency footprint tiny)."""
     replacements = {
-        "\u2013": _PDF_ENDASH, "\u2014": _PDF_ENDASH,
+        "\u2013": "-", "\u2014": "-",
         "\u2022": _PDF_BULLET, "\u00b7": "|",
         "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
         "\u2026": "...", "\u00a0": " ", "\u2192": "->",
@@ -548,7 +595,7 @@ def render_pdf(s: StructuredResume) -> bytes:
     if s.work:
         section("Experience")
         for i, w in enumerate(s.work):
-            heading = " \u2014 ".join(p for p in (w.position, w.name) if p)
+            heading = ", ".join(p for p in (w.position, w.name) if p)
             line(heading or "Role", style="B", size=10.5, before=2.6 if i else 0)
             dates = _date_range(w.startDate, w.endDate)
             if dates:
@@ -574,7 +621,7 @@ def render_pdf(s: StructuredResume) -> bytes:
         section("Education")
         for i, e in enumerate(s.education):
             degree = " in ".join(p for p in (e.studyType, e.area) if p)
-            heading = " \u2014 ".join(p for p in (degree, e.institution) if p)
+            heading = ", ".join(p for p in (degree, e.institution) if p)
             line(heading or "Education", style="B", size=10.5, before=2 if i else 0)
             tail = "  |  ".join(
                 p for p in (_date_range(e.startDate, e.endDate), e.score) if p

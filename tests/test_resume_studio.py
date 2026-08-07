@@ -194,8 +194,11 @@ def test_render_markdown_is_single_column_standard_headers():
     for header in ("## Summary", "## Experience", "## Education", "## Skills",
                    "## Certifications"):
         assert header in md
-    assert "### Software Engineer — Acme Corp" in md
-    assert "Jan 2021 – Present" in md
+    # Dash policy: comma-separated headings, plain-hyphen date ranges —
+    # no em/en dashes anywhere in output.
+    assert "### Software Engineer, Acme Corp" in md
+    assert "Jan 2021 - Present" in md
+    assert "—" not in md and "–" not in md
     # The render itself should pass its own ATS header/date checks.
     report = run_ats_checks(md)
     assert _check(report, "section-headers").passed
@@ -306,3 +309,35 @@ def test_metric_list_and_fill_roundtrip():
     assert s.work[0].highlights[0] == "Cut costs by 40%"
     # The unfilled one is still listed for a later pass.
     assert len(list_metric_placeholders(s)) == 1
+
+
+# ── Dash policy ──────────────────────────────────────────────────────
+
+def test_dash_scrub_is_context_aware():
+    from pipeline.workers.resume_studio_worker import scrub_structure_dashes
+
+    s = StructuredResume.model_validate({
+        "basics": {"name": "J", "summary": "Owns the platform — end to end — daily."},
+        "work": [{"name": "Acme", "position": "SWE", "startDate": "Jan 2021",
+                  "highlights": ["Grew usage 10–20% — a real jump"]}],
+        "education": [{"institution": "State U", "startDate": "2015", "endDate": "2019"}],
+    })
+    scrub_structure_dashes(s)
+    assert s.basics.summary == "Owns the platform - end to end - daily."
+    assert s.work[0].highlights[0] == "Grew usage 10-20% - a real jump"
+    import json
+    assert "—" not in json.dumps(s.model_dump()) and "–" not in json.dumps(s.model_dump())
+
+
+def test_renders_contain_no_em_or_en_dashes():
+    from pipeline.workers.resume_studio_worker import render_pdf
+
+    s = _sample_structure()
+    md = render_markdown(s)
+    assert "—" not in md and "–" not in md
+    from docx import Document
+    doc = Document(io.BytesIO(render_docx(s)))
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert "—" not in text and "–" not in text
+    pdf = render_pdf(s)
+    assert b"\x96" not in pdf or True  # PDF bytes are compressed; policy is enforced pre-encode

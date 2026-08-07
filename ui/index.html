@@ -776,11 +776,11 @@
         </div>
         <h3 class="font-display font-bold text-lg mb-2">Resume studio</h3>
         <p class="text-sm leading-relaxed mb-4" style="color:var(--text-dim)">
-          A transparent ATS readiness report — every point explained — then an honest rewrite tailored to the job description.
+          A transparent ATS readiness report, every point explained, then an honest rewrite tailored to the job description.
         </p>
         <ul class="text-xs space-y-1.5 mb-5 text-left" style="color:var(--text-faint)">
           <li>✓ Explainable checks, not a magic number</li>
-          <li>✓ Tailors honestly — never invents experience</li>
+          <li>✓ Tailors honestly, never invents experience</li>
           <li>✓ PDF, Word, Markdown &amp; JSON export</li>
         </ul>
         <span class="btn-primary text-sm w-full justify-center">Fix my resume</span>
@@ -1366,14 +1366,14 @@
         Make your resume <span class="grad-text">earn the screen</span>
       </h1>
       <p class="text-sm mt-3" style="color:var(--text-dim)">
-        An explainable ATS report — every point accounted for — then an honest rewrite tailored to the JD. Nothing invented, ever.
+        An explainable ATS report, every point accounted for, then an honest rewrite tailored to the JD. Nothing invented, ever.
       </p>
     </div>
 
     <!-- Setup -->
     <div class="card px-6 py-6 mb-6 rise-in" style="animation-delay:.06s" id="resume-setup-card">
       <div class="mb-4">
-        <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Resume * <span class="normal-case font-normal" style="color:var(--text-faint)">— PDF, DOCX, TXT, JSON Resume, or paste</span></label>
+        <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Resume * <span class="normal-case font-normal" style="color:var(--text-faint)">PDF, DOCX, TXT, JSON Resume, or paste</span></label>
         <div class="flex items-center gap-3 mb-2 flex-wrap">
           <label class="btn-outline text-sm cursor-pointer">
             <input id="resume-file" type="file" accept=".pdf,.docx,.txt,.md,.json" class="hidden" />
@@ -1385,11 +1385,11 @@
       </div>
 
       <div class="mb-4">
-        <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Target job <span class="normal-case font-normal" style="color:var(--text-faint)">— optional, unlocks keyword match + tailoring</span></label>
+        <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Target job <span class="normal-case font-normal" style="color:var(--text-faint)">optional, unlocks keyword match + tailoring</span></label>
         <select id="resume-jd-profile" class="q-input w-full text-sm mb-2">
           <option value="">No saved job target</option>
         </select>
-        <input id="resume-jd-url" type="text" class="q-input w-full text-sm mb-2" placeholder="https://… (optional — fetches the posting)" />
+        <input id="resume-jd-url" type="text" class="q-input w-full text-sm mb-2" placeholder="https://… (optional: fetches the posting)" />
         <textarea id="resume-jd" rows="4" class="q-input w-full text-sm" placeholder="…or paste the job description here"></textarea>
       </div>
 
@@ -1414,7 +1414,7 @@
         <h3 class="font-display font-bold text-sm">Past reports</h3>
       </div>
       <div id="resume-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
-      <p id="resume-list-empty" class="hidden text-sm text-center py-8" style="color:var(--text-faint)">No reports yet — check your first resume above.</p>
+      <p id="resume-list-empty" class="hidden text-sm text-center py-8" style="color:var(--text-faint)">No reports yet. Check your first resume above.</p>
     </div>
   </section>
 
@@ -3422,7 +3422,7 @@
   const _PROGRESS_COPY = {
     analyze: {
       title: 'Analyzing your resume',
-      done1: 'ATS checklist & keyword match', done1sub: 'computed instantly — the report below is live',
+      done1: 'ATS checklist & keyword match', done1sub: 'computed instantly; the report below is live',
       stage2: 'Structure mapping & recruiter review',
       stage2sub: 'two AI passes running in parallel',
     },
@@ -3430,7 +3430,7 @@
       title: 'Tailoring to the job description',
       done1: 'Current resume & review loaded', done1sub: 'the rewrite starts from your real structure',
       stage2: 'Honest rewrite',
-      stage2sub: 'rephrasing and reordering — never inventing',
+      stage2sub: 'rephrasing and reordering, never inventing',
     },
   };
 
@@ -3723,21 +3723,21 @@
     if (analyzing) {
       heroActions = `<span class="text-xs" style="color:var(--text-faint)">Downloads and tailoring unlock when the analysis above finishes.</span>`;
     } else if (!doc.structured) {
-      heroActions = `<span class="text-xs" style="color:var(--text-faint)">Downloads unavailable — structure extraction failed.</span>`;
+      heroActions = `<span class="text-xs" style="color:var(--text-faint)">Downloads unavailable: structure extraction failed.</span>`;
     } else if (doc.tailored) {
       heroActions = `
         <div class="flex items-center gap-2 flex-wrap">
           <button type="button" id="resume-jump-tailored" class="btn-primary text-sm">↓ Your tailored resume is below</button>
           ${_downloadBar(doc.resume_id, 'original', { primary: false })}
         </div>
-        <p class="text-xs mt-2" style="color:var(--text-faint)">These buttons download the ORIGINAL — the tailored version has its own downloads below.</p>`;
+        <p class="text-xs mt-2" style="color:var(--text-faint)">These buttons download the ORIGINAL. The tailored version has its own downloads below.</p>`;
     } else if (canTailor) {
       heroActions = `
         <div class="flex items-center gap-2 flex-wrap">
-          <button type="button" id="resume-tailor-btn" class="btn-primary text-sm">✨ Tailor to this JD — next step</button>
+          <button type="button" id="resume-tailor-btn" class="btn-primary text-sm">✨ Tailor to this JD (next step)</button>
           ${_downloadBar(doc.resume_id, 'original', { primary: false })}
         </div>
-        <p id="resume-tailor-status" class="text-xs mt-2" style="color:var(--text-dim)">Rewrites honestly for the JD — never invents experience. Downloads here are the un-tailored original.</p>`;
+        <p id="resume-tailor-status" class="text-xs mt-2" style="color:var(--text-dim)">Rewrites honestly for the JD, never invents experience. Downloads here are the un-tailored original.</p>`;
     } else {
       heroActions = `
         ${_downloadBar(doc.resume_id, 'original')}
@@ -3749,9 +3749,9 @@
         <div class="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
           ${_resumeScoreRing(report.score, (cov ? '70% checks + 30% keywords' : 'weighted checks') + (analyzing ? ' · provisional' : ''))}
           <div class="min-w-0 flex-1 text-center sm:text-left">
-            <h3 class="font-display font-bold text-lg">ATS readiness${doc.jd_label ? ` — vs ${escapeHtml(doc.jd_label)}` : ''}</h3>
+            <h3 class="font-display font-bold text-lg">ATS readiness${doc.jd_label ? ` vs ${escapeHtml(doc.jd_label)}` : ''}</h3>
             <p class="text-sm mt-1 font-semibold" style="color:${atsColor(report.score)}">${verdictLine}${analyzing ? ' <span class="font-normal" style="color:var(--text-faint)">(provisional)</span>' : ''}</p>
-            <p class="text-xs mt-1" style="color:var(--text-faint)">Every point below is a rule you can verify — no black box${doc.status !== 'ready' ? '' : '; the recruiter’s read adds the judgment layer'}.</p>
+            <p class="text-xs mt-1" style="color:var(--text-faint)">Every point below is a rule you can verify: no black box${doc.status !== 'ready' ? '' : '; the recruiter’s read adds the judgment layer'}.</p>
             <div class="mt-4">${heroActions}</div>
           </div>
         </div>
@@ -3765,13 +3765,13 @@
         <span class="flex-shrink-0 mt-0.5 text-sm">⏳</span>
         <div class="min-w-0">
           <span class="text-sm font-semibold" style="color:var(--text-dim)">${label}</span>
-          <p class="text-xs mt-0.5" style="color:var(--text-faint)">Checked once structure mapping finishes — may adjust the score.</p>
+          <p class="text-xs mt-0.5" style="color:var(--text-faint)">Checked once structure mapping finishes; may adjust the score.</p>
         </div>
       </div>`).join('') : '';
 
     const checklistCard = `
       <div class="card px-6 py-5 mb-4">
-        <p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-faint)">The checklist — fixes first, biggest weight first</p>
+        <p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-faint)">The checklist: fixes first, biggest weight first</p>
         ${checkRows}${pendingRows}
       </div>`;
 
@@ -3792,7 +3792,7 @@
       </div>` : doc.status === 'analyzing' ? `
       <div class="card px-6 py-5 mb-4" style="border-style:dashed">
         <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--text-faint)">Recruiter's read</p>
-        <p class="text-sm" style="color:var(--text-dim)">Being written now — watch the progress bar above. The checklist is already real; two structure checks join when mapping finishes.</p>
+        <p class="text-sm" style="color:var(--text-dim)">Being written now; watch the progress bar above. The checklist is already real; two structure checks join when mapping finishes.</p>
       </div>` : doc.status === 'error' ? `
       <div class="card px-6 py-5 mb-4" style="border-color:rgba(248,113,113,0.4)">
         <p class="text-sm" style="color:#fca5a5">${escapeHtml(doc.error || 'The review step failed.')}</p>
@@ -3899,7 +3899,7 @@
 
     const warningsHtml = t.warnings.length ? `
       <div class="mt-4 p-4 rounded-xl" style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.3)">
-        <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:#fbbf24">Honesty notes — read before sending</p>
+        <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:#fbbf24">Honesty notes: read before sending</p>
         ${t.warnings.map(w => `<p class="text-xs py-0.5 leading-relaxed" style="color:var(--text-dim)">• ${escapeHtml(w).replace(/\[METRIC\]/g, '<mark style="background:rgba(251,191,36,0.25);color:#fbbf24;padding:0 4px;border-radius:3px;font-weight:600">[METRIC]</mark>')}</p>`).join('')}
       </div>` : '';
 
@@ -3907,7 +3907,7 @@
       <div class="flex items-start justify-between flex-wrap gap-4 mb-5">
         <div>
           <h3 class="font-display font-bold">Tailored resume</h3>
-          <p class="text-xs mt-1" style="color:var(--text-faint)">Reorganized and rephrased for the JD — employers, titles, and dates untouched by design.</p>
+          <p class="text-xs mt-1" style="color:var(--text-faint)">Reorganized and rephrased for the JD. Employers, titles, and dates untouched by design.</p>
         </div>
         ${before != null && after != null ? `
           <div class="flex items-center gap-2">
@@ -3918,7 +3918,7 @@
       </div>
       ${occ.length ? `
       <div class="p-4 sm:p-5 rounded-xl mb-5" style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.35)">
-        <p class="text-sm font-bold mb-1" style="color:#fbbf24">Finish it — ${occ.length} number${occ.length > 1 ? 's' : ''} to fill</p>
+        <p class="text-sm font-bold mb-1" style="color:#fbbf24">Finish it: ${occ.length} number${occ.length > 1 ? 's' : ''} to fill</p>
         <p class="text-xs mb-3" style="color:var(--text-dim)">The tailor never invents your metrics. Type the real figures below (leave blanks for later) and every download comes out finished.</p>
         ${occ.map((o, i) => `
           <div class="flex items-center gap-2 mb-2 flex-wrap">
@@ -3938,7 +3938,7 @@
       ${warningsHtml}
       <div class="mt-5 pt-4" style="border-top:1px solid var(--stroke)">
         ${_downloadBar(doc.resume_id, 'tailored', occ.length ? { warn: `${occ.length} [METRIC] to fill` } : {})}
-        ${occ.length ? '<p class="text-xs mt-2" style="color:var(--text-faint)">Fill your numbers in the amber box above — downloads include the placeholders until you do.</p>' : ''}
+        ${occ.length ? '<p class="text-xs mt-2" style="color:var(--text-faint)">Fill your numbers in the amber box above. Downloads include the placeholders until you do.</p>' : ''}
       </div>`;
     el.classList.remove('hidden');
     if ($('resume-fill-save')) $('resume-fill-save').addEventListener('click', _saveResumeMetrics);
