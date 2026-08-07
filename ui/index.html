@@ -1399,8 +1399,11 @@
       </div>
     </div>
 
-    <!-- Report -->
-    <div id="resume-report" class="hidden card px-6 py-6 mb-6" style="border-color:rgba(32,184,205,0.35)"></div>
+    <!-- Live progress (analyze / tailor) — always at the top, impossible to miss -->
+    <div id="resume-progress" class="hidden card px-6 py-5 mb-6" style="border-color:rgba(32,184,205,0.45)"></div>
+
+    <!-- Report: a stack of focused cards (hero + checklist + keywords + review) -->
+    <div id="resume-report" class="hidden mb-6"></div>
 
     <!-- Tailored -->
     <div id="resume-tailored" class="hidden card px-6 py-6 mb-6" style="border-color:rgba(52,211,153,0.35)"></div>
@@ -3388,6 +3391,20 @@
   let _resumeFile = null;   // { b64, filename } from the upload input
   let _resumeDoc = null;    // the ResumeDoc currently on screen
   let _resumeWatch = null;  // { poll, clock, startedAt } while analyzing/tailoring
+  // Expected durations (seconds) for the progress bar — provider-aware,
+  // refreshed from /settings when the studio opens. Estimates, labeled so.
+  let _resumeEst = { analyze: 75, tailor: 110 };
+
+  async function _refreshResumeEstimates() {
+    try {
+      const r = await fetch('/settings');
+      if (!r.ok) return;
+      const s = await r.json();
+      _resumeEst = s.resolved_provider === 'claude-cli'
+        ? { analyze: 90, tailor: 130 }   // process spawn + subscription pace
+        : { analyze: 30, tailor: 50 };   // direct API
+    } catch (_) { /* keep defaults */ }
+  }
 
   function _stopResumeWatch() {
     if (_resumeWatch) {
@@ -3397,34 +3414,100 @@
     }
   }
 
-  function _fmtElapsed(startedAt) {
-    const s = Math.floor((Date.now() - startedAt) / 1000);
+  function _fmtSecs(total) {
+    const s = Math.max(0, Math.floor(total));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
-  // Poll the doc while a background phase runs; tick an elapsed clock so
-  // the wait is never silent. kind: 'analyze' | 'tailor'.
+  const _PROGRESS_COPY = {
+    analyze: {
+      title: 'Analyzing your resume',
+      done1: 'ATS checklist & keyword match', done1sub: 'computed instantly — the report below is live',
+      stage2: 'Structure mapping & recruiter review',
+      stage2sub: 'two AI passes running in parallel',
+    },
+    tailor: {
+      title: 'Tailoring to the job description',
+      done1: 'Current resume & review loaded', done1sub: 'the rewrite starts from your real structure',
+      stage2: 'Honest rewrite',
+      stage2sub: 'rephrasing and reordering — never inventing',
+    },
+  };
+
+  function _showResumeProgress(kind) {
+    const c = _PROGRESS_COPY[kind];
+    const est = _resumeEst[kind];
+    $('resume-progress').innerHTML = `
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <h3 class="font-display font-bold text-sm flex items-center gap-2.5">
+          <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:var(--accent-text);animation:pulseGlow 1.4s ease-in-out infinite"></span>
+          ${c.title}
+        </h3>
+        <span class="text-sm font-mono-ui font-semibold" style="color:var(--accent-text)">
+          <span id="resume-progress-elapsed">0:00</span>
+          <span style="color:var(--text-faint)"> / ~${_fmtSecs(est)} est.</span>
+        </span>
+      </div>
+      <div style="height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden">
+        <div id="resume-progress-bar" style="height:100%;width:2%;border-radius:4px;background:var(--grad);transition:width 1s linear"></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+        <div class="flex items-start gap-2">
+          <span class="flex-shrink-0 mt-0.5 font-bold text-sm" style="color:#34d399">✓</span>
+          <div><p class="text-xs font-semibold" style="color:var(--text)">${c.done1}</p>
+          <p class="text-xs" style="color:var(--text-faint)">${c.done1sub}</p></div>
+        </div>
+        <div class="flex items-start gap-2">
+          <span id="resume-progress-stage2-mark" class="flex-shrink-0 mt-0.5 text-sm" style="color:var(--accent-text)">⏳</span>
+          <div><p class="text-xs font-semibold" style="color:var(--text)">${c.stage2}</p>
+          <p class="text-xs" style="color:var(--text-faint)">${c.stage2sub} · estimate depends on your provider</p></div>
+        </div>
+      </div>`;
+    $('resume-progress').classList.remove('hidden');
+    $('resume-progress').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function _tickResumeProgress(startedAt, kind) {
+    const elapsed = (Date.now() - startedAt) / 1000;
+    const el = $('resume-progress-elapsed');
+    if (el) el.textContent = _fmtSecs(elapsed);
+    const bar = $('resume-progress-bar');
+    // Time-based fill toward the estimate, capped at 94% — the last stretch
+    // belongs to reality, not the animation. Overruns hold at the cap.
+    if (bar) bar.style.width = Math.min(94, 2 + (elapsed / _resumeEst[kind]) * 92) + '%';
+  }
+
+  function _finishResumeProgress(ok) {
+    const bar = $('resume-progress-bar');
+    const mark = $('resume-progress-stage2-mark');
+    if (bar) bar.style.width = '100%';
+    if (mark) { mark.textContent = ok ? '✓' : '✗'; mark.style.color = ok ? '#34d399' : '#f87171'; }
+    setTimeout(() => $('resume-progress').classList.add('hidden'), ok ? 900 : 4000);
+  }
+
+  // Poll the doc while a background phase runs; the progress card above the
+  // report carries the bar + elapsed clock. kind: 'analyze' | 'tailor'.
   function _watchResumeDoc(resumeId, kind) {
     _stopResumeWatch();
     const startedAt = Date.now();
-    const clock = setInterval(() => {
-      const el = $(kind === 'analyze' ? 'resume-live-clock' : 'resume-tailor-clock');
-      if (el) el.textContent = _fmtElapsed(startedAt);
-    }, 1000);
+    _showResumeProgress(kind);
+    const clock = setInterval(() => _tickResumeProgress(startedAt, kind), 1000);
     const poll = setInterval(async () => {
       let doc;
       try {
         const r = await fetch(`/resumes/${resumeId}`);
-        if (!r.ok) { _stopResumeWatch(); return; }  // deleted mid-run
+        if (!r.ok) { _stopResumeWatch(); $('resume-progress').classList.add('hidden'); return; }
         doc = await r.json();
       } catch (_) { return; }  // transient network blip: keep polling
       if (kind === 'analyze' && doc.status !== 'analyzing') {
         _stopResumeWatch();
+        _finishResumeProgress(doc.status === 'ready');
         renderResumeReport(doc);
         loadResumeList();
       } else if (kind === 'tailor' && doc.tailor_status !== 'tailoring') {
         _stopResumeWatch();
         _resumeDoc = doc;
+        _finishResumeProgress(doc.tailor_status !== 'error');
         if (doc.tailor_status === 'error') {
           const status = $('resume-tailor-status');
           if (status) status.textContent = '✗ ' + (doc.tailor_error || 'Tailoring failed.');
@@ -3445,6 +3528,7 @@
     showView('resume');
     loadResumeList();
     loadResumeJobTargets();
+    _refreshResumeEstimates();
   }
 
   async function loadResumeJobTargets() {
@@ -3567,12 +3651,22 @@
 
   const _DL_ICON = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
 
-  function _downloadLinks(rid, version) {
-    const label = version === 'tailored' ? 'Download tailored' : 'Download';
-    return `<span class="text-xs font-semibold uppercase tracking-wider self-center mr-1" style="color:var(--text-faint)">${label}:</span>` +
-      ['pdf', 'docx', 'md', 'json'].map(fmt =>
-        `<a class="btn-outline text-xs" style="display:inline-flex;align-items:center;gap:5px" href="/resumes/${rid}/download?fmt=${fmt}&version=${version}" download="resume-${version}.${fmt}" title="Download the ${version} resume as ${{pdf: 'a PDF (what most application portals want)', docx: 'a Word document', md: 'Markdown', json: 'JSON Resume (imports into Reactive Resume)'}[fmt]}">${_DL_ICON}${{pdf: 'PDF', docx: 'Word', md: 'Markdown', json: 'JSON Resume'}[fmt]}</a>`
-      ).join('');
+  // Prominent export bar: PDF is the primary action (what portals want),
+  // the other formats sit beside it. Used in the hero card and the
+  // tailored view — downloads must never be something users hunt for.
+  function _downloadBar(rid, version) {
+    const titles = { pdf: 'a PDF (what most application portals want)', docx: 'a Word document', md: 'Markdown', json: 'JSON Resume (imports into Reactive Resume)' };
+    const labels = { pdf: 'Download PDF', docx: 'Word', md: 'Markdown', json: 'JSON Resume' };
+    const link = (fmt, cls) =>
+      `<a class="${cls}" style="display:inline-flex;align-items:center;gap:6px" href="/resumes/${rid}/download?fmt=${fmt}&version=${version}" download="resume-${version}.${fmt}" title="Download the ${version} resume as ${titles[fmt]}">${_DL_ICON}${labels[fmt]}</a>`;
+    return `
+      <div class="flex items-center gap-2 flex-wrap">
+        ${link('pdf', 'btn-primary text-sm')}
+        ${link('docx', 'btn-outline text-sm')}
+        ${link('md', 'btn-outline text-sm')}
+        ${link('json', 'btn-outline text-sm')}
+        ${version === 'tailored' ? '<span class="text-xs ml-1" style="color:var(--text-faint)">tailored version</span>' : ''}
+      </div>`;
   }
 
   function renderResumeReport(doc) {
@@ -3609,25 +3703,41 @@
 
     const review = doc.review;
     const CATEGORY_COLORS = { impact: '#fbbf24', clarity: '#60a5fa', structure: '#a78bfa', relevance: '#34d399', 'red-flag': '#f87171' };
-    // Live states: the LLM phase (structure + recruiter review) may still
-    // be running or may have failed — the deterministic report above is
-    // valid either way.
-    const liveHtml = doc.status === 'analyzing' ? `
-      <div class="mt-6 pt-5" style="border-top:1px solid var(--stroke)">
-        <div class="flex items-center gap-3">
-          <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:var(--accent-text);animation:pulseGlow 1.5s ease-in-out infinite"></span>
-          <p class="text-sm" style="color:var(--text-dim)">
-            The recruiter is reading your resume and mapping its structure…
-            <span id="resume-live-clock" class="font-mono-ui font-semibold" style="color:var(--accent-text)">0:00</span>
-          </p>
+
+    const failed = report.checks.filter(c => !c.passed).length;
+    const verdictLine = [
+      report.score >= 80 ? 'Strong shape' : report.score >= 60 ? 'Getting there' : 'Needs work',
+      failed ? `${failed} check${failed > 1 ? 's' : ''} to fix` : 'all checks pass',
+      cov ? `${cov.percent}% keyword match` : null,
+    ].filter(Boolean).join(' · ');
+    const downloadsHtml = doc.structured
+      ? _downloadBar(doc.resume_id, 'original')
+      : `<span class="text-xs" style="color:var(--text-faint)">${doc.status === 'analyzing' ? 'Downloads unlock when analysis finishes.' : 'Downloads unavailable — structure extraction failed.'}</span>`;
+
+    // Hero: score + verdict + the export bar, before anything scrolls.
+    const heroCard = `
+      <div class="card px-6 py-5 mb-4" style="border-color:rgba(32,184,205,0.35)">
+        <div class="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
+          ${_resumeScoreRing(report.score, cov ? '70% checks + 30% keywords' : 'weighted checks')}
+          <div class="min-w-0 flex-1 text-center sm:text-left">
+            <h3 class="font-display font-bold text-lg">ATS readiness${doc.jd_label ? ` — vs ${escapeHtml(doc.jd_label)}` : ''}</h3>
+            <p class="text-sm mt-1 font-semibold" style="color:${atsColor(report.score)}">${verdictLine}</p>
+            <p class="text-xs mt-1" style="color:var(--text-faint)">Every point below is a rule you can verify — no black box${doc.status !== 'ready' ? '' : '; the recruiter’s read adds the judgment layer'}.</p>
+            <div class="mt-4">${downloadsHtml}</div>
+          </div>
         </div>
-        <p class="text-xs mt-1.5 ml-5" style="color:var(--text-faint)">Usually 20–60s with an API key, 1–2 minutes on a subscription CLI. The checklist above is final — this adds the judgment layer.</p>
-      </div>` : doc.status === 'error' ? `
-      <div class="mt-6 p-4 rounded-xl" style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.3)">
-        <p class="text-sm" style="color:#fca5a5">${escapeHtml(doc.error || 'The review step failed.')}</p>
-      </div>` : '';
-    const reviewHtml = review ? `
-      <div class="mt-6 pt-5" style="border-top:1px solid var(--stroke)">
+      </div>`;
+
+    const checklistCard = `
+      <div class="card px-6 py-5 mb-4">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-faint)">The checklist — fixes first, biggest weight first</p>
+        ${checkRows}
+      </div>`;
+
+    const covCard = cov ? `<div class="card px-6 py-5 mb-4">${covHtml.replace('class="mt-5"', 'class=""')}</div>` : '';
+
+    const reviewCard = review ? `
+      <div class="card px-6 py-5 mb-4" style="border-color:rgba(32,184,205,0.35)">
         <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--accent-text)">Recruiter's read</p>
         <p class="text-sm leading-relaxed mb-4" style="color:var(--text)">${escapeHtml(review.summary)}</p>
         ${review.strengths.length ? `<p class="text-xs mb-3" style="color:#4ade80">✓ ${review.strengths.map(escapeHtml).join('<br/>✓ ')}</p>` : ''}
@@ -3638,40 +3748,33 @@
             <p class="text-xs mt-1" style="color:var(--text)"><span class="font-semibold" style="color:var(--accent-text)">Fix:</span> ${escapeHtml(i.fix)}</p>
           </div>`).join('')}
         ${review.missing_keywords.length ? `<p class="text-xs mt-3" style="color:var(--text-faint)">Also missing vs the JD: <span style="color:var(--text-dim)">${review.missing_keywords.map(escapeHtml).join(' · ')}</span></p>` : ''}
+      </div>` : doc.status === 'analyzing' ? `
+      <div class="card px-6 py-5 mb-4" style="border-style:dashed">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--text-faint)">Recruiter's read</p>
+        <p class="text-sm" style="color:var(--text-dim)">Being written now — watch the progress bar above. The checklist and score are already final.</p>
+      </div>` : doc.status === 'error' ? `
+      <div class="card px-6 py-5 mb-4" style="border-color:rgba(248,113,113,0.4)">
+        <p class="text-sm" style="color:#fca5a5">${escapeHtml(doc.error || 'The review step failed.')}</p>
       </div>` : '';
 
     const canTailor = !!doc.jd_text && !!doc.structured && doc.status === 'ready';
     const tailorHint = doc.status === 'analyzing'
       ? 'Available once the analysis above finishes.'
       : !doc.jd_text ? 'Add a job description above to unlock tailoring.'
-      : !doc.structured ? 'Unavailable — structure extraction failed.' : '';
-    const downloadsHtml = doc.structured
-      ? _downloadLinks(doc.resume_id, 'original')
-      : doc.status === 'analyzing'
-        ? '<span class="text-xs" style="color:var(--text-faint)">Downloads unlock when analysis finishes.</span>'
-        : '<span class="text-xs" style="color:var(--text-faint)">Downloads unavailable — structure extraction failed.</span>';
-    el.innerHTML = `
-      <div class="flex items-start justify-between flex-wrap gap-4 mb-5">
-        <div class="min-w-0">
-          <h3 class="font-display font-bold">ATS readiness${doc.jd_label ? ` — vs ${escapeHtml(doc.jd_label)}` : ''}</h3>
-          <p class="text-xs mt-1" style="color:var(--text-faint)">Every point below is a rule you can verify — no black box.</p>
+      : !doc.structured ? 'Unavailable — structure extraction failed.' : 'Rewrites honestly for this JD — never invents experience.';
+    const tailorCard = `
+      <div class="card px-6 py-5 mb-4">
+        <div class="flex items-center gap-3 flex-wrap">
+          <button type="button" id="resume-tailor-btn" class="btn-primary text-sm" ${canTailor ? '' : 'disabled'}>Tailor to this JD</button>
+          <span id="resume-tailor-status" class="text-sm" style="color:var(--text-dim)">${tailorHint}</span>
         </div>
-        <div class="flex items-center gap-2 flex-wrap">${downloadsHtml}</div>
-      </div>
-      <div class="flex flex-col sm:flex-row gap-6 items-start">
-        ${_resumeScoreRing(report.score, cov ? '70% checks + 30% keywords' : 'weighted checks')}
-        <div class="min-w-0 flex-1">${checkRows}</div>
-      </div>
-      ${covHtml}
-      ${liveHtml}
-      ${reviewHtml}
-      <div class="flex items-center gap-3 mt-6 pt-5" style="border-top:1px solid var(--stroke)">
-        <button type="button" id="resume-tailor-btn" class="btn-primary text-sm" ${canTailor ? '' : 'disabled'}>Tailor to this JD</button>
-        <span id="resume-tailor-status" class="text-sm" style="color:var(--text-dim)">${tailorHint}</span>
       </div>`;
+
+    el.innerHTML = heroCard + checklistCard + covCard + reviewCard + tailorCard;
     el.classList.remove('hidden');
     if (canTailor) $('resume-tailor-btn').addEventListener('click', runResumeTailor);
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (doc.status !== 'analyzing')  // while analyzing, the progress card owns the viewport
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   async function runResumeTailor() {
@@ -3682,12 +3785,8 @@
       const r = await fetch(`/resumes/${_resumeDoc.resume_id}/tailor`, { method: 'POST' });
       if (!r.ok) { const d = await r.json().catch(() => ({detail: r.statusText})); throw new Error(d.detail || `HTTP ${r.status}`); }
       _resumeDoc = await r.json();
-      // The rewrite runs in the background; keep the user company with a
-      // live clock until the poll sees it finish.
-      status.innerHTML =
-        'Rewriting honestly — nothing invented… ' +
-        '<span id="resume-tailor-clock" class="font-mono-ui font-semibold" style="color:var(--accent-text)">0:00</span>' +
-        ' <span style="color:var(--text-faint)">(up to ~2 min on a subscription CLI)</span>';
+      // The progress card (bar + elapsed) takes over from here.
+      status.textContent = 'Rewriting — progress above.';
       _watchResumeDoc(_resumeDoc.resume_id, 'tailor');
     } catch (err) {
       status.textContent = '✗ ' + err.message;
@@ -3740,13 +3839,14 @@
             <span class="px-2.5 py-1 rounded-full text-sm font-bold" style="color:${atsColor(after)};background:color-mix(in srgb, ${atsColor(after)} 12%, transparent)">${after}</span>
           </div>` : ''}
       </div>
+      <div class="mb-5">${_downloadBar(doc.resume_id, 'tailored')}</div>
       ${mdHtml ? `<div class="paper px-6 sm:px-8 py-7 mb-5"><article class="prose text-sm">${mdHtml}</article></div>` : ''}
       <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--text-faint)">What changed, and why</p>
       ${changesHtml || '<p class="text-xs" style="color:var(--text-faint)">No changes logged.</p>'}
       ${warningsHtml}
-      <div class="flex items-center gap-2 mt-5 flex-wrap">
-        ${_downloadLinks(doc.resume_id, 'tailored')}
-        <span class="text-xs ml-1" style="color:var(--text-faint)">Fill every [METRIC] with your real number before you send it.</span>
+      <div class="mt-5 pt-4" style="border-top:1px solid var(--stroke)">
+        ${_downloadBar(doc.resume_id, 'tailored')}
+        <p class="text-xs mt-2" style="color:var(--text-faint)">Fill every [METRIC] with your real number before you send it.</p>
       </div>`;
     el.classList.remove('hidden');
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
