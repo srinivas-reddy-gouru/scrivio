@@ -152,3 +152,79 @@ def test_generate_closing_max_tokens_is_small() -> None:
     asyncio.run(_generate_closing_section(plan, "A content", client))
 
     assert client.messages.calls[0]["max_tokens"] == 400
+
+
+# ── Code-fence protection through the polish pass ────────────────────────────
+# Eval evidence (matchup-20260807): the polish/refinement rewrites mangled
+# code-block indentation in every pipeline article. Code now bypasses the
+# LLM entirely: fences → markers → restored byte-identical.
+
+from pipeline.workers.humanization_worker import (  # noqa: E402
+    _protect_code_fences,
+    _restore_code_fences,
+    humanize_markdown,
+)
+
+_CODE_MD = """## Section
+
+Intro prose.
+
+```python
+def f():
+    if True:
+        return 1
+```
+
+Middle prose.
+
+```mermaid
+flowchart LR
+  A --> B
+```
+
+Closing prose.
+"""
+
+
+def test_protect_and_restore_roundtrip() -> None:
+    protected, blocks = _protect_code_fences(_CODE_MD)
+    assert len(blocks) == 2
+    assert "```" not in protected
+    assert "<!-- CODE:0 -->" in protected and "<!-- CODE:1 -->" in protected
+    assert _restore_code_fences(protected, blocks) == _CODE_MD
+
+
+def test_restore_logs_and_survives_dropped_marker() -> None:
+    protected, blocks = _protect_code_fences(_CODE_MD)
+    mangled = protected.replace("<!-- CODE:1 -->", "")  # model ate a marker
+    restored = _restore_code_fences(mangled, blocks)
+    assert "def f():" in restored          # surviving marker restored
+    assert "flowchart LR" not in restored  # dropped block is lost, not corrupted
+
+
+def test_polish_pass_cannot_touch_code() -> None:
+    """Even a hostile model that rewrites everything it sees cannot change
+    code: it never receives it. The mock returns its input with all prose
+    replaced — code must come back byte-identical."""
+    class _RewritingMessages(_MockMessages):
+        async def create(self, **kwargs):
+            self.calls.append(kwargs)
+            content = kwargs["messages"][-1]["content"]
+            body = content.split("article_markdown:\n", 1)[1]
+            # Hostile pass: de-indent every line (the observed failure mode),
+            # which would wreck any code it could reach.
+            wrecked = "\n".join(line.lstrip() for line in body.splitlines())
+            return SimpleNamespace(
+                content=[SimpleNamespace(text=wrecked)], stop_reason="end_turn",
+            )
+
+    client = _MockClient()
+    client.messages = _RewritingMessages("")
+    plan = _make_plan(["Section"])
+    result = asyncio.run(humanize_markdown(_CODE_MD, plan, client))
+    assert "    if True:\n        return 1" in result   # indentation intact
+    assert "flowchart LR" in result
+    # And the model genuinely never saw the code.
+    sent = client.messages.calls[0]["messages"][-1]["content"]
+    assert "def f():" not in sent
+    assert "protected_code: 2 fenced" in sent

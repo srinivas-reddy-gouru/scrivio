@@ -40,7 +40,7 @@ from pydantic import BaseModel
 # v9: engagement-mechanics voice canon, anti-flatten polisher, global-arc
 # planner, trust-tier changes — cached stage outputs from v8 prompts must
 # not mix with the new voice.
-_CACHE_VERSION = "v9"
+_CACHE_VERSION = "v10"
 
 _DEFAULT_CACHE_DIR = Path(".cache") / "article_pipeline"
 

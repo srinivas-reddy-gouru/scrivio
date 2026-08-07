@@ -141,13 +141,19 @@ A standalone version of the article pipeline ships as a Claude Code skill — no
 ## Development
 
 ```bash
-python3 -m pytest tests/ -q     # 388 tests, fully hermetic (no network, no keys)
+python3 -m pytest tests/ -q     # 403 tests, fully hermetic (no network, no keys)
 ```
 
 The suite is deliberately isolated from the host machine: mock LLM clients for every pipeline stage, and fixtures that neutralize the developer's own `.env` preferences, installed CLIs, and saved model overrides (all three have caused order-dependent failures before — see `tests/conftest.py`).
 
+## Measured, not asserted: the article matchup evals
+
+`python -m evals.matchup` runs the question that matters — **is the pipeline actually better than one prompt to the same model?** — as a blind experiment: same topics, both arms on your own subscription, position-swapped pairwise judging (a win must hold in both orders) by two independent judges (Claude strong tier + GPT-4o), with measured wall-clock and true LLM-call counts.
+
+The first run (Aug 2026, 3 topics) answered honestly: **the one-prompt baseline won 4 overall verdicts to 0** (2 ties), at ~1/10th the wall time and 1/40th the calls. The judges' reasons pointed at three specific defects, all since fixed: the polish pass was mangling code-block indentation (code is now swapped out for markers and restored byte-identical — the LLM never touches it), a formulaic zinger-per-section cadence (voice canon now forces varied section exits), and normative claims cited to SEO blogs when official docs were in evidence (the drafter now sees trust-ranked spans and must cite the most authoritative). The harness exists precisely so claims like "fixed" get re-measured instead of believed.
+
 ## Roadmap
 
+- Re-run the full 3-topic matchup after the code-protection/cadence/citation fixes; iterate until the pipeline earns its cost or gets simplified
 - **Coding rounds** for job interviews (designed: LLM-rubric-judged code editor, no execution sandbox in v1)
 - Live validation of the codex/gemini/qwen CLI specs against real binaries (specs follow their documented flags; drift is a one-line registry fix)
-- Article quality evals via the `evals/` harness

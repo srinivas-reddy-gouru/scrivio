@@ -1,4 +1,5 @@
 import logging
+import re
 
 from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
@@ -102,6 +103,42 @@ async def _generate_closing_section(plan: ArticlePlan, polished_so_far: str, cli
     return extract_response_text(response).strip()
 
 
+# ── Code-fence protection ────────────────────────────────────────────
+# Eval evidence (matchup-20260807): LLM rewrite passes mangle code-block
+# indentation (uniform one-space indents) and the damage shipped because
+# nothing gated it. Code is never the polisher's job — so it never sees
+# it: fenced blocks are swapped for markers before the call and restored
+# byte-identical after. Covers ``` code, mermaid, everything fenced.
+
+_FENCE_RE = re.compile(r"(?ms)^[ \t]*```[^\n]*\n.*?^[ \t]*```[ \t]*$")
+
+
+def _protect_code_fences(markdown: str) -> tuple[str, list[str]]:
+    blocks: list[str] = []
+
+    def _swap(match: re.Match) -> str:
+        blocks.append(match.group(0))
+        return f"<!-- CODE:{len(blocks) - 1} -->"
+
+    return _FENCE_RE.sub(_swap, markdown), blocks
+
+
+def _restore_code_fences(markdown: str, blocks: list[str]) -> str:
+    missing = []
+    for i, block in enumerate(blocks):
+        marker = f"<!-- CODE:{i} -->"
+        if marker in markdown:
+            markdown = markdown.replace(marker, block, 1)
+        else:
+            missing.append(i)
+    if missing:
+        logging.warning(
+            "Polisher dropped %d/%d protected code marker(s): %s — those "
+            "blocks are lost from this pass.", len(missing), len(blocks), missing,
+        )
+    return markdown
+
+
 def _format_critic_feedback(issues: list[CriticIssue]) -> str:
     """Render critic issues as instructions the humanizer can act on."""
     lines = []
@@ -137,13 +174,25 @@ async def humanize_markdown(
             "the rest of the article.)\n\n"
         )
 
+    protected_markdown, code_blocks = _protect_code_fences(markdown)
+    code_note = ""
+    if code_blocks:
+        code_note = (
+            f"protected_code: {len(code_blocks)} fenced code/diagram blocks "
+            "have been replaced with <!-- CODE:n --> markers. Code is not "
+            "yours to edit. Keep every marker on its own line exactly where "
+            "it belongs in the flow; never delete, reorder, duplicate, or "
+            "expand a marker.\n\n"
+        )
+
     user_content = (
         f"article_thesis: {thesis}\n"
         f"article_angle: {angle}\n"
         f"audience: {plan.request.audience_role}\n"
         f"explanation_level: {plan.request.explanation_level}\n\n"
         f"{feedback_block}"
-        f"article_markdown:\n{markdown}"
+        f"{code_note}"
+        f"article_markdown:\n{protected_markdown}"
     )
     # Cache the system prompt: on a critic-triggered second pass the humanizer
     # runs twice within 5 minutes; the second call pays only 10 % of the normal
@@ -175,7 +224,7 @@ async def humanize_markdown(
         closing = await _generate_closing_section(plan, text, client, preset)
         text = f"{text}\n\n{closing}"
 
-    return text
+    return _restore_code_fences(text, code_blocks)
 
 
 async def humanize_article(

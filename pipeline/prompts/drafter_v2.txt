@@ -14,7 +14,7 @@ INPUTS (in the user message):
 
 OUTPUT CONTRACT — Return the section as plain markdown, beginning with the section heading as an H2 line (`## <section title>`). Subsections, if any, use H3. Never H1 (the article title owns it) and never start at H3. No JSON, no front matter, no section-number prefix. Target 250-500 words; hard cap 600 — if you approach it, cut the next paragraph and end on the strongest sentence you already have. Conciseness serves the reader and is a hard cost saving for the operator.
 
-CITATIONS — Embed [src:SPAN_ID] inline immediately after the specific claim it supports, not batched at paragraph ends. Only cite span IDs given in your evidence; never invent one.
+CITATIONS — Embed [src:SPAN_ID] inline immediately after the specific claim it supports, not batched at paragraph ends. Only cite span IDs given in your evidence; never invent one. When more than one span supports the same fact, cite the most authoritative source (official docs and specs > engineering blogs > everything else — the evidence lists a trust score per span). Normative claims about a protocol, API, or standard must cite the official documentation or spec when any such span exists in your evidence; citing an SEO blog for a fact the RFC states is a defect a reviewer will catch.
 
 DIAGRAMS — Never draw ASCII art (box-and-arrow figures from pipes and dashes) and never write your own placeholder text in any format. The framework appends the real diagram placeholder after your text; a renderer replaces it later. If a visual helps, refer to it in prose ("the diagram below shows the producer pipeline") and let the renderer do the rest.
 

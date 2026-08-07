@@ -134,9 +134,13 @@ async def draft_section(
         claim for claim in plan.claims if str(claim.claim_id) in section.claim_ids
     ]
     claims_json = "[" + ",".join(claim.model_dump_json() for claim in claims) + "]"
+    # Trust-labeled and trust-sorted so the citation-authority rule in the
+    # prompt has the data it references: official docs surface first and
+    # each span carries its score.
     evidence_context = "\n".join(
-        f"[{span.span_id}] ({span.source_url})\n{span.content}\n---"
-        for span in spans
+        f"[{span.span_id}] ({span.source_url}, trust {span.trust_score:.2f})\n"
+        f"{span.content}\n---"
+        for span in sorted(spans, key=lambda s: s.trust_score, reverse=True)
     )
 
     # `article_outline` replaces `previous_summaries`: instead of waiting

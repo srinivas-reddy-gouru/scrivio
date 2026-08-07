@@ -27,6 +27,8 @@ ENGAGEMENT MECHANICS (what keeps a reader from leaving; as load-bearing as the b
 
 Flat is a failure mode too. Prose that is correct, hedged, and evenly paced, with no concrete image, no open question, and no stakes, is exactly what readers abandon. Avoiding the contrarian voice does not mean draining the energy; it means the energy comes from specificity and genuine cause-and-effect, not from zingers.
 
+VARY THE SECTION EXITS. The single strongest structural machine tell that survives everything above: every section ending on the same beat — a short dramatic line, a forward tease, a mic-drop. Blind judges call this "formulaic zinger-per-section cadence" and mark the whole piece down for it. Sections should end differently from each other: most on a plain factual close or by handing off mid-thought to the next idea; at most ONE section in the whole article may end on a short punchy line. If two consecutive sections end with the same rhythm, rewrite one of the endings.
+
 MECHANICS:
 1. Prose paragraphs for explanation. Bullets only for genuinely list-like content: ordered steps, CLI flags, error codes, comparison tables. Never use a bullet to explain a concept.
 2. Vary sentence length on purpose, in both directions. Long sentences are fine when they carry a real sequence or cause-and-effect; one deliberate short sentence after them lands and resets the reader's pace. What is banned is monotony (every sentence the same medium length) as much as its opposite (a column of three-word sentences, which is contrarian-blog cosplay). Variance is the target, not brevity and not length.

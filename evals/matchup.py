@@ -278,25 +278,51 @@ def _win_counts(verdicts: dict) -> dict:
     return counts
 
 
-async def run_matchup(topics: list[dict]) -> Path:
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out_dir = RESULTS_DIR / f"matchup-{stamp}"
+def _flush(out_dir: Path, rows: list[dict]) -> None:
+    """Write results after EVERY topic — a crash on topic N must never
+    lose the verdicts already paid for on topics 1..N-1."""
+    (out_dir / "raw.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
+    (out_dir / "report.md").write_text(_report(rows), encoding="utf-8")
+
+
+async def run_matchup(topics: list[dict], out_dir: Path | None = None) -> Path:
+    if out_dir is None:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        out_dir = RESULTS_DIR / f"matchup-{stamp}"
     out_dir.mkdir(parents=True, exist_ok=True)
-    rows = []
+    raw_path = out_dir / "raw.json"
+    rows = (
+        json.loads(raw_path.read_text(encoding="utf-8")) if raw_path.is_file() else []
+    )
+    done_ids = {row["topic"]["id"] for row in rows}
 
     for topic in topics:
+        if topic["id"] in done_ids:
+            print(f"=== {topic['id']} === already judged, skipping")
+            continue
         print(f"\n=== {topic['id']} ===")
-        print("  pipeline arm (full flow, live search)…")
-        pipeline = await run_pipeline_arm(topic)
-        print(f"    {pipeline['seconds']}s, {pipeline['llm_calls']} LLM calls")
-        print("  baseline arm (one prompt)…")
-        baseline = await run_baseline_arm(topic)
-        print(f"    {baseline['seconds']}s, {baseline['llm_calls']} LLM call")
+        pipeline_path = out_dir / f"{topic['id']}-pipeline.md"
+        baseline_path = out_dir / f"{topic['id']}-baseline.md"
 
-        (out_dir / f"{topic['id']}-pipeline.md").write_text(
-            pipeline["markdown"], encoding="utf-8")
-        (out_dir / f"{topic['id']}-baseline.md").write_text(
-            baseline["markdown"], encoding="utf-8")
+        if pipeline_path.is_file():  # crash recovery: article exists, verdict lost
+            print("  pipeline arm: reusing saved article")
+            pipeline = {"markdown": pipeline_path.read_text(encoding="utf-8"),
+                        "seconds": None, "llm_calls": None}
+        else:
+            print("  pipeline arm (full flow, live search)…")
+            pipeline = await run_pipeline_arm(topic)
+            print(f"    {pipeline['seconds']}s, {pipeline['llm_calls']} LLM calls")
+            pipeline_path.write_text(pipeline["markdown"], encoding="utf-8")
+
+        if baseline_path.is_file():
+            print("  baseline arm: reusing saved article")
+            baseline = {"markdown": baseline_path.read_text(encoding="utf-8"),
+                        "seconds": None, "llm_calls": 1}
+        else:
+            print("  baseline arm (one prompt)…")
+            baseline = await run_baseline_arm(topic)
+            print(f"    {baseline['seconds']}s, {baseline['llm_calls']} LLM call")
+            baseline_path.write_text(baseline["markdown"], encoding="utf-8")
 
         print("  judging (blind, both orders, all judges)…")
         verdicts = await judge_pair(
@@ -308,9 +334,8 @@ async def run_matchup(topics: list[dict]) -> Path:
             "pipeline_words": len(pipeline["markdown"].split()),
             "baseline_words": len(baseline["markdown"].split()),
         })
+        _flush(out_dir, rows)
 
-    (out_dir / "raw.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
-    (out_dir / "report.md").write_text(_report(rows), encoding="utf-8")
     print(f"\nreport: {out_dir / 'report.md'}")
     return out_dir
 
@@ -329,11 +354,15 @@ def _report(rows: list[dict]) -> str:
         t = row["topic"]
         lines.append(f"## {t['id']}")
         lines.append("")
+        def _cost(arm: dict) -> str:
+            seconds = arm.get("seconds")
+            calls = arm.get("llm_calls")
+            return (f"{seconds}s / {calls} calls" if seconds is not None
+                    else "recovered run (cost in log)")
+
         lines.append(
-            f"Cost: pipeline {row['pipeline']['seconds']}s / "
-            f"{row['pipeline']['llm_calls']} calls / {row['pipeline_words']}w — "
-            f"baseline {row['baseline']['seconds']}s / 1 call / "
-            f"{row['baseline_words']}w")
+            f"Cost: pipeline {_cost(row['pipeline'])} / {row['pipeline_words']}w — "
+            f"baseline {_cost(row['baseline'])} / {row['baseline_words']}w")
         lines.append("")
         lines.append("| axis | " + " | ".join(row["verdicts"].keys()) + " |")
         lines.append("|---" * (len(row["verdicts"]) + 1) + "|")
@@ -362,13 +391,21 @@ def _report(rows: list[dict]) -> str:
 
 
 def main() -> None:
-    wanted = set(sys.argv[1:])
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("topic_ids", nargs="*", help="subset of topic ids")
+    parser.add_argument("--dir", default=None,
+                        help="existing results dir to resume (reuses saved "
+                             "articles and already-judged topics)")
+    args = parser.parse_args()
+    wanted = set(args.topic_ids)
     topics = [t for t in MATCHUP_TOPICS if not wanted or t["id"] in wanted]
     if not topics:
         print(f"unknown topic id(s); known: {[t['id'] for t in MATCHUP_TOPICS]}",
               file=sys.stderr)
         raise SystemExit(2)
-    asyncio.run(run_matchup(topics))
+    asyncio.run(run_matchup(topics, Path(args.dir) if args.dir else None))
 
 
 if __name__ == "__main__":
