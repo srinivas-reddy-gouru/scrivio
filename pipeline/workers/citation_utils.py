@@ -51,6 +51,20 @@ def _scrub_prose_segment(segment: str) -> str:
     return scrubbed + tail
 
 
+def _apply_to_prose(markdown: str, fn) -> str:
+    """Apply *fn* to prose only; fenced blocks pass through byte-for-byte.
+
+    EVERY text-wide cleanup in this module must go through this helper.
+    History, twice over: a whole-document whitespace collapse destroyed
+    code indentation once in scrub_em_dashes (fixed there, documented
+    below) and then AGAIN in resolve_citations' marker cleanup — caught
+    by the matchup evals as uniformly 1-space-indented code in every
+    pipeline article, running last and undoing the first fix's work.
+    """
+    parts = _FENCED_BLOCK_RE.split(markdown)
+    return "".join(part if i % 2 else fn(part) for i, part in enumerate(parts))
+
+
 def scrub_em_dashes(markdown: str) -> str:
     """Remove em/en-dashes that slipped past the LLM prompts — prose only.
 
@@ -60,11 +74,7 @@ def scrub_em_dashes(markdown: str) -> str:
     1-space-indented Java/SQL snippets in examples/kafka-design-patterns.md);
     dashes inside code are code, not typography.
     """
-    parts = _FENCED_BLOCK_RE.split(markdown)
-    return "".join(
-        part if i % 2 else _scrub_prose_segment(part)
-        for i, part in enumerate(parts)
-    )
+    return _apply_to_prose(markdown, _scrub_prose_segment)
 
 
 def resolve_citations(markdown: str, spans: list[EvidenceSpan]) -> str:
@@ -115,15 +125,20 @@ def resolve_citations(markdown: str, spans: list[EvidenceSpan]) -> str:
         return f"[{number}]" if number is not None else ""
 
     body = CITATION_PATTERN.sub(replace, markdown)
-    # Stripped markers can leave double spaces or space-before-punctuation.
-    body = re.sub(r" {2,}", " ", body)
-    body = re.sub(r" ([.,;:!?])", r"\1", body)
-    # Collapse runs of the SAME bracketed number — `[4][4]` becomes `[4]`,
-    # `[4][4][4]` becomes `[4]`. This catches the case where the drafter
-    # emitted `[src:UUID-A][src:UUID-A]` (same span cited twice in a row)
-    # or two different UUIDs that share a canonical URL and therefore
-    # resolved to the same citation number.
-    body = re.sub(r"(\[\d+\])\1+", r"\1", body)
+
+    # Stripped markers can leave double spaces or space-before-punctuation —
+    # in PROSE. Code indentation is exactly a run of spaces; this cleanup
+    # must never see it (it ran document-wide once and de-indented every
+    # code block in every article — the matchup evals' top defect).
+    def _tidy_marker_gaps(segment: str) -> str:
+        segment = re.sub(r" {2,}", " ", segment)
+        segment = re.sub(r" ([.,;:!?])", r"\1", segment)
+        # Collapse runs of the SAME bracketed number — `[4][4]` becomes
+        # `[4]` (same span cited twice in a row, or two UUIDs sharing a
+        # canonical URL and thus a citation number).
+        return re.sub(r"(\[\d+\])\1+", r"\1", segment)
+
+    body = _apply_to_prose(body, _tidy_marker_gaps)
 
     if not number_to_first_span_id:
         return body.rstrip()
