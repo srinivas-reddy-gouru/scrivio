@@ -2021,17 +2021,26 @@ async def create_resume(body: ResumeCreateRequest) -> ResumeDoc:
     jd_text, jd_label = await _resolve_resume_jd(body)
 
     client, preset = _client_for_session({}, "resume")
-    if structured is None:
+
+    async def _extract() -> StructuredResume | None:
         try:
-            structured = await extract_resume(resume_text, client, preset)
+            return await extract_resume(resume_text, client, preset)
         except Exception:
             # A failed extraction degrades to text-only checks — the report
             # still ships, minus the structure-aware rows and tailoring.
             logging.exception("Resume extraction failed; continuing text-only")
-            structured = None
+            return None
+
+    # Extraction and review both read only the raw text — run them
+    # concurrently (the analyze wait is dominated by these two calls).
+    if structured is None:
+        structured, review = await asyncio.gather(
+            _extract(), review_resume(resume_text, jd_text, client, preset)
+        )
+    else:  # JSON Resume import: structure already known
+        review = await review_resume(resume_text, jd_text, client, preset)
 
     report = run_ats_checks(resume_text, jd_text or None, structured)
-    review = await review_resume(resume_text, jd_text, client, preset)
 
     doc = ResumeDoc(
         resume_id=(datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]),
