@@ -5,11 +5,15 @@
 
 Scrivio started as an article generator and grew into an interview-preparation platform. It researches like a journalist (live web sources, every claim fact-checked), interviews like a senior engineer (spoken questions, strict rubric grading, real follow-ups), and gives feedback like a hiring panel (competency scorecards, hire signals, cited study plans).
 
+![Scrivio home](docs/home.png)
+
 ---
 
 ## The three studios
 
 ### ✏️ Article studio
+
+![Article studio](docs/article-studio.png)
 Type a topic, get a sourced technical article:
 
 - **Docs-first research** — resolves the official documentation domains for your topic (Kafka → kafka.apache.org) and ranks them above blogs and Q&A forums by trust tier
@@ -18,6 +22,9 @@ Type a topic, get a sourced technical article:
 - **Mermaid diagrams**, numbered citations with a Sources section, resumable runs served from a stage cache
 
 ### 🎤 Topic practice
+
+![Topic practice](docs/topic-practice.png)
+
 Voice interviews on any topic, with grading you can trust:
 
 - **The interviewer speaks** (natural TTS), **you answer out loud** (live dictation transcript, editable before submit)
@@ -26,6 +33,9 @@ Voice interviews on any topic, with grading you can trust:
 - **Progress that compounds** — topic mastery (recent sessions weighted), daily streaks, badges, confidence calibration (predict your score before the verdict), and weak areas that automatically seed your next drill
 
 ### 💼 Job interview prep
+
+![Job interview prep](docs/job-prep.png)
+
 Upload your resume and a job description; interview for *that* job:
 
 - **Fit analysis** — 5–8 competencies derived from the JD itself, each mapped against your resume's evidence (strong / partial / missing), with the gaps a sharp interviewer would probe
