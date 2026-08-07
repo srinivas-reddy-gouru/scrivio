@@ -193,6 +193,89 @@ def enforce_honesty(
     return tailored
 
 
+# ── [METRIC] placeholder filling ────────────────────────────────────────────
+# The tailor writes [METRIC] instead of inventing numbers; this pair lets
+# the user fill their real figures in-app so downloads come out finished.
+# CANONICAL TRAVERSAL ORDER — the UI builds its input list with the same
+# walk, so occurrence N here is occurrence N on screen: basics.summary,
+# then per work item (summary, highlights…), per project (description,
+# highlights…), per skill (keywords…), certificates.
+
+METRIC_TOKEN = "[METRIC]"
+
+
+def _metric_fields(s: StructuredResume):
+    """Yield (get, set) accessors for every free-text field that can carry
+    placeholders, in canonical order."""
+    yield (lambda: s.basics.summary, lambda v: setattr(s.basics, "summary", v))
+    for w in s.work:
+        yield (lambda w=w: w.summary, lambda v, w=w: setattr(w, "summary", v))
+        for i in range(len(w.highlights)):
+            yield (lambda w=w, i=i: w.highlights[i],
+                   lambda v, w=w, i=i: w.highlights.__setitem__(i, v))
+    for p in s.projects:
+        yield (lambda p=p: p.description, lambda v, p=p: setattr(p, "description", v))
+        for i in range(len(p.highlights)):
+            yield (lambda p=p, i=i: p.highlights[i],
+                   lambda v, p=p, i=i: p.highlights.__setitem__(i, v))
+    for sk in s.skills:
+        for i in range(len(sk.keywords)):
+            yield (lambda sk=sk, i=i: sk.keywords[i],
+                   lambda v, sk=sk, i=i: sk.keywords.__setitem__(i, v))
+    for i in range(len(s.certificates)):
+        yield (lambda s=s, i=i: s.certificates[i],
+               lambda v, s=s, i=i: s.certificates.__setitem__(i, v))
+
+
+def list_metric_placeholders(s: StructuredResume) -> list[dict]:
+    """Every [METRIC] occurrence in canonical order with display context."""
+    found: list[dict] = []
+    for get, _ in _metric_fields(s):
+        text = get()
+        start = 0
+        while True:
+            pos = text.find(METRIC_TOKEN, start)
+            if pos == -1:
+                break
+            found.append({
+                "index": len(found),
+                "before": text[max(0, pos - 60):pos].lstrip(),
+                "after": text[pos + len(METRIC_TOKEN):pos + len(METRIC_TOKEN) + 40].rstrip(),
+            })
+            start = pos + len(METRIC_TOKEN)
+    return found
+
+
+def fill_metric_placeholders(s: StructuredResume, values: list[str]) -> int:
+    """Replace [METRIC] occurrences in canonical order with *values*.
+    Empty/whitespace values leave that placeholder in place (the user can
+    fill the rest later). Mutates *s*; returns how many were filled."""
+    filled = 0
+    occurrence = 0
+    for get, set_ in _metric_fields(s):
+        text = get()
+        if METRIC_TOKEN not in text:
+            continue
+        out: list[str] = []
+        start = 0
+        while True:
+            pos = text.find(METRIC_TOKEN, start)
+            if pos == -1:
+                out.append(text[start:])
+                break
+            out.append(text[start:pos])
+            value = values[occurrence].strip() if occurrence < len(values) else ""
+            if value:
+                out.append(value)
+                filled += 1
+            else:
+                out.append(METRIC_TOKEN)
+            occurrence += 1
+            start = pos + len(METRIC_TOKEN)
+        set_("".join(out))
+    return filled
+
+
 # ── JSON Resume interop ─────────────────────────────────────────────────────
 
 def to_jsonresume(s: StructuredResume) -> dict:

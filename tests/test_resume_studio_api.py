@@ -311,3 +311,25 @@ def test_tailor_conflicts_are_guarded():
     stored.tailor_status = "tailoring"
     server._save_resume_doc(stored)
     assert client.post(f"/resumes/{rid}/tailor").status_code == 409
+
+
+# ── [METRIC] fill endpoint ───────────────────────────────────────────
+
+def test_fill_metrics_finishes_the_tailored_resume():
+    client = TestClient(server.app)
+    doc = _create(client, jd_text=JD)
+    rid = doc["resume_id"]
+    assert client.post(f"/resumes/{rid}/fill-metrics",
+                       json={"values": ["35"]}).status_code == 422  # not tailored yet
+    _tailor(client, rid)
+    # Mock tailored resume has exactly one [METRIC] (onboarding % highlight).
+    r = client.post(f"/resumes/{rid}/fill-metrics", json={"values": ["35"]})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    highlights = out["tailored"]["resume"]["work"][0]["highlights"]
+    assert any("by 35%" in h for h in highlights)
+    assert not any("[METRIC]" in h for h in highlights)
+    # Downloads now come out finished.
+    md = client.get(f"/resumes/{rid}/download?fmt=md&version=tailored")
+    assert "[METRIC]" not in md.text
+    assert "by 35%" in md.text

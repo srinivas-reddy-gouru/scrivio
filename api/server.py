@@ -58,6 +58,7 @@ from pipeline.workers.job_interviewer_worker import (
 from pipeline.workers.resume_parser import ResumeParseError, parse_resume
 from pipeline.workers.resume_studio_worker import (
     extract_resume,
+    fill_metric_placeholders,
     from_jsonresume,
     render_docx,
     render_markdown,
@@ -2177,6 +2178,31 @@ async def tailor_resume_endpoint(
     doc.tailor_status, doc.tailor_error = "tailoring", ""
     _save_resume_doc(doc)
     background_tasks.add_task(_finish_resume_tailor, resume_id)
+    return doc
+
+
+class MetricFillRequest(BaseModel):
+    # One entry per [METRIC] occurrence in canonical order; empty strings
+    # leave that placeholder for later.
+    values: list[str]
+
+
+@app.post("/resumes/{resume_id}/fill-metrics", response_model=ResumeDoc)
+async def fill_resume_metrics(resume_id: str, body: MetricFillRequest) -> ResumeDoc:
+    doc = _load_resume_doc(resume_id)
+    if doc.tailored is None:
+        raise HTTPException(status_code=422, detail="No tailored version to fill yet.")
+    if doc.tailor_status == "tailoring":
+        raise HTTPException(status_code=409, detail="Tailoring is still running.")
+    filled = fill_metric_placeholders(doc.tailored.resume, body.values)
+    if filled:
+        # The numbers change quantification/keyword math — keep the
+        # before/after comparison honest.
+        doc.tailored_report = run_ats_checks(
+            render_markdown(doc.tailored.resume), doc.jd_text or None,
+            doc.tailored.resume,
+        )
+        _save_resume_doc(doc)
     return doc
 
 

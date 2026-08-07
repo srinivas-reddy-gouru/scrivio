@@ -280,3 +280,29 @@ def test_honesty_guard_passes_clean_tailoring_untouched():
     guarded = enforce_honesty(original, clean)
     assert guarded.resume == original
     assert guarded.warnings == []
+
+
+# ── [METRIC] placeholder filling ─────────────────────────────────────
+
+def test_metric_list_and_fill_roundtrip():
+    from pipeline.workers.resume_studio_worker import (
+        fill_metric_placeholders, list_metric_placeholders,
+    )
+    s = StructuredResume.model_validate({
+        "basics": {"name": "J", "summary": "Led [METRIC] engineers across [METRIC] teams."},
+        "work": [{"name": "Acme", "position": "SWE",
+                  "highlights": ["Cut costs by [METRIC]%", "No placeholder here"]}],
+        "skills": [{"name": "Langs", "keywords": ["Python"]}],
+    })
+    occ = list_metric_placeholders(s)
+    assert len(occ) == 3
+    assert [o["index"] for o in occ] == [0, 1, 2]
+    assert "Led" in occ[0]["before"] or occ[0]["before"] == ""  # context present
+    assert occ[2]["after"].startswith("%")
+
+    filled = fill_metric_placeholders(s, ["12", "", "40"])
+    assert filled == 2
+    assert s.basics.summary == "Led 12 engineers across [METRIC] teams."
+    assert s.work[0].highlights[0] == "Cut costs by 40%"
+    # The unfilled one is still listed for a later pass.
+    assert len(list_metric_placeholders(s)) == 1
