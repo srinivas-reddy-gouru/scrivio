@@ -341,3 +341,27 @@ def test_renders_contain_no_em_or_en_dashes():
     assert "—" not in text and "–" not in text
     pdf = render_pdf(s)
     assert b"\x96" not in pdf or True  # PDF bytes are compressed; policy is enforced pre-encode
+
+
+# ── Weak-language voice gate ─────────────────────────────────────────
+
+def test_weak_language_check_flags_duty_speak():
+    from pipeline.workers.resume_studio_worker import find_weak_resume_phrases
+
+    weak = GOOD_RESUME.replace(
+        "Built Kafka pipelines processing 2M events/day",
+        "Responsible for Kafka pipelines and utilized Spark",
+    ).replace(
+        "Cut p99 latency 40% by rewriting the consumer group logic",
+        "Was involved in latency work and helped with rewrites",
+    )
+    hits = dict(find_weak_resume_phrases(weak))
+    assert hits["responsible for"] == 1 and hits["utilized"] == 1
+    check = _check(run_ats_checks(weak), "weak-language")
+    assert not check.passed
+    assert "responsible for" in check.detail and "verb-first" in check.detail.lower()
+
+
+def test_weak_language_check_passes_clean_resume():
+    check = _check(run_ats_checks(GOOD_RESUME), "weak-language")
+    assert check.passed

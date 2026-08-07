@@ -130,6 +130,16 @@ async def tailor_resume(
     tailored = TailoredResume.model_validate(tool_use.input)
     tailored = enforce_honesty(structured, tailored)
     scrub_structure_dashes(tailored.resume)
+    # Voice gate: the tailor's own prose is held to the weak-language bar.
+    # Deterministic and non-destructive — rewriting phrasing in code would
+    # risk meaning; a warning puts the fix in the user's hands.
+    weak = find_weak_resume_phrases(render_markdown(tailored.resume))
+    if weak:
+        tailored.warnings.append(
+            "Weak phrasing remains: "
+            + ", ".join(f"'{p}' ×{n}" for p, n in weak[:4])
+            + ". Consider verb-first rewrites ('Led X', 'Cut Y by 30%')."
+        )
     return tailored
 
 
@@ -193,6 +203,30 @@ def enforce_honesty(
 
     tailored.warnings = warnings
     return tailored
+
+
+# ── Weak-language detection ─────────────────────────────────────────────────
+# The resume-genre equivalent of the article pipeline's banned-phrases
+# gate: deterministic detection of duty-speak and filler that recruiters
+# (and AI-content detectors) flag. Used twice — as an explainable ATS
+# check on any resume, and as a post-tailor warning gate so the tailor's
+# own output is held to the same bar.
+
+_WEAK_PHRASES = (
+    "responsible for", "duties included", "tasked with", "in charge of",
+    "worked on", "helped with", "assisted with", "participated in",
+    "was involved in", "leveraged", "utilized", "utilizing",
+    "proven track record", "passionate about", "seasoned professional",
+    "highly motivated", "cutting-edge", "state-of-the-art",
+    "best-in-class", "world-class",
+)
+
+
+def find_weak_resume_phrases(text: str) -> list[tuple[str, int]]:
+    """Weak/duty-speak phrases with counts, most frequent first."""
+    lower = text.lower()
+    hits = [(p, lower.count(p)) for p in _WEAK_PHRASES if p in lower]
+    return sorted(hits, key=lambda h: -h[1])
 
 
 # ── Dash policy ─────────────────────────────────────────────────────────────
@@ -841,6 +875,20 @@ def run_ats_checks(
             ])
         )
         + ". Modern ATS treats stuffing as a fraud signal.",
+    )
+
+    # weak-language — duty-speak and filler ("responsible for", "leveraged").
+    weak_hits = find_weak_resume_phrases(text)
+    weak_total = sum(n for _, n in weak_hits)
+    weak_ok = weak_total < 3
+    add(
+        "weak-language", "Verb-first, concrete language", weak_ok, 8,
+        "No duty-speak or filler; bullets lead with strong verbs."
+        if not weak_hits else
+        ("Found " + ", ".join(f"'{p}' ×{n}" for p, n in weak_hits[:4])
+         + (". Acceptable in small doses" if weak_ok
+            else ". Rewrite verb-first: 'Led X', 'Cut Y by 30%', not what you were 'responsible for'")
+         + "."),
     )
 
     # Structure-aware checks — only when we have the structured resume.
