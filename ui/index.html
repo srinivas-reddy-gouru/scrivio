@@ -3749,34 +3749,33 @@
       cov ? `${cov.percent}% keyword match` : null,
     ].filter(Boolean).join(' · ');
 
-    // ONE action leads the hero. Before tailoring (JD present): Tailor is
-    // the primary CTA and downloads step back. After tailoring: point at
-    // the tailored version. No JD: downloads lead, with a hint.
+    // ONE action per state, downloads only where they are the deliverable:
+    // - JD present, not tailored: the ONLY action is Tailor. No downloads;
+    //   the user already owns the original file.
+    // - Tailored: jump to the tailored version (which owns its downloads).
+    // - No JD: the cleaned-up ATS-safe re-render IS the deliverable, so
+    //   the download bar appears, labeled as exactly that.
     const canTailor = !!doc.jd_text && !!doc.structured && doc.status === 'ready';
     let heroActions;
     if (analyzing) {
-      heroActions = `<span class="text-xs" style="color:var(--text-faint)">Downloads and tailoring unlock when the analysis above finishes.</span>`;
+      heroActions = `<span class="text-xs" style="color:var(--text-faint)">Tailoring unlocks when the analysis above finishes.</span>`;
     } else if (!doc.structured) {
-      heroActions = `<span class="text-xs" style="color:var(--text-faint)">Downloads unavailable: structure extraction failed.</span>`;
+      heroActions = `<span class="text-xs" style="color:var(--text-faint)">Tailoring unavailable: structure extraction failed.</span>`;
     } else if (doc.tailored) {
       heroActions = `
-        <div class="flex items-center gap-2 flex-wrap">
-          <button type="button" id="resume-jump-tailored" class="btn-primary text-sm">↓ Your tailored resume is below</button>
-          ${_downloadBar(doc.resume_id, 'original', { primary: false })}
-        </div>
-        <p class="text-xs mt-2" style="color:var(--text-faint)">These buttons download the ORIGINAL. The tailored version has its own downloads below.</p>`;
+        <button type="button" id="resume-jump-tailored" class="btn-primary text-sm">↓ Your tailored resume is below</button>
+        <p class="text-xs" style="color:var(--text-faint)">Downloads are with the tailored version.</p>`;
     } else if (canTailor) {
       heroActions = `
-        <div class="flex items-center gap-2 flex-wrap">
-          <button type="button" id="resume-tailor-btn" class="btn-primary text-sm">✨ Tailor to this JD (next step)</button>
-          ${_downloadBar(doc.resume_id, 'original', { primary: false })}
-        </div>
-        <p id="resume-tailor-status" class="text-xs mt-2" style="color:var(--text-dim)">Rewrites honestly for the JD, never invents experience. Downloads here are the un-tailored original.</p>`;
+        <button type="button" id="resume-tailor-btn" class="btn-primary text-sm">✨ Tailor to this JD</button>
+        <p id="resume-tailor-status" class="text-xs" style="color:var(--text-dim)">Rewrites honestly for the JD, never invents experience.</p>`;
     } else {
       heroActions = `
+        <p class="text-xs" style="color:var(--text-dim)">No job description was given, so your deliverable is the cleaned-up, ATS-safe re-render:</p>
         ${_downloadBar(doc.resume_id, 'original')}
-        <p class="text-xs mt-2" style="color:var(--text-faint)">Add a job description above and re-analyze to unlock keyword match + tailoring.</p>`;
+        <p class="text-xs" style="color:var(--text-faint)">Add a job description above and re-analyze to unlock keyword match + tailoring.</p>`;
     }
+    heroActions = `<div class="flex flex-col gap-2.5 items-center sm:items-start">${heroActions}</div>`;
 
     const heroCard = `
       <div class="card px-6 py-5 mb-4" style="border-color:rgba(32,184,205,0.35)">
