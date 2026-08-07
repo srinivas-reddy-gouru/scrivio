@@ -458,7 +458,9 @@ class AnswerEvaluation(BaseModel):
 # practice: feedback after every answer, follow-ups allowed.
 # simulation: realistic screen — no feedback until the end, then a debrief.
 # drill: rapid-fire short questions, 60s each, compact feedback.
-InterviewMode = Literal["practice", "simulation", "drill"]
+# job: resume+JD-targeted realistic screen — simulation semantics but
+#      follow-ups allowed (real interviewers probe); ends in a scorecard.
+InterviewMode = Literal["practice", "simulation", "drill", "job"]
 
 
 class InterviewAnswerRecord(BaseModel):
@@ -502,6 +504,103 @@ class InterviewSummary(BaseModel):
     # Simulation mode only: the interviewer's end-of-screen narrative
     # verdict (one extra LLM call; empty string when unavailable).
     debrief: str = ""
+    # Job mode only: the full recruiter-grade scorecard. Quoted forward
+    # reference — JobScorecard is defined below; InterviewSummary.model_rebuild()
+    # runs after it.
+    scorecard: "JobScorecard | None" = None
+
+
+# ── Job-targeted interview models ────────────────────────────────────
+
+EvidenceStrength = Literal["strong", "partial", "missing"]
+
+
+class Competency(BaseModel):
+    name: str = Field(description="Short competency name derived from the JD, e.g. 'Distributed systems design'.")
+    why_it_matters: str = Field(description="One sentence tying this competency to the JD's own wording.")
+    evidence_in_resume: EvidenceStrength = Field(
+        description="How well the resume evidences this competency: strong / partial / missing."
+    )
+    probe_note: str = Field(
+        description="One sentence on what an interviewer should probe (a resume claim to verify, or the gap to expose)."
+    )
+
+
+class JobAnalysis(BaseModel):
+    """Tool schema for submit_job_analysis."""
+    competencies: list[Competency] = Field(
+        min_length=3,
+        description="5-8 core competencies that define success in THIS role, derived from the JD (not generic).",
+    )
+    resume_highlights: list[str] = Field(
+        description="Specific resume claims worth grilling in the interview, quoted or closely paraphrased."
+    )
+    gaps: list[str] = Field(
+        description="Things the JD requires that the resume shows little or no evidence of."
+    )
+    company_context: str = Field(
+        default="",
+        description="1-2 sentences of company context relevant to interviewing, empty if company unknown.",
+    )
+
+
+class JobProfile(BaseModel):
+    profile_id: str
+    role_title: str
+    company: str = ""
+    location: str = ""
+    seniority: str = ""
+    job_description: str
+    resume_text: str
+    extra_notes: str = ""
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class StudyResource(BaseModel):
+    competency: str
+    title: str
+    url: str
+    trust_score: float = 0.6
+
+
+class CompetencyScore(BaseModel):
+    name: str
+    score: float | None = None     # None = never tested (all its questions skipped)
+    band: Literal["strong", "adequate", "needs work", "not assessed"] = "not assessed"
+    evidence: list[str] = []       # quotes from the candidate's own answers
+    gaps: list[str] = []
+
+
+class RequirementCoverage(BaseModel):
+    requirement: str = Field(description="A concrete requirement quoted or paraphrased from the JD.")
+    status: Literal["met", "partial", "missing"] = Field(
+        description="Whether the candidate's answers demonstrated it: met / partial / missing."
+    )
+
+
+class JobDebrief(BaseModel):
+    """Tool schema for submit_job_debrief."""
+    hire_signal: Literal[
+        "strong hire", "hire", "lean hire", "lean no-hire", "no-hire"
+    ] = Field(description="Calibrated to THIS role and seniority, never inflated.")
+    debrief: str = Field(
+        description="3-5 sentence narrative: overall impression anchored to named moments, the most important gap, one genuine strength."
+    )
+    requirement_coverage: list[RequirementCoverage] = Field(
+        description="The JD's 4-8 most important concrete requirements with demonstrated coverage."
+    )
+
+
+class JobScorecard(BaseModel):
+    competency_scores: list[CompetencyScore] = []
+    requirement_coverage: list[RequirementCoverage] = []
+    hire_signal: str = ""
+    debrief: str = ""
+    study_plan: list[StudyResource] = []
+
+
+InterviewSummary.model_rebuild()
 
 
 class InterviewSession(BaseModel):
@@ -510,6 +609,8 @@ class InterviewSession(BaseModel):
     topic: str
     level: str
     mode: InterviewMode = "practice"  # default keeps pre-mode session files valid
+    job_profile_id: str | None = None  # set for mode="job"
+    duration_minutes: int = 45         # job mode: the soft time budget
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     questions: list[InterviewQuestionState] = []

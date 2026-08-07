@@ -433,8 +433,8 @@ def test_drill_sergeant_badge() -> None:
 
 
 def test_streak_computation_edges() -> None:
-    from datetime import date, timedelta
-    today = date.today()
+    from datetime import datetime, timedelta
+    today = datetime.utcnow().date()  # streaks anchor on UTC (session timestamps)
     # Practiced today and the two days before → 3-day streak.
     assert server._compute_streak({today, today - timedelta(days=1), today - timedelta(days=2)}) == 3
     # Practiced yesterday only → streak survives overnight.

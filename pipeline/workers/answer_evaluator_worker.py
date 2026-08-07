@@ -66,14 +66,20 @@ async def evaluate_answer(
     client,
     preset: str = "balanced",
     article_markdown: str | None = None,
+    job_context: str | None = None,
     followup_question: str | None = None,
     followup_answer: str | None = None,
 ) -> AnswerEvaluation:
-    reference = (
-        _section_excerpt(article_markdown, question.section_anchor)
-        if article_markdown
-        else ""
-    )
+    # Job mode grounds grading in the JD/resume context instead of an
+    # article excerpt.
+    if job_context:
+        reference = job_context
+    else:
+        reference = (
+            _section_excerpt(article_markdown, question.section_anchor)
+            if article_markdown
+            else ""
+        )
     rubric_block = "\n".join(f"- {p}" for p in question.rubric_key_points)
 
     parts = [

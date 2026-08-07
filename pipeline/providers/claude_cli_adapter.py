@@ -1,20 +1,29 @@
-"""BYO-subscription provider: route LLM calls through the local Claude Code CLI.
+"""BYO-subscription provider: route LLM calls through a LOCAL AI CLI.
 
-Users with a Claude Pro/Max subscription can run Scrivio with ZERO API cost:
-`claude -p` (headless print mode) executes one prompt using whatever account
-the CLI is logged in with. This adapter exposes the same `.messages.create()`
-interface as `anthropic.AsyncAnthropic` (and the OpenAI adapter shim), so
-every worker runs unchanged on top of it.
+Users who already pay for an AI subscription can run Scrivio with ZERO API
+cost by routing calls through the CLI that subscription ships with. Which
+CLI is used is CONFIGURATION (`LLM_CLI` env / Settings), not code — each
+supported CLI is described by a spec in CLI_SPECS: how to invoke it
+headless, how to pass the prompt, how to parse its output, which model
+tiers it offers, and which env vars would shadow its subscription login.
 
-Honest trade-offs, surfaced in the settings UI:
-- Slower than the API (one process spawn per call, no streaming).
-- Subject to the subscription's own rate limits.
-- Great fit for interview practice (few sequential calls); the article
-  pipeline works but is slow.
+Supported out of the box (all verified to document a headless mode):
+- claude  — Claude Code, `claude -p`, Claude Pro/Max login (the reference
+            implementation; also powers subscription web search)
+- codex   — OpenAI Codex CLI, `codex exec`, ChatGPT Plus/Pro sign-in
+- gemini  — Google Gemini CLI, `-p/--output-format json`, Google login
+- qwen    — Qwen Code (Gemini CLI fork), free-tier login
+- ollama  — local models via `ollama run` — no account at all
 
-Structured output: workers force tool_use via tool_choice. The CLI has no
-tool-call API in print mode, so we ask for bare JSON matching the tool's
-input_schema and parse it — with one self-correcting retry on invalid JSON.
+The adapter exposes the same `.messages.create()` interface as
+`anthropic.AsyncAnthropic`, so every worker runs unchanged on top of any
+of these. Structured output: workers force tool_use via tool_choice; the
+CLIs have no tool-call API in headless mode, so we ask for bare JSON
+matching the tool's input_schema and parse it — with one self-correcting
+retry on invalid JSON.
+
+Honest trade-offs (surfaced in Settings): slower than an API (a process
+spawn per call, no streaming) and bound by the subscription's own limits.
 """
 from __future__ import annotations
 
@@ -28,28 +37,157 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-def _find_cli() -> str | None:
-    """Locate a host-runnable Claude Code CLI.
+# ── CLI registry ─────────────────────────────────────────────────────
+# Each spec: label (settings UI), binary name, path_env (explicit binary
+# override), extra_paths (well-known install locations), argv template
+# ({model} placeholder; prompt always arrives on stdin), output parsing
+# ("claude_json" envelope / "json_response" object / "text" / "auto"),
+# strip_env (auth vars that would SHADOW the subscription login — the
+# whole point is not billing an API), tiers (strong/light model defaults,
+# overridable via CLI_STRONG_MODEL / CLI_LIGHT_MODEL), web_search.
+CLI_SPECS: dict[str, dict] = {
+    "claude": {
+        "label": "Claude Code — Claude Pro/Max",
+        "binary": "claude",
+        "path_env": "CLAUDE_CLI_PATH",
+        "extra_paths": [Path.home() / ".claude" / "local" / "claude"],
+        "output": "claude_json",
+        "strip_env": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
+        "web_search": True,
+        "tiers": None,  # native: model_config ids map to CLI aliases
+    },
+    "codex": {
+        "label": "Codex CLI — ChatGPT Plus/Pro",
+        "binary": "codex",
+        "path_env": "CODEX_CLI_PATH",
+        "extra_paths": [],
+        # Final agent message goes to stdout; progress goes to stderr.
+        # read-only sandbox + git check skip: pure text generation only.
+        "argv": ["exec", "--sandbox", "read-only", "--skip-git-repo-check",
+                 "-m", "{model}"],
+        "output": "text",
+        "strip_env": ("OPENAI_API_KEY",),
+        "web_search": False,
+        "tiers": {"strong": "gpt-5", "light": "gpt-5-mini"},
+    },
+    "gemini": {
+        "label": "Gemini CLI — Google account",
+        "binary": "gemini",
+        "path_env": "GEMINI_CLI_PATH",
+        "extra_paths": [],
+        "argv": ["--output-format", "json", "-m", "{model}"],
+        "output": "json_response",  # single JSON object with "response"
+        "strip_env": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+        "web_search": False,
+        "tiers": {"strong": "gemini-2.5-pro", "light": "gemini-2.5-flash"},
+    },
+    "qwen": {
+        "label": "Qwen Code — free tier",
+        "binary": "qwen",
+        "path_env": "QWEN_CLI_PATH",
+        "extra_paths": [],
+        "argv": ["-m", "{model}"],
+        "output": "auto",  # Gemini fork; JSON support varies by version
+        "strip_env": ("DASHSCOPE_API_KEY", "OPENAI_API_KEY"),
+        "web_search": False,
+        "tiers": {"strong": "qwen3-coder-plus", "light": "qwen3-coder-flash"},
+    },
+    "ollama": {
+        "label": "Ollama — local models, no account",
+        "binary": "ollama",
+        "path_env": "OLLAMA_CLI_PATH",
+        "extra_paths": [],
+        "argv": ["run", "{model}"],
+        "output": "text",
+        "strip_env": (),
+        "web_search": False,
+        "tiers": {"strong": "llama3.3", "light": "llama3.2"},
+    },
+}
 
-    Priority: CLAUDE_CLI_PATH env override → PATH → the standalone
-    installer's default (~/.claude/local/claude). The desktop app's
-    claude-code-vm binary is deliberately NOT used: it is built for the
-    app's sandbox VM architecture and fails with 'exec format error' when
-    run on the host."""
-    override = os.environ.get("CLAUDE_CLI_PATH")
+_DEFAULT_CLI = "claude"
+
+
+def _parse_cli_output(name: str, output_kind: str, raw: str) -> str:
+    """Extract the model's text from a CLI's stdout, per its spec."""
+    if output_kind == "claude_json":
+        try:
+            envelope = json.loads(raw)
+        except json.JSONDecodeError:
+            raise ClaudeCLIError(f"{name} CLI returned a non-JSON envelope")
+        if isinstance(envelope, dict) and envelope.get("is_error"):
+            raise ClaudeCLIError(
+                f"{name} CLI error: {str(envelope.get('result'))[:500]}"
+            )
+        result = envelope.get("result") if isinstance(envelope, dict) else None
+        if not isinstance(result, str):
+            raise ClaudeCLIError(f"{name} CLI envelope has no result text")
+        return result
+    if output_kind == "json_response":
+        try:
+            obj = json.loads(raw)
+            if isinstance(obj, dict) and isinstance(obj.get("response"), str):
+                return obj["response"]
+        except json.JSONDecodeError:
+            pass
+        raise ClaudeCLIError(f"{name} CLI returned no parseable response")
+    if output_kind == "auto":
+        # Fork CLIs whose JSON support varies: try the gemini-style object,
+        # fall back to raw text.
+        try:
+            obj = json.loads(raw)
+            if isinstance(obj, dict) and isinstance(obj.get("response"), str):
+                return obj["response"]
+        except json.JSONDecodeError:
+            pass
+        return raw.strip()
+    # "text": the final message is stdout, verbatim.
+    return raw.strip()
+
+
+def active_cli_name() -> str:
+    """Which CLI spec is selected (LLM_CLI env / Settings)."""
+    name = os.environ.get("LLM_CLI", "").strip().lower()
+    return name if name in CLI_SPECS else _DEFAULT_CLI
+
+
+def _active_spec() -> dict:
+    return CLI_SPECS[active_cli_name()]
+
+
+def _find_cli_for(name: str) -> str | None:
+    """Locate a host-runnable binary for one spec: path_env override →
+    PATH → well-known install locations. (For Claude, the desktop app's
+    claude-code-vm binary is deliberately excluded — it is built for the
+    app's sandbox VM architecture and fails with 'exec format error'.)"""
+    spec = CLI_SPECS[name]
+    override = os.environ.get(spec["path_env"], "")
     if override:
         return override if Path(override).is_file() else None
-    on_path = shutil.which("claude")
+    on_path = shutil.which(spec["binary"])
     if on_path:
         return on_path
-    local = Path.home() / ".claude" / "local" / "claude"
-    if local.is_file() and os.access(local, os.X_OK):
-        return str(local)
+    for candidate in spec["extra_paths"]:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
     return None
 
 
+def _find_cli() -> str | None:
+    """Binary for the ACTIVE spec (kept as the historical seam name —
+    tests and callers monkeypatch this)."""
+    return _find_cli_for(active_cli_name())
+
+
+def detected_clis() -> list[str]:
+    """Every supported CLI actually installed on this machine."""
+    return [name for name in CLI_SPECS if _find_cli_for(name) is not None]
+
+
 def claude_cli_available() -> bool:
-    """Is a host-runnable Claude Code CLI installed?"""
+    """Is the ACTIVE local CLI installed? (Name kept for compatibility —
+    provider id 'claude-cli' now means 'local CLI subscription provider',
+    whichever CLI configuration selects.)"""
     return _find_cli() is not None
 
 
@@ -76,25 +214,36 @@ def _get_semaphore() -> asyncio.Semaphore:
 
 
 def _model_alias(model: str) -> str:
-    """API model ids → CLI model argument.
+    """Pipeline model id → the ACTIVE CLI's model argument.
 
-    CLAUDE_CLI_MODEL overrides everything (the "ration my quota" hammer —
-    e.g. force every call onto haiku). Otherwise, known families map to
-    their CLI alias, and any OTHER string (a user's custom model id from
-    ANTHROPIC_STRONG_MODEL / ANTHROPIC_LIGHT_MODEL) passes through verbatim
-    — `claude --model` accepts full ids, and an invalid one surfaces as a
-    clear CLI error instead of being silently rewritten to sonnet."""
-    override = os.environ.get("CLAUDE_CLI_MODEL")
-    if override:
-        return override
+    Overrides, strongest first: CLI_FORCE_MODEL (any CLI) and — for the
+    claude spec only — the historical CLAUDE_CLI_MODEL. Then:
+    - claude: family aliases (haiku/opus/sonnet); custom ids pass verbatim
+      so an invalid one fails loudly instead of silently becoming sonnet.
+    - other CLIs: the pipeline's ids are Claude-family, so only the TIER
+      carries over — haiku-class ids map to the spec's light model,
+      everything else to its strong model, overridable via
+      CLI_LIGHT_MODEL / CLI_STRONG_MODEL."""
+    force = os.environ.get("CLI_FORCE_MODEL")
+    if force:
+        return force
+    name = active_cli_name()
     lowered = (model or "").lower()
+    if name == "claude":
+        override = os.environ.get("CLAUDE_CLI_MODEL")
+        if override:
+            return override
+        if "haiku" in lowered:
+            return "haiku"
+        if "opus" in lowered:
+            return "opus"
+        if "sonnet" in lowered or not lowered:
+            return "sonnet"
+        return model
+    tiers = CLI_SPECS[name]["tiers"]
     if "haiku" in lowered:
-        return "haiku"
-    if "opus" in lowered:
-        return "opus"
-    if "sonnet" in lowered or not lowered:
-        return "sonnet"
-    return model
+        return os.environ.get("CLI_LIGHT_MODEL") or tiers["light"]
+    return os.environ.get("CLI_STRONG_MODEL") or tiers["strong"]
 
 
 def _extract_system_text(system) -> str:
@@ -129,7 +278,10 @@ async def cli_web_search(query: str, max_results: int = 8) -> list[dict]:
     Returns [{url, title, snippet, published_at|None}]. Empty list on any
     failure: search is an enrichment, never a crash. Slower than a search
     API (an agentic model performs the search), so multi_search only routes
-    here when no search key is configured."""
+    here when no search key is configured. Only CLIs whose spec declares
+    web_search support this (claude today)."""
+    if not _active_spec().get("web_search"):
+        return []
     prompt = (
         "You MUST call the WebSearch tool before answering; answering from "
         "memory is forbidden and treated as failure.\n"
@@ -272,32 +424,39 @@ class _CLIMessages:
         JSON" prompt by attempting a real tool call, burning its single
         turn and failing with stop_reason=tool_use. Web search passes
         tools="WebSearch" with a higher turn budget instead."""
+        name = active_cli_name()
+        spec = CLI_SPECS[name]
         binary = _find_cli()
         if binary is None:
             raise ClaudeCLIError(
-                "Claude Code CLI not found. Install it with "
-                "`npm install -g @anthropic-ai/claude-code` and sign in, or "
-                "set CLAUDE_CLI_PATH to the binary."
+                f"The '{name}' CLI is not installed (binary "
+                f"'{spec['binary']}' not found). Install and sign in, or "
+                f"set {spec['path_env']} to the binary, or pick another "
+                f"CLI via LLM_CLI in Settings. Detected: "
+                f"{', '.join(detected_clis()) or 'none'}."
             )
-        argv = [
-            binary, "-p",
-            "--output-format", "json",
-            "--model", model,
-            "--max-turns", str(max_turns),
-            "--tools", tools,
-        ]
-        if tools:
-            # The adapter runs from a neutral temp cwd with no project
-            # permission rules, so enabled tools must be explicitly
-            # pre-authorized or the CLI denies them without prompting.
-            # Scoped to exactly the tools we enabled — nothing broader.
-            argv += ["--allowedTools", tools]
-        # The CLI treats ANTHROPIC_API_KEY as an auth source that BEATS the
-        # subscription login — inheriting it from the server would silently
-        # bill the API (or fail outright), defeating the whole point of the
-        # claude-cli provider. Strip API auth so the CLI uses the login.
+        if name == "claude":
+            argv = [
+                binary, "-p",
+                "--output-format", "json",
+                "--model", model,
+                "--max-turns", str(max_turns),
+                "--tools", tools,
+            ]
+            if tools:
+                # The adapter runs from a neutral temp cwd with no project
+                # permission rules, so enabled tools must be explicitly
+                # pre-authorized or the CLI denies them without prompting.
+                argv += ["--allowedTools", tools]
+        else:
+            # Template-driven CLIs get pure text generation only — agent
+            # tools stay off, and the prompt always arrives on stdin.
+            argv = [binary] + [a.format(model=model) for a in spec["argv"]]
+        # Auth vars like ANTHROPIC_API_KEY / OPENAI_API_KEY BEAT the CLI's
+        # subscription login — inheriting them from the server would
+        # silently bill an API, defeating the whole point. Strip per spec.
         env = dict(os.environ)
-        for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
+        for var in spec["strip_env"]:
             env.pop(var, None)
         async with _get_semaphore():
             process = await asyncio.create_subprocess_exec(
@@ -306,8 +465,8 @@ class _CLIMessages:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
-                # Neutral cwd: never let the CLI pick up a project context
-                # (CLAUDE.md, settings) from wherever the server was started.
+                # Neutral cwd: never let a CLI pick up a project context
+                # (CLAUDE.md, AGENTS.md, settings) from the server's dir.
                 cwd=tempfile.gettempdir(),
             )
             try:
@@ -318,25 +477,16 @@ class _CLIMessages:
             except asyncio.TimeoutError:
                 process.kill()
                 raise ClaudeCLIError(
-                    f"Claude CLI call timed out after {_CALL_TIMEOUT_S}s"
+                    f"{name} CLI call timed out after {_CALL_TIMEOUT_S}s"
                 )
         if process.returncode != 0:
             detail = (stderr or stdout or b"").decode(errors="replace")[:500]
             raise ClaudeCLIError(
-                f"Claude CLI exited with {process.returncode}: {detail}"
+                f"{name} CLI exited with {process.returncode}: {detail}"
             )
-        try:
-            envelope = json.loads(stdout.decode(errors="replace"))
-        except json.JSONDecodeError:
-            raise ClaudeCLIError("Claude CLI returned a non-JSON envelope")
-        if isinstance(envelope, dict) and envelope.get("is_error"):
-            raise ClaudeCLIError(
-                f"Claude CLI error: {str(envelope.get('result'))[:500]}"
-            )
-        result = envelope.get("result") if isinstance(envelope, dict) else None
-        if not isinstance(result, str):
-            raise ClaudeCLIError("Claude CLI envelope has no result text")
-        return result
+        return _parse_cli_output(
+            name, spec["output"], stdout.decode(errors="replace")
+        )
 
     def _compose(self, system_text: str, user_content: str) -> str:
         if system_text:

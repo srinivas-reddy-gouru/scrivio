@@ -12,3 +12,5 @@ readability-lxml
 temporalio
 uvicorn[standard]
 pytest
+pypdf
+python-docx

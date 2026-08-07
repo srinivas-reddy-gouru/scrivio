@@ -37,9 +37,19 @@ from pipeline.schemas.models import (
     InterviewQuestionStatus,
     InterviewSession,
     InterviewSummary,
+    JobAnalysis,
+    JobProfile,
     ProgressEvent,
 )
 from pipeline.workers.answer_evaluator_worker import evaluate_answer, generate_debrief
+from pipeline.workers.job_interviewer_worker import (
+    analyze_job_fit,
+    competency_for_question,
+    generate_job_interview,
+    generate_job_scorecard,
+    research_job_questions,
+)
+from pipeline.workers.resume_parser import ResumeParseError, parse_resume
 from pipeline.workers.interviewer_worker import (
     find_real_question_patterns,
     generate_interview_questions,
@@ -622,6 +632,11 @@ _MANAGED_KEYS: list[tuple[str, str]] = [
     ("OPENAI_STRONG_MODEL",    "Article writing, editing, interview grading. Pick any OpenAI model."),
     ("OPENAI_LIGHT_MODEL",     "Routing, checks, diagrams. High call volume."),
     ("CLAUDE_CLI_MODEL",       "Every subscription call uses this one model, ignoring the large/small split. Leave on default to keep the split."),
+    # ── Local CLI provider selection ────────────────────────────────
+    ("LLM_CLI",           "Which local AI CLI runs the subscription provider: claude (Claude Pro/Max), codex (ChatGPT), gemini (Google), qwen, or ollama (local, no account)."),
+    ("CLI_STRONG_MODEL",  "Non-Claude CLIs: model for LARGE tasks. Empty = the CLI's default strong model."),
+    ("CLI_LIGHT_MODEL",   "Non-Claude CLIs: model for SMALL tasks. Empty = the CLI's default light model."),
+    ("CLI_FORCE_MODEL",   "Any CLI: force EVERY call onto this one model, beating all other choices."),
 ]
 
 # Displayed and edited in plain text — these are preferences, not secrets.
@@ -629,6 +644,7 @@ _PLAIN_KEYS = {
     "USE_JINA_READER",
     "ANTHROPIC_STRONG_MODEL", "ANTHROPIC_LIGHT_MODEL",
     "OPENAI_STRONG_MODEL", "OPENAI_LIGHT_MODEL", "CLAUDE_CLI_MODEL",
+    "LLM_CLI", "CLI_STRONG_MODEL", "CLI_LIGHT_MODEL", "CLI_FORCE_MODEL",
 }
 
 # Search-provider env vars (any one is sufficient).
@@ -712,9 +728,12 @@ class SettingsResponse(BaseModel):
     has_search: bool         # True when any search key is configured
     has_anthropic: bool
     has_openai: bool
-    # BYO subscription: the local Claude Code CLI is installed, so LLM calls
-    # can run on the user's Claude Pro/Max login with no API key.
+    # BYO subscription: a local AI CLI is installed, so LLM calls can run
+    # on the user's existing login with no API key. Which CLI is active is
+    # configuration (LLM_CLI); detected_clis lists every one installed.
     has_claude_cli: bool = False
+    active_cli: str = "claude"
+    detected_clis: list[str] = []
 
 
 class SettingsPatch(BaseModel):
@@ -724,7 +743,11 @@ class SettingsPatch(BaseModel):
 
 def _resolved_state(env: dict) -> dict:
     """Compute provider resolution using the same logic as main._resolve_provider()."""
-    from pipeline.providers.claude_cli_adapter import claude_cli_available
+    from pipeline.providers.claude_cli_adapter import (
+        active_cli_name,
+        claude_cli_available,
+        detected_clis,
+    )
 
     def _present(key: str) -> bool:
         return bool(env.get(key) or os.environ.get(key))
@@ -762,6 +785,8 @@ def _resolved_state(env: dict) -> dict:
         "has_anthropic": has_anthropic,
         "has_openai": has_openai,
         "has_claude_cli": has_claude_cli,
+        "active_cli": active_cli_name(),
+        "detected_clis": detected_clis(),
     }
 
 
@@ -973,6 +998,8 @@ class InterviewSessionPublic(BaseModel):
     topic: str
     level: str
     mode: str = "practice"
+    job_profile_id: str | None = None
+    duration_minutes: int = 45
     created_at: str
     updated_at: str
     complete: bool
@@ -1006,10 +1033,19 @@ def _public_question(
         section_anchor=q.section_anchor,
         status=state.status,
     )
-    # Simulation redaction: mid-session, a completed question reveals
+    # Simulation/job redaction: mid-session, a completed question reveals
     # NOTHING beyond its status — the whole point is no feedback until the
     # end of the screen. Everything unlocks once the session is complete.
-    if mode == "simulation" and not session_complete:
+    # Job mode differs in one respect: follow-ups exist (real interviewers
+    # probe), so an open follow-up question must be visible — but the
+    # interim evaluation behind it stays hidden.
+    if mode in ("simulation", "job") and not session_complete:
+        if (
+            mode == "job"
+            and state.status == "awaiting_followup"
+            and state.first is not None
+        ):
+            public.followup_question = state.first.evaluation.followup_question
         return public
     if state.status == "awaiting_followup" and state.first is not None:
         # Interim feedback is visible; the rubric/model answer stay hidden
@@ -1042,6 +1078,8 @@ def _public_session(session: InterviewSession) -> InterviewSessionPublic:
         topic=session.topic,
         level=session.level,
         mode=session.mode,
+        job_profile_id=session.job_profile_id,
+        duration_minutes=session.duration_minutes,
         created_at=session.created_at.isoformat(),
         updated_at=session.updated_at.isoformat(),
         complete=complete,
@@ -1069,6 +1107,9 @@ class InterviewCreateRequest(BaseModel):
     level: str | None = None       # default: article's level, else "intermediate"
     num_questions: int = Field(default=5, ge=3, le=8)
     mode: InterviewMode = "practice"
+    # Job mode only:
+    job_profile_id: str | None = None
+    duration_minutes: int = Field(default=45, ge=15, le=60)
 
 
 class InterviewAnswerRequest(BaseModel):
@@ -1091,6 +1132,41 @@ class InterviewAnswerResponse(BaseModel):
 
 @app.post("/interviews", response_model=InterviewSessionPublic)
 async def create_interview(body: InterviewCreateRequest) -> InterviewSessionPublic:
+    if body.mode == "job":
+        if not body.job_profile_id:
+            raise HTTPException(
+                status_code=422, detail="job_profile_id is required for mode='job'"
+            )
+        profile, analysis = _load_job_profile(body.job_profile_id)
+        topic = profile.role_title + (
+            f" @ {profile.company}" if profile.company else ""
+        )
+        client, preset = _client_for_session({}, topic)
+        patterns = await research_job_questions(profile)
+        question_set = await generate_job_interview(
+            profile=profile,
+            analysis=analysis,
+            patterns=patterns,
+            duration_minutes=body.duration_minutes,
+            client=client,
+            preset=preset,
+        )
+        session = InterviewSession(
+            session_id=(
+                datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
+            ),
+            topic=topic,
+            level="advanced" if "senior" in profile.seniority.lower() else "intermediate",
+            mode="job",
+            job_profile_id=body.job_profile_id,
+            duration_minutes=body.duration_minutes,
+            questions=[
+                InterviewQuestionState(question=q) for q in question_set.questions
+            ],
+        )
+        _save_session(session)
+        return _public_session(session)
+
     if bool(body.topic) == bool(body.article_id):
         raise HTTPException(
             status_code=422,
@@ -1263,9 +1339,13 @@ class InterviewStats(BaseModel):
 
 def _compute_streak(dates: set) -> int:
     """Consecutive-day streak ending today (or yesterday, so an evening
-    practice yesterday still shows a live streak this morning)."""
-    from datetime import date, timedelta as _td
-    today = date.today()
+    practice yesterday still shows a live streak this morning).
+
+    Anchored on the UTC date because session.created_at is stored in UTC —
+    mixing local today with UTC session dates made evening sessions look
+    like they happened 'tomorrow' and zeroed the streak."""
+    from datetime import timedelta as _td
+    today = datetime.utcnow().date()
     anchor = today if today in dates else today - _td(days=1)
     if anchor not in dates:
         return 0
@@ -1471,6 +1551,14 @@ async def submit_interview_answer(
                 meta_request = (meta or {}).get("request") or {}
             client, preset = _client_for_session(meta_request, session.topic)
             article_markdown = _article_markdown_for(session)
+            # Job mode grades against the JD/resume instead of an article.
+            job_context = None
+            if session.mode == "job" and session.job_profile_id:
+                try:
+                    job_profile, _ = _load_job_profile(session.job_profile_id)
+                    job_context = _job_context_for(job_profile, state.question)
+                except HTTPException:
+                    job_context = None  # profile deleted: grade ungrounded
 
             if state.status == "pending":
                 evaluation = await evaluate_answer(
@@ -1480,10 +1568,12 @@ async def submit_interview_answer(
                     client=client,
                     preset=preset,
                     article_markdown=article_markdown,
+                    job_context=job_context,
                 )
-                # Follow-ups exist only in practice mode: a simulation never
-                # breaks its flow for coaching, and drills stay rapid-fire.
-                if session.mode != "practice" and evaluation.needs_followup:
+                # Follow-ups exist in practice AND job modes (real
+                # interviewers probe); simulations never break their flow
+                # for coaching, and drills stay rapid-fire.
+                if session.mode in ("simulation", "drill") and evaluation.needs_followup:
                     evaluation = evaluation.model_copy(
                         update={"needs_followup": False, "followup_question": ""}
                     )
@@ -1505,6 +1595,7 @@ async def submit_interview_answer(
                     client=client,
                     preset=preset,
                     article_markdown=article_markdown,
+                    job_context=job_context,
                     followup_question=state.first.evaluation.followup_question,
                     followup_answer=answer,
                 )
@@ -1545,6 +1636,20 @@ async def submit_interview_answer(
                     )
                 except Exception:
                     logging.exception("Debrief generation failed; continuing without it")
+            elif session.mode == "job" and session.job_profile_id:
+                # Recruiter-grade scorecard: competency rollup + panel
+                # debrief + cited study plan. Failure-tolerant garnish.
+                try:
+                    profile, analysis = _load_job_profile(session.job_profile_id)
+                    client, preset = _client_for_session({}, session.topic)
+                    scorecard = await generate_job_scorecard(
+                        session=session, profile=profile, analysis=analysis,
+                        client=client, preset=preset,
+                    )
+                    session.summary.scorecard = scorecard
+                    session.summary.debrief = scorecard.debrief
+                except Exception:
+                    logging.exception("Scorecard generation failed; continuing without it")
         _save_session(session)
 
         followup = (
@@ -1553,11 +1658,11 @@ async def submit_interview_answer(
             and state.status == "awaiting_followup"
             else None
         )
-        # Simulation redaction: mid-screen answers return no evaluation —
-        # the reveal happens all at once on the debrief screen.
+        # Simulation/job redaction: mid-screen answers return no evaluation —
+        # the reveal happens all at once on the debrief/scorecard screen.
         visible_evaluation = (
             None
-            if session.mode == "simulation" and not session_complete
+            if session.mode in ("simulation", "job") and not session_complete
             else evaluation
         )
         return InterviewAnswerResponse(
@@ -1567,6 +1672,199 @@ async def submit_interview_answer(
             session_complete=session_complete,
             summary=session.summary if session_complete else None,
         )
+
+
+# ── Job-targeted interviews (resume + JD) ────────────────────────────
+# A JobProfile captures one target job (role, company, JD, resume). The
+# analysis derives the 5-8 competencies that become the interview's rubric
+# AND the scorecard's rows. Sessions with mode="job" run simulation-style
+# (no feedback until the end) but keep follow-ups, and finish with a
+# recruiter-grade scorecard including a cited study plan.
+
+_JOB_PROFILES_DIR = "job_profiles"
+
+
+def _job_profiles_root() -> Path:
+    return OUTPUT_ROOT / _JOB_PROFILES_DIR
+
+
+def _job_profile_path(profile_id: str) -> Path:
+    return _job_profiles_root() / f"{profile_id}.json"
+
+
+def _load_job_profile(profile_id: str) -> tuple[JobProfile, JobAnalysis]:
+    if not _SESSION_ID_PATTERN.match(profile_id):
+        raise HTTPException(status_code=404, detail="Job profile not found")
+    path = _job_profile_path(profile_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Job profile not found")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return (
+            JobProfile.model_validate(data["profile"]),
+            JobAnalysis.model_validate(data["analysis"]),
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=410, detail="Job profile unreadable")
+
+
+def _save_job_profile(profile: JobProfile, analysis: JobAnalysis) -> None:
+    root = _job_profiles_root()
+    root.mkdir(parents=True, exist_ok=True)
+    path = _job_profile_path(profile.profile_id)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({
+        "profile": profile.model_dump(mode="json"),
+        "analysis": analysis.model_dump(mode="json"),
+    }, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+class JobProfileCreateRequest(BaseModel):
+    role_title: str
+    company: str = ""
+    location: str = ""
+    seniority: str = ""
+    extra_notes: str = ""
+    # JD: pasted text OR a URL to fetch.
+    job_description: str = ""
+    jd_url: str = ""
+    # Resume: pasted text OR an uploaded file (base64, like /transcribe).
+    resume_text: str = ""
+    resume_file_b64: str = ""
+    resume_filename: str = ""
+
+
+class JobProfileResponse(BaseModel):
+    profile: JobProfile
+    analysis: JobAnalysis
+
+
+class JobProfileSummary(BaseModel):
+    profile_id: str
+    role_title: str
+    company: str
+    location: str
+    seniority: str
+    created_at: str
+
+
+async def _resolve_jd_text(body: JobProfileCreateRequest) -> str:
+    if body.job_description.strip():
+        return body.job_description.strip()[:30_000]
+    if body.jd_url.strip():
+        from pipeline.workers.extraction_worker import (
+            fetch_with_retry, injection_filter, remove_boilerplate,
+        )
+        try:
+            raw, _strategy = await fetch_with_retry(body.jd_url.strip())
+            text = injection_filter(remove_boilerplate(raw)).strip()
+        except Exception:
+            raise HTTPException(
+                status_code=422,
+                detail="Could not fetch the job posting URL — paste the JD text instead.",
+            )
+        if len(text) < 200:
+            raise HTTPException(
+                status_code=422,
+                detail="The job posting page yielded almost no text (likely "
+                       "behind a login or rendered by JavaScript) — paste the JD text instead.",
+            )
+        return text[:30_000]
+    raise HTTPException(status_code=422, detail="Provide the job description (text or URL)")
+
+
+def _resolve_resume_text(body: JobProfileCreateRequest) -> str:
+    if body.resume_text.strip():
+        return body.resume_text.strip()[:30_000]
+    if body.resume_file_b64:
+        try:
+            data = base64.b64decode(body.resume_file_b64, validate=True)
+        except (binascii.Error, ValueError):
+            raise HTTPException(status_code=422, detail="resume_file_b64 is not valid base64")
+        try:
+            return parse_resume(data, body.resume_filename)
+        except ResumeParseError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+    raise HTTPException(status_code=422, detail="Provide a resume (file upload or pasted text)")
+
+
+@app.post("/job-profiles", response_model=JobProfileResponse)
+async def create_job_profile(body: JobProfileCreateRequest) -> JobProfileResponse:
+    if not body.role_title.strip():
+        raise HTTPException(status_code=422, detail="role_title is required")
+    jd_text = await _resolve_jd_text(body)
+    resume_text = _resolve_resume_text(body)
+
+    profile = JobProfile(
+        profile_id=(
+            datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
+        ),
+        role_title=body.role_title.strip(),
+        company=body.company.strip(),
+        location=body.location.strip(),
+        seniority=body.seniority.strip(),
+        job_description=jd_text,
+        resume_text=resume_text,
+        extra_notes=body.extra_notes.strip(),
+    )
+    client, preset = _client_for_session({}, profile.role_title)
+    analysis = await analyze_job_fit(profile, client, preset)
+    _save_job_profile(profile, analysis)
+    return JobProfileResponse(profile=profile, analysis=analysis)
+
+
+@app.get("/job-profiles", response_model=list[JobProfileSummary])
+async def list_job_profiles() -> list[JobProfileSummary]:
+    root = _job_profiles_root()
+    if not root.is_dir():
+        return []
+    items: list[tuple[JobProfileSummary, float]] = []
+    for path in root.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            p = JobProfile.model_validate(data["profile"])
+        except Exception:
+            continue
+        items.append((JobProfileSummary(
+            profile_id=p.profile_id, role_title=p.role_title,
+            company=p.company, location=p.location, seniority=p.seniority,
+            created_at=p.created_at.isoformat(),
+        ), path.stat().st_mtime))
+    items.sort(key=lambda pair: pair[1], reverse=True)
+    return [item for item, _ in items]
+
+
+@app.get("/job-profiles/{profile_id}", response_model=JobProfileResponse)
+async def get_job_profile(profile_id: str) -> JobProfileResponse:
+    profile, analysis = _load_job_profile(profile_id)
+    return JobProfileResponse(profile=profile, analysis=analysis)
+
+
+@app.delete("/job-profiles/{profile_id}")
+async def delete_job_profile(profile_id: str) -> dict:
+    if not _SESSION_ID_PATTERN.match(profile_id):
+        raise HTTPException(status_code=404, detail="Job profile not found")
+    path = _job_profile_path(profile_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Job profile not found")
+    path.unlink()
+    return {"deleted": profile_id}
+
+
+def _job_context_for(profile: JobProfile, question) -> str:
+    """Grading context for job-mode answers: the JD's bar + the resume the
+    candidate must stay consistent with."""
+    competency = competency_for_question(question) or "(untagged)"
+    return (
+        f"role: {profile.role_title} ({profile.seniority or 'unspecified seniority'})"
+        f"{' at ' + profile.company if profile.company else ''}\n"
+        f"competency under test: {competency}\n\n"
+        f"job_description (excerpt):\n{profile.job_description[:4000]}\n\n"
+        f"candidate_resume (excerpt):\n{profile.resume_text[:4000]}"
+    )
 
 
 # ── Voice transcription ──────────────────────────────────────────────

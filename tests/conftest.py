@@ -40,6 +40,7 @@ def _hermetic_provider_environment(monkeypatch):
     for var in (
         "ANTHROPIC_STRONG_MODEL", "ANTHROPIC_LIGHT_MODEL",
         "OPENAI_STRONG_MODEL", "OPENAI_LIGHT_MODEL", "CLAUDE_CLI_MODEL",
+        "LLM_CLI", "CLI_FORCE_MODEL", "CLI_STRONG_MODEL", "CLI_LIGHT_MODEL",
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(claude_cli_adapter, "_find_cli", lambda: None)

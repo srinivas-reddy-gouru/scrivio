@@ -1350,9 +1350,15 @@ class MockAnthropicMessages:
             # just adds nothing on top.
             return {"domains": []}
         if tool_name == "submit_interview_questions":
+            if "job_analysis:" in user_content:
+                return self._mock_job_interview_questions(user_content)
             return self._mock_interview_questions(user_content)
         if tool_name == "submit_answer_evaluation":
             return self._mock_answer_evaluation(user_content)
+        if tool_name == "submit_job_analysis":
+            return self._mock_job_analysis()
+        if tool_name == "submit_job_debrief":
+            return self._mock_job_debrief()
         # Unknown tool — return an empty dict; the caller's model_validate will
         # raise a clear Pydantic error rather than an obscure AttributeError.
         return {}
@@ -1403,6 +1409,59 @@ class MockAnthropicMessages:
                 {**question, "id": "q2", "section_anchor": "",
                  "question": f"Describe a trade-off you weigh when using {topic}."},
             ]
+        }
+
+    def _mock_job_analysis(self) -> dict:
+        return {
+            "competencies": [
+                {"name": "Event streaming", "why_it_matters": "JD centers on Kafka pipelines.",
+                 "evidence_in_resume": "strong",
+                 "probe_note": "Verify the 2M events/day claim."},
+                {"name": "Cloud infrastructure", "why_it_matters": "JD requires Kubernetes.",
+                 "evidence_in_resume": "missing",
+                 "probe_note": "Test container fundamentals."},
+                {"name": "Collaboration", "why_it_matters": "JD mentions cross-team work.",
+                 "evidence_in_resume": "partial",
+                 "probe_note": "Ask for a specific conflict story."},
+            ],
+            "resume_highlights": ["Built Kafka pipelines processing 2M events/day"],
+            "gaps": ["No Kubernetes experience listed"],
+            "company_context": "",
+        }
+
+    def _mock_job_interview_questions(self, user_content: str) -> dict:
+        """Three-question job screen tagged to two competencies so the
+        scorecard rollup and study plan have deterministic material."""
+        def q(i, anchor, competency, text):
+            return {
+                "id": f"q{i}", "question": text, "difficulty": "intermediate",
+                "section_anchor": anchor,
+                "rubric_key_points": [
+                    f"[competency: {competency}]",
+                    "names a specific system", "explains a trade-off",
+                ],
+                "model_answer": "A strong candidate walks through the "
+                                "specific system and its trade-offs.",
+            }
+        return {"questions": [
+            q(1, "warm-up", "Event streaming",
+              "Walk me through your path to this role."),
+            q(2, "resume deep-dive", "Event streaming",
+              "Your resume claims 2M events/day on Kafka. Walk me through the failure handling."),
+            q(3, "gap-probe", "Cloud infrastructure",
+              "This role uses Kubernetes daily. How would you close that gap?"),
+        ]}
+
+    def _mock_job_debrief(self) -> dict:
+        return {
+            "hire_signal": "lean hire",
+            "debrief": "Strong on event streaming with specific evidence; "
+                       "the Kubernetes gap-probe exposed real unfamiliarity. "
+                       "Fix container fundamentals before the real screen.",
+            "requirement_coverage": [
+                {"requirement": "Kafka pipeline experience", "status": "met"},
+                {"requirement": "Kubernetes in production", "status": "missing"},
+            ],
         }
 
     def _mock_answer_evaluation(self, user_content: str) -> dict:

@@ -357,6 +357,36 @@
   @keyframes rise-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
   .rise-in { animation: rise-in 0.5s ease-out both; }
 
+  /* Home feature cards */
+  .feature-card {
+    position: relative; text-align: center; padding: 2rem 1.5rem 1.75rem;
+    background: var(--surface); border: 1px solid var(--stroke);
+    border-radius: 1.25rem; cursor: pointer; font-family: inherit;
+    color: var(--text); display: flex; flex-direction: column;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+  .feature-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(32,184,205,0.5);
+    box-shadow: var(--card-hover-shadow);
+  }
+  .feature-card ul { margin-left: auto; margin-right: auto; }
+  .feature-card .btn-primary { margin-top: auto; display: inline-flex; }
+  .feature-icon {
+    width: 52px; height: 52px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 1.1rem; color: #06282c;
+    background: var(--grad); box-shadow: 0 0 24px rgba(32,184,205,0.3);
+  }
+  .feature-badge {
+    position: absolute; top: 1rem; right: 1rem;
+    padding: 0.2rem 0.6rem; border-radius: 9999px;
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: var(--grad); color: #06282c;
+  }
+
   .predict-range { width: 100%; max-width: 18rem; accent-color: var(--accent-text); }
   .badge-chip {
     display: inline-flex; align-items: center; gap: 0.3rem;
@@ -643,6 +673,10 @@
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <span class="hidden sm:inline">Library</span>
         </button>
+        <button id="nav-job" class="nav-link">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          <span class="hidden sm:inline">Job prep</span>
+        </button>
         <button id="nav-practice" class="nav-link">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>
           <span class="hidden sm:inline">Practice</span>
@@ -668,6 +702,71 @@
 
 <!-- ══════════ MAIN ══════════ -->
 <main class="max-w-5xl mx-auto px-5 py-10">
+
+  <!-- ── Home ── -->
+  <section id="home-panel" class="view hidden">
+    <div class="text-center mb-12 mt-6 rise-in">
+      <h1 class="font-display text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
+        Learn it. <span class="grad-text">Prove it.</span> Get the job.
+      </h1>
+      <p class="text-sm sm:text-base mt-4 max-w-xl mx-auto" style="color:var(--text-dim)">
+        Scrivio researches like a journalist, interviews like a senior engineer,
+        and gives feedback like a hiring panel — all on your own AI subscription.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto">
+
+      <button type="button" class="feature-card rise-in" style="animation-delay:.06s" id="home-card-article">
+        <div class="feature-icon">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </div>
+        <h3 class="font-display font-bold text-lg mb-2">Article studio</h3>
+        <p class="text-sm leading-relaxed mb-4" style="color:var(--text-dim)">
+          Deep technical articles researched from trusted sources, fact-checked claim by claim, written at your reading level.
+        </p>
+        <ul class="text-xs space-y-1.5 mb-5 text-left" style="color:var(--text-faint)">
+          <li>✓ Live web research with cited sources</li>
+          <li>✓ Every claim verified before it ships</li>
+          <li>✓ Basic, intermediate, or advanced depth</li>
+        </ul>
+        <span class="btn-primary text-sm w-full justify-center">Write an article</span>
+      </button>
+
+      <button type="button" class="feature-card rise-in" style="animation-delay:.12s" id="home-card-practice">
+        <div class="feature-icon">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </div>
+        <h3 class="font-display font-bold text-lg mb-2">Topic practice</h3>
+        <p class="text-sm leading-relaxed mb-4" style="color:var(--text-dim)">
+          Voice interviews on any topic. The interviewer speaks, you answer out loud, and the grading never flatters.
+        </p>
+        <ul class="text-xs space-y-1.5 mb-5 text-left" style="color:var(--text-faint)">
+          <li>✓ Practice, simulation, and 60s drills</li>
+          <li>✓ Hidden rubric — feedback you can trust</li>
+          <li>✓ Mastery tracking, streaks, weak-spot drills</li>
+        </ul>
+        <span class="btn-primary text-sm w-full justify-center">Start practicing</span>
+      </button>
+
+      <button type="button" class="feature-card rise-in" style="animation-delay:.18s" id="home-card-job">
+        <span class="feature-badge">New</span>
+        <div class="feature-icon">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        </div>
+        <h3 class="font-display font-bold text-lg mb-2">Job interview prep</h3>
+        <p class="text-sm leading-relaxed mb-4" style="color:var(--text-dim)">
+          Upload your resume and the job description — get a realistic 30–45 minute screen and a recruiter-grade scorecard.
+        </p>
+        <ul class="text-xs space-y-1.5 mb-5 text-left" style="color:var(--text-faint)">
+          <li>✓ Questions real interviewers ask for the role</li>
+          <li>✓ Grills your resume's own claims</li>
+          <li>✓ Hire signal + cited study plan for gaps</li>
+        </ul>
+        <span class="btn-primary text-sm w-full justify-center">Prep for a job</span>
+      </button>
+    </div>
+  </section>
 
   <!-- ── Compose ── -->
   <section id="config-panel" class="view view-fade">
@@ -1144,6 +1243,102 @@
     <div id="practice-summary" class="hidden max-w-3xl mx-auto"></div>
   </section>
 
+  <!-- ── Job prep ── -->
+  <section id="job-panel" class="view hidden">
+    <div class="text-center mb-8 mt-2 rise-in">
+      <h1 class="font-display text-3xl sm:text-4xl font-bold tracking-tight leading-tight">
+        Interview for <span class="grad-text">the job</span>, not just the topic
+      </h1>
+      <p class="text-sm mt-3" style="color:var(--text-dim)">
+        Your resume + the JD → a realistic 30–45 minute screen → a recruiter-grade scorecard with study links.
+      </p>
+    </div>
+
+    <!-- Setup form -->
+    <div class="card px-6 py-6 mb-6 rise-in" style="animation-delay:.06s" id="job-setup-card">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Role title *</label>
+          <input id="job-role" type="text" class="q-input w-full text-sm" placeholder="e.g. Senior Backend Engineer" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Company</label>
+          <input id="job-company" type="text" class="q-input w-full text-sm" placeholder="e.g. Acme Corp" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Location</label>
+          <input id="job-location" type="text" class="q-input w-full text-sm" placeholder="e.g. Austin, TX / Remote" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Seniority</label>
+          <select id="job-seniority" class="q-input w-full text-sm">
+            <option value="">Not specified</option>
+            <option value="junior">Junior</option>
+            <option value="mid">Mid-level</option>
+            <option value="senior" selected>Senior</option>
+            <option value="staff">Staff / Principal</option>
+            <option value="lead">Lead / Manager</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Job description * <span class="normal-case font-normal" style="color:var(--text-faint)">— paste it, or a posting URL</span></label>
+        <input id="job-jd-url" type="text" class="q-input w-full text-sm mb-2" placeholder="https://… (optional — fetches the posting)" />
+        <textarea id="job-jd" rows="5" class="q-input w-full text-sm" placeholder="Paste the job description here…"></textarea>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Resume * <span class="normal-case font-normal" style="color:var(--text-faint)">— PDF, DOCX, TXT, or paste</span></label>
+        <div class="flex items-center gap-3 mb-2 flex-wrap">
+          <label class="btn-outline text-sm cursor-pointer">
+            <input id="job-resume-file" type="file" accept=".pdf,.docx,.txt,.md" class="hidden" />
+            Upload file
+          </label>
+          <span id="job-resume-status" class="text-xs" style="color:var(--text-faint)">no file selected</span>
+        </div>
+        <textarea id="job-resume" rows="4" class="q-input w-full text-sm" placeholder="…or paste your resume text here"></textarea>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:var(--text-dim)">Anything else? <span class="normal-case font-normal" style="color:var(--text-faint)">— recruiter hints, round focus, notes</span></label>
+        <input id="job-notes" type="text" class="q-input w-full text-sm" placeholder="e.g. recruiter said they focus on system design" />
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button type="button" id="job-analyze-btn" class="btn-primary text-sm">Analyze my fit</button>
+        <span id="job-setup-status" class="text-sm" style="color:var(--text-dim)"></span>
+      </div>
+    </div>
+
+    <!-- Fit preview (after analysis) -->
+    <div id="job-fit" class="hidden card px-6 py-6 mb-6" style="border-color:rgba(32,184,205,0.35)">
+      <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <h3 class="font-display font-bold" id="job-fit-title">Your fit</h3>
+        <div class="flex items-center gap-2">
+          <select id="job-duration" class="q-input py-1.5 text-sm" style="width:auto">
+            <option value="30">~30 minutes</option>
+            <option value="45" selected>~45 minutes</option>
+          </select>
+          <button type="button" id="job-start-btn" class="btn-primary text-sm">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            Start interview
+          </button>
+        </div>
+      </div>
+      <div id="job-fit-body"></div>
+    </div>
+
+    <!-- Saved job targets -->
+    <div class="rise-in" style="animation-delay:.12s">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-display font-bold text-sm">Saved job targets</h3>
+      </div>
+      <div id="job-profile-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+      <p id="job-profile-empty" class="hidden text-sm text-center py-8" style="color:var(--text-faint)">No saved targets yet — analyze your first job above.</p>
+    </div>
+  </section>
+
   <!-- ── Settings ── -->
   <section id="settings-panel" class="view hidden max-w-2xl mx-auto">
     <div class="mb-6">
@@ -1240,6 +1435,7 @@
   applyTheme(document.documentElement.dataset.theme || 'dark');
 
   const VIEWS = {
+    home:           ['home-panel'],
     config:         ['config-panel'],
     clarification:  ['clarification-panel'],
     execution:      ['execution-panel'],
@@ -1247,6 +1443,7 @@
     history:        ['history-panel'],
     'past-article': ['past-article-panel'],
     practice:       ['practice-panel'],
+    job:            ['job-panel'],
     settings:       ['settings-panel'],
   };
 
@@ -1269,6 +1466,7 @@
       ['config','clarification','execution','result'].includes(view));
     $('nav-history').classList.toggle('active', ['history','past-article'].includes(view));
     $('nav-practice').classList.toggle('active', view === 'practice');
+    $('nav-job').classList.toggle('active', view === 'job');
     $('nav-settings').classList.toggle('active', view === 'settings');
   }
 
@@ -1479,10 +1677,16 @@
     // Every way Scrivio can reach an LLM is a provider — an API key is just
     // one of them. The Claude Code CLI (subscription) needs no key at all.
     const providers = [];
-    if (ks.has_claude_cli) providers.push({
-      id: 'claude-cli', name: 'Claude Code — your subscription',
-      desc: 'No API key needed. Runs on your Claude Pro/Max plan via the local CLI. Slower, but zero per-article cost.',
-    });
+    if (ks.has_claude_cli || (ks.detected_clis || []).length) {
+      const active = CLI_NAMES[ks.active_cli] || ks.active_cli || 'Claude Code';
+      const others = (ks.detected_clis || [])
+        .filter(c => c !== ks.active_cli).map(c => CLI_NAMES[c] || c);
+      providers.push({
+        id: 'claude-cli', name: `Local CLI — ${active}`,
+        desc: 'No API key needed — runs on the CLI\'s own sign-in. Slower, but zero per-call cost.'
+          + (others.length ? ` Also detected: ${others.join(', ')} (switch in Models below).` : ''),
+      });
+    }
     if (ks.has_anthropic) providers.push({
       id: 'anthropic', name: 'Anthropic API — Claude',
       desc: 'Pay per token · fastest · Sonnet for writing, Haiku for routing',
@@ -2528,7 +2732,10 @@
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const session = await r.json();
       State.practice = { session, idx: firstOpenQuestion(session) };
-      if (session.complete) renderPracticeSummary(session.summary);
+      if (session.complete) {
+        if (session.mode === 'job') { showView('practice'); renderJobScorecard(session); }
+        else renderPracticeSummary(session.summary);
+      }
       else renderPracticeQuestion();
     } catch (err) { alert('Could not open session: ' + err.message); }
   }
@@ -2558,6 +2765,19 @@
       const tick = () => {
         const s = Math.floor((Date.now() - State.practice.startedAt) / 1000);
         chip.textContent = `⏱ ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+      };
+      tick();
+      _practiceTimer = setInterval(tick, 1000);
+    } else if (mode === 'job') {
+      // Elapsed against a soft budget — real interviews run over, so the
+      // clock warns but never stops the session.
+      State.practice.startedAt = State.practice.startedAt || Date.now();
+      const budget = (State.practice.session.duration_minutes || 45) * 60;
+      chip.classList.remove('hidden');
+      const tick = () => {
+        const s = Math.floor((Date.now() - State.practice.startedAt) / 1000);
+        chip.textContent = `⏱ ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')} / ~${Math.round(budget / 60)}m`;
+        if (s > budget) chip.style.color = '#f87171';
       };
       tick();
       _practiceTimer = setInterval(tick, 1000);
@@ -2698,7 +2918,10 @@
 
   async function submitPracticeAnswer({ skip = false, followup = false } = {}) {
     Voice.abort(); // skip mid-recording, or leftover state — release the mic
-    clearPracticeTimer();
+    // Job mode's clock is a SESSION clock — it keeps running through
+    // grading and follow-ups, like a real interview. Other modes clear
+    // their per-question timers here.
+    if (!State.practice || State.practice.session.mode !== 'job') clearPracticeTimer();
     const { session, idx } = State.practice;
     const q = session.questions[idx];
     const answerEl = followup ? $('practice-followup-answer') : $('practice-answer');
@@ -2727,6 +2950,13 @@
       session.complete = result.session_complete;
       if (result.summary) session.summary = result.summary;
       if (skip) { advancePractice(); return; }
+      if (session.mode === 'job') {
+        if (result.session_complete) { renderJobScorecard(session); return; }
+        if (result.followup_question) { renderJobFollowup(result.followup_question); return; }
+        statusEl.textContent = 'Noted.';
+        setTimeout(advancePractice, 700);
+        return;
+      }
       if (session.mode === 'simulation' && !result.session_complete) {
         // Real conditions: no feedback mid-screen. Brief beat, next question.
         setTimeout(advancePractice, 700);
@@ -2750,7 +2980,8 @@
     const { session } = State.practice;
     const next = session.questions.findIndex(q => q.status === 'pending' || q.status === 'awaiting_followup');
     if (next === -1) {
-      renderPracticeSummary(session.summary);
+      if (session.mode === 'job') renderJobScorecard(session);
+      else renderPracticeSummary(session.summary);
     } else {
       State.practice.idx = next;
       renderPracticeQuestion();
@@ -2841,6 +3072,238 @@
     $('practice-home-btn').addEventListener('click', () => openPracticeHome(null));
   }
 
+  /* ── Job prep ───────────────────────────────── */
+  let _jobResumeFile = null;   // {b64, filename} once a file is chosen
+  let _jobProfile = null;      // {profile, analysis} of the active target
+
+  const EVIDENCE_STYLES = {
+    strong:  'background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.35)',
+    partial: 'background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.3)',
+    missing: 'background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.35)',
+  };
+  const HIRE_SIGNAL_STYLES = {
+    'strong hire':  VERDICT_STYLES.strong,
+    'hire':         VERDICT_STYLES.strong,
+    'lean hire':    VERDICT_STYLES.shallow,
+    'lean no-hire': VERDICT_STYLES.incorrect,
+    'no-hire':      VERDICT_STYLES.incorrect,
+  };
+
+  function openJobPrep() {
+    Voice.abort();
+    showView('job');
+    loadJobProfiles();
+  }
+
+  async function loadJobProfiles() {
+    const list = $('job-profile-list');
+    try {
+      const r = await fetch('/job-profiles');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const profiles = await r.json();
+      list.innerHTML = '';
+      $('job-profile-empty').classList.toggle('hidden', profiles.length > 0);
+      for (const p of profiles) {
+        const card = document.createElement('div');
+        card.className = 'history-card';
+        card.style.cursor = 'default';
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <h3 class="font-display font-bold text-sm leading-snug" style="color:var(--text)">${escapeHtml(p.role_title)}${p.company ? ' @ ' + escapeHtml(p.company) : ''}</h3>
+            <button type="button" class="job-del text-xs flex-shrink-0" title="Delete" style="color:var(--text-faint)">✕</button>
+          </div>
+          <div class="flex items-center justify-between text-xs" style="color:var(--text-faint)">
+            <span>${escapeHtml([p.seniority, p.location].filter(Boolean).join(' · ') || '—')}</span>
+            <button type="button" class="job-open btn-outline text-xs">Prepare</button>
+          </div>`;
+        card.querySelector('.job-open').addEventListener('click', async () => {
+          const rr = await fetch(`/job-profiles/${p.profile_id}`);
+          if (rr.ok) { renderJobFit(await rr.json()); }
+        });
+        card.querySelector('.job-del').addEventListener('click', async () => {
+          await fetch(`/job-profiles/${p.profile_id}`, { method: 'DELETE' });
+          if (_jobProfile && _jobProfile.profile.profile_id === p.profile_id) {
+            _jobProfile = null; $('job-fit').classList.add('hidden');
+          }
+          loadJobProfiles();
+        });
+        list.appendChild(card);
+      }
+    } catch (_) { /* list is enhancement; the form still works */ }
+  }
+
+  async function analyzeJob() {
+    const btn = $('job-analyze-btn'), status = $('job-setup-status');
+    const body = {
+      role_title: $('job-role').value.trim(),
+      company: $('job-company').value.trim(),
+      location: $('job-location').value.trim(),
+      seniority: $('job-seniority').value,
+      extra_notes: $('job-notes').value.trim(),
+      job_description: $('job-jd').value.trim(),
+      jd_url: $('job-jd-url').value.trim(),
+      resume_text: $('job-resume').value.trim(),
+    };
+    if (_jobResumeFile && !body.resume_text) {
+      body.resume_file_b64 = _jobResumeFile.b64;
+      body.resume_filename = _jobResumeFile.filename;
+    }
+    if (!body.role_title) { status.textContent = 'Role title is required.'; return; }
+    if (!body.job_description && !body.jd_url) { status.textContent = 'Paste the JD or give a posting URL.'; return; }
+    if (!body.resume_text && !body.resume_file_b64) { status.textContent = 'Upload or paste your resume.'; return; }
+    btn.disabled = true; status.textContent = 'Analyzing your fit… (~20s)';
+    try {
+      const r = await fetch('/job-profiles', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({detail: r.statusText})); throw new Error(d.detail || `HTTP ${r.status}`); }
+      const data = await r.json();
+      status.textContent = `✓ Resume parsed (${data.profile.resume_text.split(/\s+/).length} words)`;
+      renderJobFit(data);
+      loadJobProfiles();
+    } catch (err) {
+      status.textContent = '✗ ' + err.message;
+    } finally { btn.disabled = false; }
+  }
+
+  function renderJobFit(data) {
+    _jobProfile = data;
+    const a = data.analysis, p = data.profile;
+    $('job-fit-title').textContent =
+      `Your fit — ${p.role_title}${p.company ? ' @ ' + p.company : ''}`;
+    const chips = a.competencies.map(c =>
+      `<span class="px-2 py-0.5 rounded-full text-xs font-semibold mr-1 mb-1 inline-block" style="${EVIDENCE_STYLES[c.evidence_in_resume] || EVIDENCE_STYLES.partial}" title="${escapeHtml(c.probe_note)}">${escapeHtml(c.name)} · ${c.evidence_in_resume}</span>`
+    ).join('');
+    const gaps = a.gaps.length
+      ? `<p class="text-xs mt-3" style="color:var(--text-faint)">The interviewer will probe: <span style="color:var(--text-dim)">${a.gaps.map(escapeHtml).join(' · ')}</span></p>`
+      : '';
+    $('job-fit-body').innerHTML = `
+      <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--text-faint)">What this interview will measure</p>
+      <div>${chips}</div>${gaps}`;
+    $('job-fit').classList.remove('hidden');
+    $('job-fit').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  async function startJobInterview() {
+    if (!_jobProfile) return;
+    const btn = $('job-start-btn');
+    btn.disabled = true;
+    const old = btn.innerHTML;
+    btn.textContent = 'Preparing your interviewer… (~30s)';
+    try {
+      const r = await fetch('/interviews', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'job',
+          job_profile_id: _jobProfile.profile.profile_id,
+          duration_minutes: parseInt($('job-duration').value, 10),
+        }),
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({detail: r.statusText})); throw new Error(d.detail || `HTTP ${r.status}`); }
+      const session = await r.json();
+      State.practice = { session, idx: firstOpenQuestion(session) };
+      showView('practice');
+      renderPracticeQuestion();
+    } catch (err) {
+      alert('Could not start the interview: ' + err.message);
+    } finally { btn.disabled = false; btn.innerHTML = old; }
+  }
+
+  function renderJobFollowup(followupQuestion) {
+    // Job mode: the probe is visible but the evaluation behind it is not.
+    $('practice-answer-block').classList.add('hidden');
+    const fb = $('practice-feedback');
+    fb.innerHTML = `
+      <div class="card px-6 py-5">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--accent-text)">Follow-up</p>
+        <p class="text-sm font-semibold mb-3" style="color:var(--text)">${escapeHtml(followupQuestion)}</p>
+        <div id="practice-followup-voice"></div>
+        <div class="flex items-center justify-center gap-3 mt-2">
+          <button type="button" id="practice-followup-btn" class="btn-primary text-sm hidden">Submit follow-up</button>
+          <span id="practice-followup-status" class="text-sm" style="color:var(--text-dim)"></span>
+        </div>
+      </div>`;
+    fb.classList.remove('hidden');
+    $('practice-followup-btn').addEventListener('click', () => submitPracticeAnswer({ followup: true }));
+    mountVoiceInput($('practice-followup-voice'), {
+      textareaId: 'practice-followup-answer', submitBtnId: 'practice-followup-btn',
+    });
+    speakQuestion(followupQuestion);
+  }
+
+  function renderJobScorecard(session) {
+    Voice.abort();
+    clearPracticeTimer();
+    _practiceShow('practice-summary');
+    checkNewBadges();
+    const el = $('practice-summary');
+    const summary = session.summary || {};
+    const sc = summary.scorecard;
+    if (!sc) { renderPracticeSummary(summary); return; }
+
+    const signalStyle = HIRE_SIGNAL_STYLES[sc.hire_signal] || VERDICT_STYLES.adequate;
+    const avg = summary.average_score != null ? summary.average_score : '—';
+
+    const competencies = sc.competency_scores.map(c => {
+      const width = c.score != null ? c.score * 10 : 0;
+      const evidence = c.evidence.length
+        ? `<p class="text-xs mt-1.5" style="color:#4ade80">✓ ${c.evidence.map(escapeHtml).join('<br/>✓ ')}</p>` : '';
+      const gaps = c.gaps.length
+        ? `<p class="text-xs mt-1.5" style="color:#fbbf24">△ ${c.gaps.map(escapeHtml).join('<br/>△ ')}</p>` : '';
+      return `
+        <details class="py-2.5" style="border-bottom:1px solid var(--stroke)">
+          <summary class="cursor-pointer list-none">
+            <div class="flex items-center justify-between gap-3 mb-1.5">
+              <span class="text-sm font-semibold" style="color:var(--text)">${escapeHtml(c.name)}</span>
+              <span class="px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0" style="${c.band === 'strong' ? VERDICT_STYLES.strong : c.band === 'adequate' ? VERDICT_STYLES.adequate : c.band === 'needs work' ? VERDICT_STYLES.incorrect : VERDICT_STYLES.shallow}">${c.score != null ? c.score + '/10' : 'not assessed'}</span>
+            </div>
+            <div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${width}%;border-radius:3px;background:${SCORE_COLORS(c.score)};transition:width .6s ease-out"></div>
+            </div>
+          </summary>
+          ${evidence}${gaps}
+        </details>`;
+    }).join('');
+
+    const coverage = sc.requirement_coverage.map(r => `
+      <div class="flex items-center justify-between gap-3 py-2" style="border-bottom:1px solid var(--stroke)">
+        <span class="text-sm min-w-0" style="color:var(--text-dim)">${escapeHtml(r.requirement)}</span>
+        <span class="px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0" style="${r.status === 'met' ? VERDICT_STYLES.strong : r.status === 'partial' ? VERDICT_STYLES.shallow : VERDICT_STYLES.incorrect}">${r.status}</span>
+      </div>`).join('');
+
+    const byCompetency = {};
+    for (const s of sc.study_plan) (byCompetency[s.competency] = byCompetency[s.competency] || []).push(s);
+    const studyPlan = Object.entries(byCompetency).map(([name, resources]) => `
+      <div class="mb-3">
+        <p class="text-xs font-semibold mb-1" style="color:var(--text)">${escapeHtml(name)}</p>
+        ${resources.map(s => `
+          <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener" class="block text-sm py-1 hover:underline" style="color:var(--link)">
+            ${escapeHtml(s.title)} <span class="text-xs" style="color:var(--text-faint)">— ${escapeHtml(new URL(s.url).hostname.replace('www.',''))}</span>
+          </a>`).join('')}
+      </div>`).join('');
+
+    el.innerHTML = `
+      <div class="text-center mb-6 mt-2">
+        <h2 class="font-display text-3xl font-bold mb-3">Interview <span class="grad-text">scorecard</span></h2>
+        <p class="text-sm mb-3" style="color:var(--text-dim)">${escapeHtml(session.topic)} · ${summary.answered} answered · avg ${avg}/10</p>
+        ${sc.hire_signal ? `<span class="px-3 py-1.5 rounded-full text-sm font-bold" style="${signalStyle}">${escapeHtml(sc.hire_signal)}</span>` : ''}
+      </div>
+      ${sc.debrief ? `<div class="card px-6 py-5 mb-4" style="border-color:rgba(32,184,205,0.35)"><p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--accent-text)">Panel notes</p><p class="text-sm leading-relaxed" style="color:var(--text)">${escapeHtml(sc.debrief)}</p></div>` : ''}
+      <div class="card px-6 py-5 mb-4">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--text-faint)">Competency scorecard — tap to see evidence</p>
+        ${competencies}
+      </div>
+      ${coverage ? `<div class="card px-6 py-5 mb-4"><p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--text-faint)">JD requirement coverage</p>${coverage}</div>` : ''}
+      ${studyPlan ? `<div class="card px-6 py-5 mb-4"><p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--text-faint)">Study plan — trusted sources for your gaps</p>${studyPlan}</div>` : ''}
+      <div class="flex items-center justify-center gap-3 mt-6">
+        <button type="button" id="job-again-btn" class="btn-primary text-sm">Interview again</button>
+        <button type="button" id="job-back-btn" class="btn-outline text-sm">Back to job prep</button>
+      </div>`;
+    $('job-again-btn').addEventListener('click', startJobInterview);
+    $('job-back-btn').addEventListener('click', openJobPrep);
+  }
+
   let _pendingKeyUpdates = {};
   async function loadSettings() {
     showView('settings');
@@ -2877,6 +3340,10 @@
     OPENAI_STRONG_MODEL:    ['gpt-5', 'gpt-4o', 'gpt-5-mini'],
     OPENAI_LIGHT_MODEL:     ['gpt-5-mini', 'gpt-4o-mini'],
     CLAUDE_CLI_MODEL:       ['sonnet', 'haiku', 'opus', 'claude-fable-5', 'claude-opus-5', 'claude-sonnet-5'],
+    LLM_CLI:                ['claude', 'codex', 'gemini', 'qwen', 'ollama'],
+    CLI_STRONG_MODEL:       ['gpt-5', 'gemini-2.5-pro', 'qwen3-coder-plus', 'llama3.3'],
+    CLI_LIGHT_MODEL:        ['gpt-5-mini', 'gemini-2.5-flash', 'qwen3-coder-flash', 'llama3.2'],
+    CLI_FORCE_MODEL:        ['sonnet', 'haiku', 'gpt-5-mini', 'gemini-2.5-flash', 'llama3.3'],
   };
 
   function _modelSelectMarkup(k) {
@@ -2900,11 +3367,18 @@
   // Model settings are scoped to the provider actually in use — picking
   // Anthropic shows Claude model choices only, OpenAI shows GPT choices,
   // the CLI shows Claude choices plus its global override.
-  const PROVIDER_MODEL_KEYS = {
-    'anthropic':  ['ANTHROPIC_STRONG_MODEL', 'ANTHROPIC_LIGHT_MODEL'],
-    'openai':     ['OPENAI_STRONG_MODEL', 'OPENAI_LIGHT_MODEL'],
-    'claude-cli': ['ANTHROPIC_STRONG_MODEL', 'ANTHROPIC_LIGHT_MODEL', 'CLAUDE_CLI_MODEL'],
-  };
+  function providerModelKeys(state) {
+    const provider = state && state.resolved_provider;
+    if (provider === 'anthropic') return ['ANTHROPIC_STRONG_MODEL', 'ANTHROPIC_LIGHT_MODEL'];
+    if (provider === 'openai') return ['OPENAI_STRONG_MODEL', 'OPENAI_LIGHT_MODEL'];
+    if (provider === 'claude-cli') {
+      // Which knobs make sense depends on WHICH CLI is active.
+      return (state.active_cli === 'claude' || !state.active_cli)
+        ? ['LLM_CLI', 'ANTHROPIC_STRONG_MODEL', 'ANTHROPIC_LIGHT_MODEL', 'CLAUDE_CLI_MODEL']
+        : ['LLM_CLI', 'CLI_STRONG_MODEL', 'CLI_LIGHT_MODEL', 'CLI_FORCE_MODEL'];
+    }
+    return [];
+  }
 
   // Human titles for the models card — the env var name is a footnote.
   const MODEL_LABELS = {
@@ -2913,26 +3387,39 @@
     OPENAI_STRONG_MODEL:    'Large tasks',
     OPENAI_LIGHT_MODEL:     'Small tasks',
     CLAUDE_CLI_MODEL:       'Force one model (optional)',
+    LLM_CLI:                'Which CLI',
+    CLI_STRONG_MODEL:       'Large tasks',
+    CLI_LIGHT_MODEL:        'Small tasks',
+    CLI_FORCE_MODEL:        'Force one model (optional)',
+  };
+  const CLI_NAMES = {
+    claude: 'Claude Code (Claude Pro/Max)', codex: 'Codex CLI (ChatGPT)',
+    gemini: 'Gemini CLI (Google)', qwen: 'Qwen Code', ollama: 'Ollama (local)',
   };
   const PROVIDER_NAMES = {
     'anthropic': 'Anthropic API', 'openai': 'OpenAI API',
-    'claude-cli': 'Claude Code subscription',
+    'claude-cli': 'local CLI subscription',
   };
 
   function renderModelSettings(keys, state) {
     const container = $('settings-models');
     container.innerHTML = '';
     const provider = state && state.resolved_provider;
-    const visible = PROVIDER_MODEL_KEYS[provider] || [];
+    const visible = providerModelKeys(state);
+    const cliNote = provider === 'claude-cli' && state.active_cli
+      ? ` Active CLI: ${CLI_NAMES[state.active_cli] || state.active_cli}.`
+      : '';
     $('models-card-hint').textContent = provider && PROVIDER_NAMES[provider]
-      ? `For ${PROVIDER_NAMES[provider]} — the app describes the task size; the model choice is yours.`
+      ? `For the ${PROVIDER_NAMES[provider]} — the app describes the task size; the model choice is yours.${cliNote}`
       : 'Pick a provider above first.';
     if (!visible.length) {
       container.innerHTML = '<p class="py-6 text-sm text-center" style="color:var(--text-dim)">Choose a provider above to configure its models.</p>';
       return;
     }
-    for (const k of keys) {
-      if (!visible.includes(k.key)) continue;
+    const byKey = Object.fromEntries(keys.map(x => [x.key, x]));
+    for (const keyName of visible) {   // render in the list's logical order
+      const k = byKey[keyName];
+      if (!k) continue;
       const row = document.createElement('div');
       row.className = 'py-3';
       row.style.borderBottom = '1px solid var(--stroke)';
@@ -3183,6 +3670,20 @@
   $('nav-new').addEventListener('click', e => { e.preventDefault(); resetToConfig(); });
   $('nav-history').addEventListener('click', e => { e.preventDefault(); loadHistory(); });
   $('nav-practice').addEventListener('click', e => { e.preventDefault(); openPracticeHome(null); });
+  $('nav-job').addEventListener('click', e => { e.preventDefault(); openJobPrep(); });
+  $('job-analyze-btn').addEventListener('click', analyzeJob);
+  $('job-start-btn').addEventListener('click', startJobInterview);
+  $('job-resume-file').addEventListener('change', () => {
+    const file = $('job-resume-file').files[0];
+    if (!file) { _jobResumeFile = null; $('job-resume-status').textContent = 'no file selected'; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      _jobResumeFile = { b64: String(reader.result).split(',')[1] || '', filename: file.name };
+      $('job-resume-status').textContent = `${file.name} (${Math.round(file.size / 1024)} KB) ready`;
+      $('job-resume').value = ''; // file wins over paste until cleared
+    };
+    reader.readAsDataURL(file);
+  });
   $('nav-settings').addEventListener('click', e => { e.preventDefault(); loadSettings(); });
   $('result-practice-btn').addEventListener('click', () => {
     const level = $('level-selector').value || 'intermediate';
@@ -3243,11 +3744,14 @@
     else { localStorage.setItem('scrivio-tts', 'off'); stopSpeaking(); }
     updateTtsToggle();
   });
-  $('brand-link').addEventListener('click', e => { e.preventDefault(); resetToConfig(); });
+  $('brand-link').addEventListener('click', e => { e.preventDefault(); showView('home'); });
+  $('home-card-article').addEventListener('click', resetToConfig);
+  $('home-card-practice').addEventListener('click', () => openPracticeHome(null));
+  $('home-card-job').addEventListener('click', openJobPrep);
   $('level-selector').addEventListener('change', e => renderArticle(e.target.value));
   $('past-level-selector').addEventListener('change', e => { if (State.pastArticle) loadPastArticle(State.pastArticle.id, e.target.value); });
 
-  showView('config'); checkHealth(); refreshKeyStatus(); updateSummary();
+  showView('home'); checkHealth(); refreshKeyStatus(); updateSummary();
 </script>
 </body>
 </html>

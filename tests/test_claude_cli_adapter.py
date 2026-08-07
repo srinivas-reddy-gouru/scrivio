@@ -229,6 +229,104 @@ def test_verify_claim_runs_through_facade(monkeypatch) -> None:
     assert report.claim_id == str(claim.claim_id)
 
 
+# ── Multi-CLI registry ───────────────────────────────────────────────
+
+def test_cli_selection_via_env(monkeypatch) -> None:
+    from pipeline.providers.claude_cli_adapter import active_cli_name
+
+    monkeypatch.delenv("LLM_CLI", raising=False)
+    assert active_cli_name() == "claude"          # default
+    monkeypatch.setenv("LLM_CLI", "codex")
+    assert active_cli_name() == "codex"
+    monkeypatch.setenv("LLM_CLI", "not-a-cli")
+    assert active_cli_name() == "claude"          # unknown → safe default
+
+
+def test_codex_spec_argv_and_text_output(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_CLI", "codex")
+    stdout = b"The final agent message.\n"
+    calls = _patch_cli(monkeypatch, [_FakeProcess(stdout)])
+    adapter = ClaudeCLIAdapter()
+    response = asyncio.run(adapter.messages.create(
+        model="claude-sonnet-4-6",  # strong tier → codex strong model
+        messages=[{"role": "user", "content": "hi"}],
+    ))
+    assert response.content[0].text == "The final agent message."
+    argv = calls[0]
+    assert argv[1] == "exec"
+    assert "--sandbox" in argv and "read-only" in argv
+    assert "--skip-git-repo-check" in argv
+    assert "gpt-5" in argv                        # codex strong default
+
+
+def test_gemini_spec_json_response(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_CLI", "gemini")
+    stdout = json.dumps({"response": "Gemini says hi", "stats": {}}).encode()
+    calls = _patch_cli(monkeypatch, [_FakeProcess(stdout)])
+    adapter = ClaudeCLIAdapter()
+    response = asyncio.run(adapter.messages.create(
+        model="claude-haiku-4-5",  # light tier → gemini flash
+        messages=[{"role": "user", "content": "hi"}],
+    ))
+    assert response.content[0].text == "Gemini says hi"
+    assert "gemini-2.5-flash" in calls[0]
+    assert "--output-format" in calls[0]
+
+
+def test_ollama_spec_local_text(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_CLI", "ollama")
+    calls = _patch_cli(monkeypatch, [_FakeProcess(b"local answer")])
+    adapter = ClaudeCLIAdapter()
+    response = asyncio.run(adapter.messages.create(
+        model="claude-sonnet-4-6",
+        messages=[{"role": "user", "content": "hi"}],
+    ))
+    assert response.content[0].text == "local answer"
+    assert calls[0][1] == "run" and "llama3.3" in calls[0]
+
+
+def test_generic_tier_overrides_and_force(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_CLI", "gemini")
+    monkeypatch.setenv("CLI_STRONG_MODEL", "gemini-3-ultra")
+    assert _model_alias("claude-sonnet-4-6") == "gemini-3-ultra"
+    monkeypatch.setenv("CLI_FORCE_MODEL", "gemini-2.5-flash")
+    assert _model_alias("claude-sonnet-4-6") == "gemini-2.5-flash"  # force beats all
+
+
+def test_web_search_only_for_capable_clis(monkeypatch) -> None:
+    from pipeline.providers.claude_cli_adapter import cli_web_search
+
+    monkeypatch.setenv("LLM_CLI", "codex")
+    # No subprocess patching needed: capability gate returns [] first.
+    assert asyncio.run(cli_web_search("anything")) == []
+
+
+def test_detected_clis_lists_installed(monkeypatch) -> None:
+    from pipeline.providers import claude_cli_adapter as a
+
+    monkeypatch.setattr(
+        a, "_find_cli_for",
+        lambda name: "/bin/x" if name in ("claude", "ollama") else None,
+    )
+    assert a.detected_clis() == ["claude", "ollama"]
+
+
+def test_structured_output_works_on_any_cli(monkeypatch) -> None:
+    """The JSON-forcing tool emulation is CLI-agnostic — a codex-backed
+    run still produces valid tool_use blocks."""
+    monkeypatch.setenv("LLM_CLI", "codex")
+    _patch_cli(monkeypatch, [_FakeProcess(b'{"status": "ok"}')])
+    adapter = ClaudeCLIAdapter()
+    response = asyncio.run(adapter.messages.create(
+        model="m",
+        tools=[{"name": "t", "input_schema": {}}],
+        tool_choice={"type": "tool", "name": "t"},
+        messages=[{"role": "user", "content": "go"}],
+    ))
+    assert response.content[0].type == "tool_use"
+    assert response.content[0].input == {"status": "ok"}
+
+
 def test_cli_web_search_parses_results(monkeypatch) -> None:
     from pipeline.providers.claude_cli_adapter import cli_web_search
 
