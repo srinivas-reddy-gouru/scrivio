@@ -59,11 +59,33 @@ def _mock_anthropic_for_api(monkeypatch):
 
 
 def _create(client: TestClient, **overrides) -> dict:
+    """Create and return the FINISHED doc. Analysis is two-phase: the POST
+    returns status='analyzing' with the deterministic report only; under
+    TestClient the background LLM phase completes before post() returns,
+    so one GET yields the ready doc."""
     body = {"resume_text": RESUME_TEXT}
     body.update(overrides)
     response = client.post("/resumes", json=body)
     assert response.status_code == 200, response.text
-    return response.json()
+    immediate = response.json()
+    assert immediate["status"] == "analyzing"
+    assert immediate["report"]["score"] > 0  # deterministic report ships NOW
+    assert immediate["review"] is None       # LLM phase not in this response
+    done = client.get(f"/resumes/{immediate['resume_id']}")
+    assert done.status_code == 200
+    doc = done.json()
+    assert doc["status"] == "ready", doc.get("error")
+    return doc
+
+
+def _tailor(client: TestClient, resume_id: str) -> dict:
+    """Kick tailoring and return the finished doc (same two-phase shape)."""
+    response = client.post(f"/resumes/{resume_id}/tailor")
+    assert response.status_code == 200, response.text
+    assert response.json()["tailor_status"] == "tailoring"
+    done = client.get(f"/resumes/{resume_id}").json()
+    assert done["tailor_status"] == "idle", done.get("tailor_error")
+    return done
 
 
 # ── Create ───────────────────────────────────────────────────────────
@@ -161,9 +183,7 @@ def test_tailor_requires_jd():
 def test_tailor_produces_before_after_and_change_log():
     client = TestClient(server.app)
     doc = _create(client, jd_text=JD)
-    response = client.post(f"/resumes/{doc['resume_id']}/tailor")
-    assert response.status_code == 200, response.text
-    out = response.json()
+    out = _tailor(client, doc["resume_id"])
     tailored = out["tailored"]
     assert tailored["changes"], "change log must not be empty"
     kinds = {c["kind"] for c in tailored["changes"]}
@@ -227,7 +247,7 @@ def test_download_tailored_version_gating():
     doc = _create(client, jd_text=JD)
     rid = doc["resume_id"]
     assert client.get(f"/resumes/{rid}/download?version=tailored").status_code == 404
-    assert client.post(f"/resumes/{rid}/tailor").status_code == 200
+    _tailor(client, rid)
     tailored_md = client.get(f"/resumes/{rid}/download?version=tailored")
     assert tailored_md.status_code == 200
     assert "[METRIC]" in tailored_md.text
@@ -259,3 +279,35 @@ def test_path_traversal_ids_rejected():
     for bad in ("invalid~id", "x" * 100, "20250101..000000-abcdef"):
         assert client.get(f"/resumes/{bad}").status_code == 404
         assert client.delete(f"/resumes/{bad}").status_code == 404
+
+
+# ── Two-phase status flow ────────────────────────────────────────────
+
+def test_review_failure_keeps_checks_and_reports_error(monkeypatch):
+    async def boom(*args, **kwargs):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr(server, "review_resume", boom)
+    client = TestClient(server.app)
+    response = client.post("/resumes", json={"resume_text": RESUME_TEXT})
+    assert response.status_code == 200
+    doc = client.get(f"/resumes/{response.json()['resume_id']}").json()
+    assert doc["status"] == "error"
+    assert "provider" in doc["error"].lower() or "review" in doc["error"].lower()
+    assert doc["report"]["score"] > 0     # deterministic report survives
+    assert doc["review"] is None
+
+
+def test_tailor_conflicts_are_guarded():
+    client = TestClient(server.app)
+    doc = _create(client, jd_text=JD)
+    rid = doc["resume_id"]
+    # Simulate a tailor already in flight (in prod the background task
+    # is still running; under TestClient it finishes instantly, so set
+    # the persisted state directly).
+    from pipeline.schemas.models import ResumeDoc
+    stored = ResumeDoc.model_validate_json(
+        server._resume_path(rid).read_text(encoding="utf-8"))
+    stored.tailor_status = "tailoring"
+    server._save_resume_doc(stored)
+    assert client.post(f"/resumes/{rid}/tailor").status_code == 409

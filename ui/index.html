@@ -3387,6 +3387,58 @@
      review) → honest tailoring with an auditable change log. */
   let _resumeFile = null;   // { b64, filename } from the upload input
   let _resumeDoc = null;    // the ResumeDoc currently on screen
+  let _resumeWatch = null;  // { poll, clock, startedAt } while analyzing/tailoring
+
+  function _stopResumeWatch() {
+    if (_resumeWatch) {
+      clearInterval(_resumeWatch.poll);
+      clearInterval(_resumeWatch.clock);
+      _resumeWatch = null;
+    }
+  }
+
+  function _fmtElapsed(startedAt) {
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  // Poll the doc while a background phase runs; tick an elapsed clock so
+  // the wait is never silent. kind: 'analyze' | 'tailor'.
+  function _watchResumeDoc(resumeId, kind) {
+    _stopResumeWatch();
+    const startedAt = Date.now();
+    const clock = setInterval(() => {
+      const el = $(kind === 'analyze' ? 'resume-live-clock' : 'resume-tailor-clock');
+      if (el) el.textContent = _fmtElapsed(startedAt);
+    }, 1000);
+    const poll = setInterval(async () => {
+      let doc;
+      try {
+        const r = await fetch(`/resumes/${resumeId}`);
+        if (!r.ok) { _stopResumeWatch(); return; }  // deleted mid-run
+        doc = await r.json();
+      } catch (_) { return; }  // transient network blip: keep polling
+      if (kind === 'analyze' && doc.status !== 'analyzing') {
+        _stopResumeWatch();
+        renderResumeReport(doc);
+        loadResumeList();
+      } else if (kind === 'tailor' && doc.tailor_status !== 'tailoring') {
+        _stopResumeWatch();
+        _resumeDoc = doc;
+        if (doc.tailor_status === 'error') {
+          const status = $('resume-tailor-status');
+          if (status) status.textContent = '✗ ' + (doc.tailor_error || 'Tailoring failed.');
+          const btn = $('resume-tailor-btn');
+          if (btn) btn.disabled = false;
+        } else {
+          renderResumeReport(doc);
+          renderResumeTailored(doc);
+          loadResumeList();
+        }
+      }
+    }, 2500);
+    _resumeWatch = { poll, clock, startedAt };
+  }
 
   function openResumeStudio() {
     Voice.abort();
@@ -3441,6 +3493,10 @@
           const doc = await rr.json();
           renderResumeReport(doc);
           if (doc.tailored) renderResumeTailored(doc); else $('resume-tailored').classList.add('hidden');
+          // Re-attach the live watch if a background phase is still running
+          // (e.g. the page was reloaded mid-analysis).
+          if (doc.status === 'analyzing') _watchResumeDoc(doc.resume_id, 'analyze');
+          else if (doc.tailor_status === 'tailoring') _watchResumeDoc(doc.resume_id, 'tailor');
         });
         card.querySelector('.resume-del').addEventListener('click', async () => {
           await fetch(`/resumes/${item.resume_id}`, { method: 'DELETE' });
@@ -3472,7 +3528,7 @@
       status.textContent = 'Upload or paste your resume.'; return;
     }
     btn.disabled = true;
-    status.textContent = 'Reading your resume like a recruiter… (~20s)';
+    status.textContent = 'Running the checks…';
     $('resume-tailored').classList.add('hidden');
     try {
       const r = await fetch('/resumes', {
@@ -3482,8 +3538,11 @@
       if (!r.ok) { const d = await r.json().catch(() => ({detail: r.statusText})); throw new Error(d.detail || `HTTP ${r.status}`); }
       const doc = await r.json();
       status.textContent = '';
+      // The deterministic report is already in this response — show it NOW;
+      // the recruiter review streams in behind it via polling.
       renderResumeReport(doc);
       loadResumeList();
+      if (doc.status === 'analyzing') _watchResumeDoc(doc.resume_id, 'analyze');
     } catch (err) {
       status.textContent = '✗ ' + err.message;
     } finally { btn.disabled = false; }
@@ -3550,6 +3609,23 @@
 
     const review = doc.review;
     const CATEGORY_COLORS = { impact: '#fbbf24', clarity: '#60a5fa', structure: '#a78bfa', relevance: '#34d399', 'red-flag': '#f87171' };
+    // Live states: the LLM phase (structure + recruiter review) may still
+    // be running or may have failed — the deterministic report above is
+    // valid either way.
+    const liveHtml = doc.status === 'analyzing' ? `
+      <div class="mt-6 pt-5" style="border-top:1px solid var(--stroke)">
+        <div class="flex items-center gap-3">
+          <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:var(--accent-text);animation:pulseGlow 1.5s ease-in-out infinite"></span>
+          <p class="text-sm" style="color:var(--text-dim)">
+            The recruiter is reading your resume and mapping its structure…
+            <span id="resume-live-clock" class="font-mono-ui font-semibold" style="color:var(--accent-text)">0:00</span>
+          </p>
+        </div>
+        <p class="text-xs mt-1.5 ml-5" style="color:var(--text-faint)">Usually 20–60s with an API key, 1–2 minutes on a subscription CLI. The checklist above is final — this adds the judgment layer.</p>
+      </div>` : doc.status === 'error' ? `
+      <div class="mt-6 p-4 rounded-xl" style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.3)">
+        <p class="text-sm" style="color:#fca5a5">${escapeHtml(doc.error || 'The review step failed.')}</p>
+      </div>` : '';
     const reviewHtml = review ? `
       <div class="mt-6 pt-5" style="border-top:1px solid var(--stroke)">
         <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--accent-text)">Recruiter's read</p>
@@ -3564,24 +3640,34 @@
         ${review.missing_keywords.length ? `<p class="text-xs mt-3" style="color:var(--text-faint)">Also missing vs the JD: <span style="color:var(--text-dim)">${review.missing_keywords.map(escapeHtml).join(' · ')}</span></p>` : ''}
       </div>` : '';
 
-    const canTailor = !!doc.jd_text && !!doc.structured;
+    const canTailor = !!doc.jd_text && !!doc.structured && doc.status === 'ready';
+    const tailorHint = doc.status === 'analyzing'
+      ? 'Available once the analysis above finishes.'
+      : !doc.jd_text ? 'Add a job description above to unlock tailoring.'
+      : !doc.structured ? 'Unavailable — structure extraction failed.' : '';
+    const downloadsHtml = doc.structured
+      ? _downloadLinks(doc.resume_id, 'original')
+      : doc.status === 'analyzing'
+        ? '<span class="text-xs" style="color:var(--text-faint)">Downloads unlock when analysis finishes.</span>'
+        : '<span class="text-xs" style="color:var(--text-faint)">Downloads unavailable — structure extraction failed.</span>';
     el.innerHTML = `
       <div class="flex items-start justify-between flex-wrap gap-4 mb-5">
         <div class="min-w-0">
           <h3 class="font-display font-bold">ATS readiness${doc.jd_label ? ` — vs ${escapeHtml(doc.jd_label)}` : ''}</h3>
           <p class="text-xs mt-1" style="color:var(--text-faint)">Every point below is a rule you can verify — no black box.</p>
         </div>
-        <div class="flex items-center gap-2 flex-wrap">${doc.structured ? _downloadLinks(doc.resume_id, 'original') : '<span class="text-xs" style="color:var(--text-faint)">Downloads unavailable — structure extraction failed.</span>'}</div>
+        <div class="flex items-center gap-2 flex-wrap">${downloadsHtml}</div>
       </div>
       <div class="flex flex-col sm:flex-row gap-6 items-start">
         ${_resumeScoreRing(report.score, cov ? '70% checks + 30% keywords' : 'weighted checks')}
         <div class="min-w-0 flex-1">${checkRows}</div>
       </div>
       ${covHtml}
+      ${liveHtml}
       ${reviewHtml}
       <div class="flex items-center gap-3 mt-6 pt-5" style="border-top:1px solid var(--stroke)">
         <button type="button" id="resume-tailor-btn" class="btn-primary text-sm" ${canTailor ? '' : 'disabled'}>Tailor to this JD</button>
-        <span id="resume-tailor-status" class="text-sm" style="color:var(--text-dim)">${canTailor ? '' : 'Add a job description above to unlock tailoring.'}</span>
+        <span id="resume-tailor-status" class="text-sm" style="color:var(--text-dim)">${tailorHint}</span>
       </div>`;
     el.classList.remove('hidden');
     if (canTailor) $('resume-tailor-btn').addEventListener('click', runResumeTailor);
@@ -3592,18 +3678,21 @@
     if (!_resumeDoc) return;
     const btn = $('resume-tailor-btn'), status = $('resume-tailor-status');
     btn.disabled = true;
-    status.textContent = 'Rewriting honestly — nothing invented… (~40s)';
     try {
       const r = await fetch(`/resumes/${_resumeDoc.resume_id}/tailor`, { method: 'POST' });
       if (!r.ok) { const d = await r.json().catch(() => ({detail: r.statusText})); throw new Error(d.detail || `HTTP ${r.status}`); }
-      const doc = await r.json();
-      _resumeDoc = doc;
-      status.textContent = '';
-      await renderResumeTailored(doc);
-      loadResumeList();
+      _resumeDoc = await r.json();
+      // The rewrite runs in the background; keep the user company with a
+      // live clock until the poll sees it finish.
+      status.innerHTML =
+        'Rewriting honestly — nothing invented… ' +
+        '<span id="resume-tailor-clock" class="font-mono-ui font-semibold" style="color:var(--accent-text)">0:00</span>' +
+        ' <span style="color:var(--text-faint)">(up to ~2 min on a subscription CLI)</span>';
+      _watchResumeDoc(_resumeDoc.resume_id, 'tailor');
     } catch (err) {
       status.textContent = '✗ ' + err.message;
-    } finally { btn.disabled = false; }
+      btn.disabled = false;
+    }
   }
 
   const CHANGE_KIND_LABELS = {

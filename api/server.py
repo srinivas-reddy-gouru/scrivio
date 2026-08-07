@@ -16,7 +16,7 @@ try:
 except ModuleNotFoundError:
     pass
 
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -2015,43 +2015,71 @@ def _resolve_resume_input(body: ResumeCreateRequest) -> tuple[str, StructuredRes
     raise HTTPException(status_code=422, detail="Provide a resume (file upload or pasted text)")
 
 
-@app.post("/resumes", response_model=ResumeDoc)
-async def create_resume(body: ResumeCreateRequest) -> ResumeDoc:
-    resume_text, structured = _resolve_resume_input(body)
-    jd_text, jd_label = await _resolve_resume_jd(body)
-
+async def _finish_resume_analysis(resume_id: str) -> None:
+    """Background phase of analysis: the two LLM calls. The deterministic
+    report already shipped in the POST response; this fills in structure +
+    recruiter review and flips status to ready/error."""
+    try:
+        doc = _load_resume_doc(resume_id)
+    except HTTPException:
+        return  # deleted before the task ran
     client, preset = _client_for_session({}, "resume")
 
     async def _extract() -> StructuredResume | None:
         try:
-            return await extract_resume(resume_text, client, preset)
+            return await extract_resume(doc.original_text, client, preset)
         except Exception:
             # A failed extraction degrades to text-only checks — the report
             # still ships, minus the structure-aware rows and tailoring.
             logging.exception("Resume extraction failed; continuing text-only")
             return None
 
-    # Extraction and review both read only the raw text — run them
-    # concurrently (the analyze wait is dominated by these two calls).
-    if structured is None:
-        structured, review = await asyncio.gather(
-            _extract(), review_resume(resume_text, jd_text, client, preset)
+    try:
+        # Extraction and review both read only the raw text — run them
+        # concurrently (the analyze wait is dominated by these two calls).
+        if doc.structured is None:
+            doc.structured, doc.review = await asyncio.gather(
+                _extract(),
+                review_resume(doc.original_text, doc.jd_text, client, preset),
+            )
+        else:  # JSON Resume import: structure already known
+            doc.review = await review_resume(
+                doc.original_text, doc.jd_text, client, preset
+            )
+        # Structure-aware checks join the report now that structure exists.
+        doc.report = run_ats_checks(
+            doc.original_text, doc.jd_text or None, doc.structured
         )
-    else:  # JSON Resume import: structure already known
-        review = await review_resume(resume_text, jd_text, client, preset)
+        doc.status, doc.error = "ready", ""
+    except Exception:
+        logging.exception("Resume review failed")
+        doc.status = "error"
+        doc.error = ("The recruiter review failed — check your provider in "
+                     "Settings and re-analyze. The checklist above is still valid.")
+    if _resume_path(resume_id).is_file():  # deleted mid-analysis → discard
+        _save_resume_doc(doc)
 
-    report = run_ats_checks(resume_text, jd_text or None, structured)
 
+@app.post("/resumes", response_model=ResumeDoc)
+async def create_resume(
+    body: ResumeCreateRequest, background_tasks: BackgroundTasks
+) -> ResumeDoc:
+    resume_text, structured = _resolve_resume_input(body)
+    jd_text, jd_label = await _resolve_resume_jd(body)
+
+    # Everything deterministic ships in THIS response, sub-second: the
+    # user sees a real report immediately while the LLM phase runs behind.
     doc = ResumeDoc(
         resume_id=(datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]),
         original_text=resume_text,
+        status="analyzing",
         structured=structured,
         jd_text=jd_text,
         jd_label=jd_label,
-        report=report,
-        review=review,
+        report=run_ats_checks(resume_text, jd_text or None, structured),
     )
     _save_resume_doc(doc)
+    background_tasks.add_task(_finish_resume_analysis, doc.resume_id)
     return doc
 
 
@@ -2094,8 +2122,40 @@ async def delete_resume(resume_id: str) -> dict:
     return {"deleted": resume_id}
 
 
+async def _finish_resume_tailor(resume_id: str) -> None:
+    try:
+        doc = _load_resume_doc(resume_id)
+    except HTTPException:
+        return
+    client, preset = _client_for_session({}, "resume")
+    try:
+        doc.tailored = await tailor_resume(
+            structured=doc.structured,
+            jd_text=doc.jd_text,
+            review=doc.review,
+            report=doc.report,
+            client=client,
+            preset=preset,
+        )
+        # Before/after on identical footing: re-run the same deterministic
+        # checks on the tailored structure's canonical rendering.
+        doc.tailored_report = run_ats_checks(
+            render_markdown(doc.tailored.resume), doc.jd_text, doc.tailored.resume
+        )
+        doc.tailor_status, doc.tailor_error = "idle", ""
+    except Exception:
+        logging.exception("Resume tailoring failed")
+        doc.tailor_status = "error"
+        doc.tailor_error = ("Tailoring failed — check your provider in Settings "
+                            "and try again.")
+    if _resume_path(resume_id).is_file():
+        _save_resume_doc(doc)
+
+
 @app.post("/resumes/{resume_id}/tailor", response_model=ResumeDoc)
-async def tailor_resume_endpoint(resume_id: str) -> ResumeDoc:
+async def tailor_resume_endpoint(
+    resume_id: str, background_tasks: BackgroundTasks
+) -> ResumeDoc:
     doc = _load_resume_doc(resume_id)
     if not doc.jd_text:
         raise HTTPException(
@@ -2108,21 +2168,15 @@ async def tailor_resume_endpoint(resume_id: str) -> ResumeDoc:
             detail="No structured resume available (extraction failed) — tailoring "
                    "needs the structure. Try re-uploading.",
         )
-    client, preset = _client_for_session({}, "resume")
-    doc.tailored = await tailor_resume(
-        structured=doc.structured,
-        jd_text=doc.jd_text,
-        review=doc.review,
-        report=doc.report,
-        client=client,
-        preset=preset,
-    )
-    # Before/after on identical footing: re-run the same deterministic
-    # checks on the tailored structure's canonical rendering.
-    doc.tailored_report = run_ats_checks(
-        render_markdown(doc.tailored.resume), doc.jd_text, doc.tailored.resume
-    )
+    if doc.status == "analyzing":
+        raise HTTPException(
+            status_code=409, detail="Analysis is still running — tailor once it finishes.",
+        )
+    if doc.tailor_status == "tailoring":
+        raise HTTPException(status_code=409, detail="Tailoring is already running.")
+    doc.tailor_status, doc.tailor_error = "tailoring", ""
     _save_resume_doc(doc)
+    background_tasks.add_task(_finish_resume_tailor, resume_id)
     return doc
 
 

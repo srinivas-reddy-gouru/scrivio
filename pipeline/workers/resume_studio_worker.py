@@ -365,32 +365,45 @@ def render_docx(s: StructuredResume) -> bytes:
     return buf.getvalue()
 
 
+# PDF core fonts use WinAnsi encoding: 0x95 renders as a real bullet
+# glyph and 0x96 as an en dash, so those survive; everything else
+# non-encodable maps to a plain equivalent rather than embedding a font.
+_PDF_BULLET = "\x95"
+_PDF_ENDASH = "\x96"
+
+
 def _pdf_safe(text: str) -> str:
-    """fpdf2's built-in core fonts are latin-1; swap the typographic
-    characters resumes actually contain for ASCII equivalents rather than
+    """fpdf2's built-in core fonts are WinAnsi; swap typographic characters
+    resumes actually contain for renderable equivalents rather than
     embedding a font (keeps the dependency footprint tiny)."""
     replacements = {
-        "–": "-", "—": "-", "•": "-", "·": "|",
-        "‘": "'", "’": "'", "“": '"', "”": '"',
-        "…": "...", " ": " ", "→": "->",
+        "\u2013": _PDF_ENDASH, "\u2014": _PDF_ENDASH,
+        "\u2022": _PDF_BULLET, "\u00b7": "|",
+        "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+        "\u2026": "...", "\u00a0": " ", "\u2192": "->",
     }
-    for src, dst in replacements.items():
-        text = text.replace(src, dst)
+    for src_ch, dst in replacements.items():
+        text = text.replace(src_ch, dst)
     return text.encode("latin-1", errors="replace").decode("latin-1")
 
 
 def render_pdf(s: StructuredResume) -> bytes:
     """Single-column, ATS-safe PDF — the format most application portals
-    demand. Same field mapping as the DOCX render, core fonts only."""
+    demand. Same field mapping as the DOCX render, core fonts only.
+    Typography rules: real bullet glyphs with hanging indents (wrapped
+    lines align under the text, not the margin), bold role lines with
+    muted dates, ruled section headers."""
     from fpdf import FPDF
 
     pdf = FPDF(format="letter")
-    pdf.set_auto_page_break(auto=True, margin=18)
-    pdf.set_margins(18, 16, 18)
+    pdf.set_auto_page_break(auto=True, margin=16)
+    pdf.set_margins(18, 15, 18)
     pdf.add_page()
     width = pdf.w - pdf.l_margin - pdf.r_margin
 
-    def line(text, size=10, style="", color=(20, 20, 20), spacing=1.45, before=0):
+    INK, MUTED, ACCENT, RULE = (25, 30, 29), (95, 105, 103), (26, 84, 78), (185, 195, 193)
+
+    def line(text, size=10, style="", color=INK, spacing=1.42, before=0):
         if before:
             pdf.ln(before)
         pdf.set_font("Helvetica", style, size)
@@ -402,66 +415,101 @@ def render_pdf(s: StructuredResume) -> bytes:
             new_x="LMARGIN", new_y="NEXT",
         )
 
+    def bullet(text, size=9.5):
+        """Real bullet glyph + hanging indent: wrapped lines align under
+        the text start, which is what makes a dense role scannable."""
+        h = size * 0.353 * 1.42
+        pdf.set_font("Helvetica", "", size)
+        pdf.set_text_color(*ACCENT)
+        pdf.cell(4.5, h, _PDF_BULLET)
+        pdf.set_text_color(*INK)
+        pdf.multi_cell(width - 4.5, h, _pdf_safe(text),
+                       new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(0.6)
+
+    def labeled(label, rest, size=9.5):
+        """Bold inline label ("Languages:") followed by wrapped plain text."""
+        h = size * 0.353 * 1.42
+        pdf.set_font("Helvetica", "B", size)
+        label_w = pdf.get_string_width(_pdf_safe(label)) + 1.5
+        pdf.set_text_color(*INK)
+        pdf.cell(label_w, h, _pdf_safe(label))
+        pdf.set_font("Helvetica", "", size)
+        pdf.multi_cell(width - label_w, h, _pdf_safe(rest),
+                       new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(0.6)
+
     def section(title):
-        pdf.ln(3)
-        line(title.upper(), size=11, style="B", color=(30, 64, 60))
-        y = pdf.get_y() + 0.5
-        pdf.set_draw_color(180, 190, 188)
+        pdf.ln(3.2)
+        pdf.set_font("Helvetica", "B", 10.5)
+        pdf.set_text_color(*ACCENT)
+        pdf.set_char_spacing(0.6)
+        pdf.multi_cell(width, 5, title.upper(), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_char_spacing(0)
+        y = pdf.get_y() + 0.4
+        pdf.set_draw_color(*RULE)
+        pdf.set_line_width(0.3)
         pdf.line(pdf.l_margin, y, pdf.l_margin + width, y)
-        pdf.ln(2)
+        pdf.ln(2.4)
 
     b = s.basics
-    line(b.name or "Resume", size=19, style="B")
+    line(b.name or "Resume", size=20, style="B")
     if b.label:
-        line(b.label, size=11, color=(70, 80, 78))
+        line(b.label, size=11, color=(60, 72, 70), before=0.6)
     contact = "  |  ".join(p for p in (b.email, b.phone, b.location, b.url) if p)
     if contact:
-        line(contact, size=9, color=(90, 100, 98))
+        line(contact, size=9, color=MUTED, before=0.8)
     if b.summary:
         section("Summary")
-        line(b.summary)
+        line(b.summary, size=9.7)
     if s.work:
         section("Experience")
-        for w in s.work:
-            heading = " - ".join(p for p in (w.position, w.name) if p)
-            line(heading or "Role", style="B", size=10.5, before=1.5)
+        for i, w in enumerate(s.work):
+            heading = " \u2014 ".join(p for p in (w.position, w.name) if p)
+            line(heading or "Role", style="B", size=10.5, before=2.6 if i else 0)
             dates = _date_range(w.startDate, w.endDate)
             if dates:
-                line(dates, size=9, color=(90, 100, 98))
+                line(dates, size=8.8, color=MUTED, before=0.3)
+            pdf.ln(1)
             if w.summary:
                 line(w.summary, size=9.5)
+                pdf.ln(0.6)
             for h in w.highlights:
-                line(f"-  {h}", size=9.5)
+                bullet(h)
     if s.projects:
         section("Projects")
-        for p in s.projects:
-            line(p.name or "Project", style="B", size=10.5, before=1.5)
-            if p.description:
-                line(p.description, size=9.5)
-            if p.url:
-                line(p.url, size=9, color=(90, 100, 98))
-            for h in p.highlights:
-                line(f"-  {h}", size=9.5)
+        for i, proj in enumerate(s.projects):
+            line(proj.name or "Project", style="B", size=10.5, before=2.6 if i else 0)
+            if proj.description:
+                line(proj.description, size=9.5)
+            if proj.url:
+                line(proj.url, size=8.8, color=MUTED)
+            pdf.ln(0.6)
+            for h in proj.highlights:
+                bullet(h)
     if s.education:
         section("Education")
-        for e in s.education:
+        for i, e in enumerate(s.education):
             degree = " in ".join(p for p in (e.studyType, e.area) if p)
-            heading = " - ".join(p for p in (degree, e.institution) if p)
-            line(heading or "Education", style="B", size=10.5, before=1.5)
+            heading = " \u2014 ".join(p for p in (degree, e.institution) if p)
+            line(heading or "Education", style="B", size=10.5, before=2 if i else 0)
             tail = "  |  ".join(
                 p for p in (_date_range(e.startDate, e.endDate), e.score) if p
             )
             if tail:
-                line(tail, size=9, color=(90, 100, 98))
+                line(tail, size=8.8, color=MUTED, before=0.3)
     if s.skills:
         section("Skills")
         for sk in s.skills:
             kw = ", ".join(sk.keywords)
-            line(f"{sk.name}: {kw}" if sk.name else kw, size=9.5)
+            if sk.name:
+                labeled(f"{sk.name}:", kw)
+            else:
+                line(kw, size=9.5)
     if s.certificates:
         section("Certifications")
         for c in s.certificates:
-            line(f"-  {c}", size=9.5)
+            bullet(c)
     return bytes(pdf.output())
 
 

@@ -724,9 +724,19 @@ class TailoredResume(BaseModel):
 
 
 class ResumeDoc(BaseModel):
-    """Persisted resume-studio document (output/resumes/<id>.json)."""
+    """Persisted resume-studio document (output/resumes/<id>.json).
+
+    Analysis is two-phase: POST /resumes returns immediately with the
+    deterministic report and status="analyzing"; a background task fills
+    in the LLM parts (structure, review) and flips status to "ready".
+    Old single-phase docs deserialize as "ready" via the default.
+    """
     resume_id: str
     original_text: str
+    status: Literal["analyzing", "ready", "error"] = "ready"
+    error: str = ""
+    tailor_status: Literal["idle", "tailoring", "error"] = "idle"
+    tailor_error: str = ""
     structured: StructuredResume | None = None
     jd_text: str = ""
     jd_label: str = ""  # "role @ company" when sourced from a saved job target
