@@ -4,6 +4,12 @@ The rubric and model answer were generated with the question, before any
 candidate answer existed — the evaluator's only job is to compare against
 that fixed bar. Supports a single follow-up round: when *followup_answer*
 is passed, the call produces the FINAL combined evaluation of both answers.
+
+Interviewer memory: the evaluator can receive a compact digest of the
+session's PRIOR answers (interview_memory_digest). This is deliberately
+application-layer state — we assemble exactly the context each grading
+call should see from our own persisted session, instead of running one
+ever-growing chat session whose history would drift the grading bar.
 """
 from __future__ import annotations
 
@@ -58,6 +64,51 @@ def _section_excerpt(
     return _truncate_article(article_markdown, fallback_chars)
 
 
+# Memory digest budgets: enough for continuity, small enough that the
+# fixed rubric stays the dominant signal in the prompt.
+_MEMORY_MAX_QUESTIONS = 8
+_MEMORY_FIELD_CHARS = 110
+
+
+def _memory_trunc(text: str, limit: int = _MEMORY_FIELD_CHARS) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def interview_memory_digest(session, exclude_question_id: str) -> str:
+    """Deterministic one-line-per-question summary of every PRIOR resolved
+    question: what was asked, how it scored, what the candidate demonstrated
+    (the evaluator's quoted strengths) and where they fell short.
+
+    Built from persisted session state, never from an LLM — so it costs
+    ~40 tokens per prior question and cannot hallucinate history.
+    """
+    lines: list[str] = []
+    for i, state in enumerate(session.questions, start=1):
+        if state.question.id == exclude_question_id:
+            continue
+        if state.status == "skipped":
+            lines.append(f"Q{i} (skipped): {_memory_trunc(state.question.question)}")
+            continue
+        if state.status != "completed":
+            continue
+        evaluation = state.followup.evaluation if state.followup else (
+            state.first.evaluation if state.first else None
+        )
+        if evaluation is None:
+            continue
+        entry = (
+            f"Q{i} ({state.final_score}/10, {evaluation.verdict}): "
+            f"{_memory_trunc(state.question.question)}"
+        )
+        if evaluation.strengths:
+            entry += f"\n   demonstrated: {_memory_trunc(evaluation.strengths[0])}"
+        if evaluation.gaps:
+            entry += f"\n   gap: {_memory_trunc(evaluation.gaps[0])}"
+        lines.append(entry)
+    return "\n".join(lines[-_MEMORY_MAX_QUESTIONS:])
+
+
 async def evaluate_answer(
     *,
     question: InterviewQuestion,
@@ -67,6 +118,7 @@ async def evaluate_answer(
     preset: str = "balanced",
     article_markdown: str | None = None,
     job_context: str | None = None,
+    session_memory: str | None = None,
     followup_question: str | None = None,
     followup_answer: str | None = None,
 ) -> AnswerEvaluation:
@@ -88,8 +140,10 @@ async def evaluate_answer(
         f"rubric_key_points:\n{rubric_block}",
         f"model_answer: {question.model_answer}",
         f"reference:\n{reference or 'none'}",
-        f"candidate_answer: {user_answer}",
     ]
+    if session_memory:
+        parts.append(f"interview_so_far:\n{session_memory}")
+    parts.append(f"candidate_answer: {user_answer}")
     if followup_answer is not None:
         parts.append(f"followup_question: {followup_question or ''}")
         parts.append(f"followup_answer: {followup_answer}")

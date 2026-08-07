@@ -43,7 +43,11 @@ from pipeline.schemas.models import (
     ResumeDoc,
     StructuredResume,
 )
-from pipeline.workers.answer_evaluator_worker import evaluate_answer, generate_debrief
+from pipeline.workers.answer_evaluator_worker import (
+    evaluate_answer,
+    generate_debrief,
+    interview_memory_digest,
+)
 from pipeline.workers.job_interviewer_worker import (
     analyze_job_fit,
     competency_for_question,
@@ -1573,6 +1577,16 @@ async def submit_interview_answer(
                 except HTTPException:
                     job_context = None  # profile deleted: grade ungrounded
 
+            # Interviewer memory: a digest of prior answers so grading has
+            # session continuity (consistency checks, "as you said earlier"
+            # follow-ups). Drills stay memoryless — rapid fire is meant to
+            # test each item cold, and the digest would just burn tokens.
+            session_memory = None
+            if session.mode != "drill":
+                session_memory = (
+                    interview_memory_digest(session, state.question.id) or None
+                )
+
             if state.status == "pending":
                 evaluation = await evaluate_answer(
                     question=state.question,
@@ -1582,6 +1596,7 @@ async def submit_interview_answer(
                     preset=preset,
                     article_markdown=article_markdown,
                     job_context=job_context,
+                    session_memory=session_memory,
                 )
                 # Follow-ups exist in practice AND job modes (real
                 # interviewers probe); simulations never break their flow
@@ -1609,6 +1624,7 @@ async def submit_interview_answer(
                     preset=preset,
                     article_markdown=article_markdown,
                     job_context=job_context,
+                    session_memory=session_memory,
                     followup_question=state.first.evaluation.followup_question,
                     followup_answer=answer,
                 )
