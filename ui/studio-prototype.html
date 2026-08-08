@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scrivio: The Studio (prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* ═══ THE STUDIO — whole-app prototype. One workplace, four rooms,
+   one language: paper on the desk, marks on the paper. ═══ */
+:root {
+  --desk: #0C1312; --paper: #F7F4EC; --paper-edge: #EAE5D8;
+  --ink: #212B29; --ink-dim: #5A6663;
+  --teal: #20B8CD; --grad: linear-gradient(135deg,#0FB5AA 0%,#20B8CD 55%,#4CC9F0 100%);
+  --amber: #E5B04C; --amber-soft: rgba(229,176,76,0.16);
+  --redpen: #E06A55; --redpen-soft: rgba(224,106,85,0.14);
+  --green: #34D399;
+  --text: #E8EDEA; --text-dim: #93A5A2; --text-faint: #5C6C6A;
+  --stroke: rgba(255,255,255,0.09); --rail-bg: rgba(255,255,255,0.033);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family:'Inter',system-ui,sans-serif; color:var(--text); min-height:100vh;
+  background:
+    radial-gradient(1100px 500px at 75% -10%, rgba(32,184,205,0.08), transparent 60%),
+    radial-gradient(900px 600px at -10% 110%, rgba(15,181,170,0.06), transparent 55%),
+    var(--desk);
+  display:flex;
+}
+.font-display { font-family:'Space Grotesk',sans-serif; }
+.mono { font-family:'JetBrains Mono',monospace; }
+:focus-visible { outline:2px solid var(--teal); outline-offset:2px; border-radius:6px; }
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; }
+}
+@keyframes rise { from { opacity:0; transform:translateY(8px);} to { opacity:1; transform:none;} }
+@keyframes paper-in { from { opacity:0; transform:translateY(18px) rotate(-0.5deg);} to { opacity:1; transform:none;} }
+
+/* ── Shell: sidebar + palette ── */
+.side {
+  width: 196px; flex-shrink:0; padding:1rem 0.7rem; position:sticky; top:0; height:100vh;
+  border-right:1px solid var(--stroke); display:flex; flex-direction:column; gap:0.2rem;
+  background:rgba(12,19,18,0.6); backdrop-filter:blur(8px);
+}
+.side .brand { font-family:'Space Grotesk'; font-weight:700; font-size:1.05rem; padding:0.4rem 0.7rem 0.9rem;
+  background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.side .health { font-size:0.62rem; color:var(--text-faint); padding:0 0.7rem 0.8rem; display:flex; gap:0.4rem; align-items:center; }
+.side .health i { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); }
+.room-btn {
+  display:flex; align-items:center; gap:0.65rem; width:100%;
+  background:none; border:none; cursor:pointer; font-family:inherit; text-align:left;
+  color:var(--text-dim); font-size:0.83rem; font-weight:600;
+  padding:0.55rem 0.7rem; border-radius:10px; transition:all .15s;
+}
+.room-btn:hover { color:var(--text); background:rgba(255,255,255,0.04); }
+.room-btn.on { color:var(--text); background:rgba(32,184,205,0.1); }
+.room-btn.on .glyph { color:var(--teal); }
+.room-btn .glyph { width:18px; text-align:center; color:var(--text-faint); }
+.side .spacer { flex:1; }
+.side .kbd-hint { font-size:0.66rem; color:var(--text-faint); padding:0.6rem 0.7rem; }
+kbd { font-family:'JetBrains Mono'; font-size:0.62rem; border:1px solid var(--stroke); border-radius:4px; padding:0.05rem 0.3rem; background:rgba(255,255,255,0.04); }
+
+main { flex:1; min-width:0; padding:1.6rem 2rem 3rem; }
+.room { display:none; max-width:1080px; margin:0 auto; }
+.room.on { display:block; animation:rise .4s cubic-bezier(.2,.8,.25,1); }
+.room-title { font-family:'Space Grotesk'; font-size:1.5rem; letter-spacing:-0.015em; margin-bottom:0.3rem; }
+.room-sub { color:var(--text-dim); font-size:0.85rem; margin-bottom:1.6rem; }
+.bar-tick { position:relative; padding-bottom:0.55rem; }
+.bar-tick::after { content:""; position:absolute; left:0; bottom:0; width:34px; height:3px; border-radius:2px; background:var(--grad); }
+
+.eyebrow { font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:0.09em; color:var(--text-faint); margin-bottom:0.55rem; }
+.panel { background:var(--rail-bg); border:1px solid var(--stroke); border-radius:14px; padding:1rem 1.15rem; }
+.btn {
+  display:inline-flex; align-items:center; gap:0.5rem; background:var(--grad); color:#06282C;
+  font-weight:700; font-size:0.85rem; padding:0.6rem 1.3rem; border-radius:11px; border:none;
+  cursor:pointer; font-family:inherit; box-shadow:0 4px 22px rgba(13,148,136,0.4); transition:transform .13s, filter .15s;
+}
+.btn:hover { transform:translateY(-1px); filter:brightness(1.07); }
+.btn-quiet { background:rgba(255,255,255,0.05); color:var(--text-dim); box-shadow:none; border:1px solid var(--stroke); }
+
+/* Command palette */
+#palette { position:fixed; inset:0; background:rgba(5,9,9,0.6); backdrop-filter:blur(3px); display:none; z-index:90; }
+#palette.on { display:flex; align-items:flex-start; justify-content:center; padding-top:14vh; }
+.pal-box { width:min(560px, 92vw); background:#101A18; border:1px solid rgba(32,184,205,0.3); border-radius:16px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,0.6); animation:rise .18s ease-out; }
+.pal-box input { width:100%; background:none; border:none; outline:none; color:var(--text); font-family:inherit; font-size:0.95rem; padding:0.95rem 1.1rem; border-bottom:1px solid var(--stroke); }
+.pal-list { max-height:320px; overflow-y:auto; padding:0.4rem; }
+.pal-item { display:flex; align-items:center; gap:0.7rem; padding:0.55rem 0.7rem; border-radius:9px; cursor:pointer; font-size:0.83rem; }
+.pal-item:hover, .pal-item.sel { background:rgba(32,184,205,0.12); }
+.pal-item .glyph { color:var(--text-faint); width:16px; text-align:center; }
+.pal-item .kind { margin-left:auto; font-size:0.64rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.06em; }
+
+/* ── Floor ── */
+.floor-grid { display:grid; grid-template-columns:2fr 1fr; gap:1.2rem; align-items:start; }
+@media (max-width:900px){ .floor-grid { grid-template-columns:1fr; } }
+.desk-row { display:flex; gap:1rem; flex-wrap:wrap; }
+.mini-paper {
+  background:var(--paper); color:var(--ink); border-radius:5px; width:168px;
+  padding:0.8rem 0.9rem; font-size:0.6rem; line-height:1.5; cursor:pointer;
+  box-shadow:0 10px 26px rgba(0,0,0,0.45); transition:transform .18s, box-shadow .18s;
+  animation:paper-in .5s cubic-bezier(.2,.8,.25,1) both; animation-delay:calc(var(--i)*80ms);
+}
+.mini-paper:nth-child(odd){ transform:rotate(-0.8deg);}
+.mini-paper:hover { transform:translateY(-4px) rotate(0deg); box-shadow:0 18px 40px rgba(0,0,0,0.55); }
+.mini-paper b { display:block; font-size:0.68rem; margin-bottom:0.15rem; }
+.mini-paper .tag { display:inline-block; font-size:0.52rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#1A5450; margin-bottom:0.3rem; }
+.mini-paper .pill { float:right; font-family:'JetBrains Mono'; font-weight:700; font-size:0.6rem; }
+.stat-strip { display:flex; gap:1.4rem; margin-top:1.4rem; flex-wrap:wrap; }
+.stat-strip .s { text-align:left; }
+.stat-strip .v { font-family:'Space Grotesk'; font-size:1.25rem; font-weight:700; display:block; }
+.stat-strip .l { font-size:0.64rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.07em; }
+.quick { display:flex; flex-direction:column; gap:0.55rem; }
+.quick button { justify-content:flex-start; width:100%; }
+
+/* ── Newsroom: the press run ── */
+.press-grid { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:1.3rem; align-items:start; }
+@media (max-width:980px){ .press-grid { grid-template-columns:1fr; } }
+.manuscript {
+  background:var(--paper); color:var(--ink); border-radius:6px; min-height:420px;
+  padding:2.2rem 2.4rem; font-size:0.84rem; line-height:1.6;
+  box-shadow:0 24px 60px rgba(0,0,0,0.5); animation:paper-in .5s both;
+}
+.manuscript h1 { font-size:1.3rem; font-weight:800; letter-spacing:-0.01em; margin-bottom:0.7rem; }
+.manuscript h2 { font-size:0.95rem; font-weight:700; margin:1.1rem 0 0.4rem; color:#1A5450; }
+.manuscript p { margin-bottom:0.5rem; }
+.ghost-line { height:0.62rem; border-radius:3px; background:#E3DccA; background:linear-gradient(90deg,#E7E2D3,#EFEadb,#E7E2D3); background-size:200% 100%; animation:shimmer 1.3s linear infinite; margin:0.42rem 0; }
+@keyframes shimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
+.cite-tick { color:var(--teal); font-family:'JetBrains Mono'; font-size:0.68em; font-weight:700; cursor:help; }
+.strike { text-decoration:line-through; text-decoration-color:var(--redpen); text-decoration-thickness:2px; color:var(--ink-dim); }
+.stage-row { display:flex; gap:0.6rem; align-items:flex-start; padding:0.45rem 0; opacity:0.45; transition:opacity .3s; }
+.stage-row.live, .stage-row.done { opacity:1; }
+.stage-row .dot { width:20px; height:20px; border-radius:50%; display:grid; place-items:center; flex-shrink:0;
+  font-size:0.6rem; font-family:'JetBrains Mono'; font-weight:700; border:1.5px solid var(--stroke); color:var(--text-faint); margin-top:0.1rem; }
+.stage-row.live .dot { border-color:var(--teal); color:var(--teal); animation:spin-dot 1s linear infinite; }
+@keyframes spin-dot { 50% { transform:scale(1.15); } }
+.stage-row.done .dot { border-color:var(--green); color:var(--green); }
+.stage-row b { font-size:0.8rem; display:block; }
+.stage-row p { font-size:0.7rem; color:var(--text-dim); margin-top:0.1rem; }
+
+/* ── Interview room ── */
+.iv-grid { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:1.3rem; align-items:start; }
+@media (max-width:980px){ .iv-grid { grid-template-columns:1fr; } }
+.table { position:relative; padding:1rem 0; }
+.orb { width:74px; height:74px; border-radius:50%; margin:0 auto 1.1rem;
+  background:radial-gradient(circle at 32% 30%, #4CC9F0, #0FB5AA 70%); box-shadow:0 0 40px rgba(32,184,205,0.4);
+  animation:breathe 3.2s ease-in-out infinite; }
+@keyframes breathe { 50% { transform:scale(1.06); } }
+.qcard {
+  background:var(--paper); color:var(--ink); border-radius:8px; max-width:520px; margin:0 auto;
+  padding:1.3rem 1.5rem; box-shadow:0 18px 44px rgba(0,0,0,0.5); animation:paper-in .5s both;
+  font-size:0.92rem; line-height:1.55; text-align:center;
+}
+.qcard .tag { font-size:0.6rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#1A5450; display:block; margin-bottom:0.4rem; }
+.notepad {
+  background:#FDFBF4; color:var(--ink); border-radius:6px; max-width:560px; margin:1rem auto 0;
+  padding:1rem 1.2rem; font-size:0.8rem; line-height:1.7; box-shadow:0 12px 30px rgba(0,0,0,0.4);
+  background-image:repeating-linear-gradient(transparent, transparent 1.62em, #E8E2d0 1.63em);
+  min-height:5.2em;
+}
+.notepad .interim { color:var(--ink-dim); }
+/* The rubric card: face-down on the table until the answer closes. */
+.rubric-flip { perspective:1000px; max-width:520px; margin:1.1rem auto 0; height:190px; }
+.rubric-inner { position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform .7s cubic-bezier(.3,.9,.35,1); }
+.rubric-flip.flipped .rubric-inner { transform:rotateY(180deg); }
+.rubric-face { position:absolute; inset:0; backface-visibility:hidden; border-radius:8px; box-shadow:0 14px 36px rgba(0,0,0,0.45); }
+.rubric-back-face {
+  background:linear-gradient(135deg,#14413D,#0F2E2B); border:1px solid rgba(32,184,205,0.35);
+  display:grid; place-items:center; color:var(--text-dim); font-size:0.76rem; text-align:center; padding:1rem;
+}
+.rubric-back-face .seal { font-family:'Space Grotesk'; font-weight:700; color:var(--teal); display:block; font-size:0.85rem; margin-bottom:0.3rem; }
+.rubric-front-face { background:var(--paper); color:var(--ink); transform:rotateY(180deg); padding:1rem 1.2rem; font-size:0.78rem; }
+.rubric-front-face .tag { font-size:0.58rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#1A5450; }
+.rubric-front-face li { list-style:none; padding:0.22rem 0 0.22rem 1.4rem; position:relative; }
+.rubric-front-face li::before { content:"✓"; position:absolute; left:0.2rem; color:var(--green); font-weight:700; }
+.rubric-front-face li.miss::before { content:"✗"; color:var(--redpen); }
+.mic-row { display:flex; justify-content:center; gap:0.7rem; margin-top:1.1rem; }
+.wall .shelf { display:flex; justify-content:space-between; align-items:baseline; padding:0.4rem 0; border-bottom:1px solid var(--stroke); font-size:0.8rem; }
+.wall .shelf:last-child { border-bottom:none; }
+.wall .shelf .mono { color:var(--teal); }
+
+/* ── Job room: the dossier ── */
+.dossier {
+  background:linear-gradient(180deg,#20302C,#182420); border:1px solid var(--stroke); border-radius:14px 14px 12px 12px;
+  padding:0; overflow:hidden; max-width:860px;
+}
+.dossier .clip { height:38px; background:rgba(0,0,0,0.25); display:flex; align-items:center; padding:0 1.1rem; gap:0.7rem; }
+.dossier .clip b { font-size:0.85rem; }
+.dossier .clip .meta { font-size:0.68rem; color:var(--text-faint); }
+.tabs { display:flex; gap:0.2rem; padding:0.6rem 1rem 0; }
+.tab { background:none; border:none; font-family:inherit; cursor:pointer; color:var(--text-faint); font-size:0.76rem; font-weight:700;
+  padding:0.45rem 0.9rem; border-radius:8px 8px 0 0; }
+.tab.on { color:var(--text); background:var(--rail-bg); }
+.dossier-body { background:var(--rail-bg); margin:0 1rem 1rem; border-radius:0 10px 10px 10px; padding:1rem 1.2rem; }
+.comp-row { display:flex; align-items:center; gap:0.7rem; padding:0.45rem 0; border-bottom:1px solid var(--stroke); font-size:0.8rem; }
+.comp-row:last-child { border-bottom:none; }
+.comp-row .m { width:9px; height:9px; border-radius:2px; flex-shrink:0; }
+.comp-row .note { margin-left:auto; font-size:0.68rem; color:var(--text-faint); text-align:right; }
+.report-card {
+  background:var(--paper); color:var(--ink); border-radius:6px; max-width:860px; margin-top:1.2rem;
+  padding:1.8rem 2.1rem; box-shadow:0 24px 60px rgba(0,0,0,0.5); animation:paper-in .5s both; font-size:0.82rem;
+}
+.report-card h2 { font-size:0.7rem; letter-spacing:0.09em; text-transform:uppercase; color:#1A5450; font-weight:700;
+  border-bottom:1px solid #D8D2C2; padding-bottom:0.3rem; margin:1rem 0 0.5rem; }
+.report-card .sig-row { display:flex; justify-content:space-between; align-items:center; }
+.hire-stamp { font-family:'Space Grotesk'; font-weight:700; color:#8A6420; border:2px solid var(--amber); border-radius:6px;
+  padding:0.2rem 0.7rem; transform:rotate(-2deg); font-size:0.8rem; background:var(--amber-soft); }
+.comp-line { display:flex; align-items:center; gap:0.6rem; padding:0.3rem 0; }
+.comp-line .bar { flex:1; height:6px; border-radius:3px; background:#E7E2D3; overflow:hidden; }
+.comp-line .bar i { display:block; height:100%; border-radius:3px; }
+.comp-line .sc { font-family:'JetBrains Mono'; font-size:0.72rem; width:44px; text-align:right; }
+.pen-note { font-style:italic; color:#7A4438; border-left:3px solid var(--redpen); padding:0.2rem 0 0.2rem 0.7rem; margin:0.5rem 0; }
+</style>
+</head>
+<body>
+
+<nav class="side">
+  <div class="brand">Scrivio</div>
+  <div class="health"><i></i> subscription connected</div>
+  <button class="room-btn on" data-room="floor"><span class="glyph">⌂</span> The Floor</button>
+  <button class="room-btn" data-room="newsroom"><span class="glyph">✎</span> Newsroom</button>
+  <button class="room-btn" data-room="interview"><span class="glyph">◉</span> Interview Room</button>
+  <button class="room-btn" data-room="job"><span class="glyph">▤</span> Job Room</button>
+  <button class="room-btn" data-room="desk"><span class="glyph">≡</span> The Desk</button>
+  <div class="spacer"></div>
+  <button class="room-btn" data-room="office"><span class="glyph">⚙</span> Back Office</button>
+  <div class="kbd-hint"><kbd>⌘K</kbd> jump anywhere</div>
+</nav>
+
+<main>
+  <!-- ═══ THE FLOOR ═══ -->
+  <section class="room on" id="room-floor">
+    <h1 class="room-title bar-tick">The studio floor</h1>
+    <p class="room-sub">Where you left off, and what is on your desk.</p>
+    <div class="floor-grid">
+      <div>
+        <p class="eyebrow">On your desk</p>
+        <div class="desk-row">
+          <div class="mini-paper" style="--i:0" data-room="desk">
+            <span class="tag">Resume · tailored</span><span class="pill" style="color:#1A7A4E">59 → 78</span>
+            <b>Senior Backend Engineer, Stripe</b>
+            2 numbers still to fill · exported PDF yesterday
+          </div>
+          <div class="mini-paper" style="--i:1" data-room="newsroom">
+            <span class="tag">Article · published</span><span class="pill" style="color:#8A6420">4 sources</span>
+            <b>Idempotent REST APIs</b>
+            Read again, or spin a practice interview from it
+          </div>
+          <div class="mini-paper" style="--i:2" data-room="job">
+            <span class="tag">Scorecard · lean hire</span><span class="pill" style="color:#B0552F">6.8/10</span>
+            <b>Stripe screen, attempt 2</b>
+            Kubernetes still the weak competency
+          </div>
+        </div>
+        <div class="stat-strip">
+          <div class="s"><span class="v" style="color:var(--amber)">🔥 6</span><span class="l">day streak</span></div>
+          <div class="s"><span class="v" style="color:var(--teal)">3</span><span class="l">topics ≥80 mastery</span></div>
+          <div class="s"><span class="v" style="color:var(--green)">lean hire</span><span class="l">last signal</span></div>
+          <div class="s"><span class="v">14</span><span class="l">honest rewrites shipped</span></div>
+        </div>
+      </div>
+      <div class="quick">
+        <p class="eyebrow">Start something</p>
+        <button class="btn" data-room="interview">▶ Continue: drill your weak spots</button>
+        <button class="btn btn-quiet" data-room="newsroom">Write an article</button>
+        <button class="btn btn-quiet" data-room="job">Open the Stripe dossier</button>
+        <button class="btn btn-quiet" data-room="desk">Check a resume</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ THE NEWSROOM ═══ -->
+  <section class="room" id="room-newsroom">
+    <h1 class="room-title bar-tick">The Newsroom</h1>
+    <p class="room-sub">Your article assembles on the page while the press run reports every stage. <button class="btn" id="press-btn" style="margin-left:0.6rem">Run the press</button></p>
+    <div class="press-grid">
+      <div class="manuscript" id="manuscript">
+        <h1>How Kafka Handles Backpressure</h1>
+        <p style="color:var(--ink-dim);font-size:0.72rem">intermediate · sourced from 4 domains · every claim verified before drafting</p>
+        <div id="ms-body">
+          <div class="ghost-line" style="width:92%"></div>
+          <div class="ghost-line" style="width:86%"></div>
+          <div class="ghost-line" style="width:64%"></div>
+        </div>
+      </div>
+      <aside>
+        <div class="panel">
+          <p class="eyebrow">The press run</p>
+          <div class="stage-row" data-stage="0"><span class="dot">1</span><span><b>Sources</b><p id="st-0">waiting…</p></span></div>
+          <div class="stage-row" data-stage="1"><span class="dot">2</span><span><b>Verify before drafting</b><p id="st-1">waiting…</p></span></div>
+          <div class="stage-row" data-stage="2"><span class="dot">3</span><span><b>Drafting</b><p id="st-2">waiting…</p></span></div>
+          <div class="stage-row" data-stage="3"><span class="dot">4</span><span><b>Editor + polish</b><p id="st-3">waiting…</p></span></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ═══ THE INTERVIEW ROOM ═══ -->
+  <section class="room" id="room-interview">
+    <h1 class="room-title bar-tick">The Interview Room</h1>
+    <p class="room-sub">The rubric is on the table, face-down, written before you speak. That is the point.</p>
+    <div class="iv-grid">
+      <div class="table">
+        <div class="orb"></div>
+        <div class="qcard">
+          <span class="tag">Question 2 of 5 · practice</span>
+          Explain how Kafka consumer groups distribute partitions, and what happens during a rebalance.
+        </div>
+        <div class="notepad" id="notepad"><span class="interim">Tap the mic and your answer writes itself here…</span></div>
+        <div class="rubric-flip" id="rubric">
+          <div class="rubric-inner">
+            <div class="rubric-face rubric-back-face">
+              <div><span class="seal">SEALED · THE BAR</span>
+              Written before you answered.<br>Flips when your answer closes; the grader cannot move it.</div>
+            </div>
+            <div class="rubric-face rubric-front-face">
+              <span class="tag">The bar, revealed · 7/10 adequate</span>
+              <ul>
+                <li>Partitions assigned so each is owned by one consumer</li>
+                <li>Rebalance triggers: join, leave, failure detection</li>
+                <li class="miss">Cost of rebalance: pause, offset churn (missing)</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="mic-row">
+          <button class="btn" id="answer-btn">◉ Answer out loud (simulated)</button>
+          <button class="btn btn-quiet" id="iv-reset">Reset</button>
+        </div>
+      </div>
+      <aside class="panel wall">
+        <p class="eyebrow">The wall</p>
+        <div class="shelf"><span>🔥 Streak</span><span class="mono">6 days</span></div>
+        <div class="shelf"><span>Kafka mastery</span><span class="mono">82</span></div>
+        <div class="shelf"><span>Distributed systems</span><span class="mono">74</span></div>
+        <div class="shelf"><span>K8s (weak · seeds drills)</span><span class="mono" style="color:var(--redpen)">41</span></div>
+        <div class="shelf"><span>Badges</span><span>🎯 🏃 🧠</span></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ═══ THE JOB ROOM ═══ -->
+  <section class="room" id="room-job">
+    <h1 class="room-title bar-tick">The Job Room</h1>
+    <p class="room-sub">Every target is a dossier: your resume and the JD, clipped together and worked.</p>
+    <div class="dossier">
+      <div class="clip"><b>Senior Backend Engineer @ Stripe</b><span class="meta">resume + JD clipped · 2 screens taken</span></div>
+      <div class="tabs">
+        <button class="tab on" data-tab="fit">Fit</button>
+        <button class="tab" data-tab="scorecard">Last scorecard</button>
+      </div>
+      <div class="dossier-body" id="tab-fit">
+        <div class="comp-row"><span class="m" style="background:var(--green)"></span> Event streaming <span class="note">strong · will verify the 2M/day claim</span></div>
+        <div class="comp-row"><span class="m" style="background:var(--amber)"></span> API design <span class="note">partial · external-facing unproven</span></div>
+        <div class="comp-row"><span class="m" style="background:var(--redpen)"></span> Kubernetes <span class="note">missing · the gap-probe goes here</span></div>
+        <div class="comp-row"><span class="m" style="background:var(--amber)"></span> Payments domain <span class="note">partial · reconciliation adjacent</span></div>
+        <div style="margin-top:0.8rem"><button class="btn" data-room="interview">Take the 45-minute screen →</button></div>
+      </div>
+      <div class="dossier-body" id="tab-scorecard" style="display:none">
+        <p style="font-size:0.76rem;color:var(--text-dim)">Rendered as the marked report card below.</p>
+      </div>
+    </div>
+
+    <div class="report-card">
+      <div class="sig-row">
+        <div><h1 class="font-display" style="font-size:1.1rem">Interview scorecard</h1>
+        <span style="font-size:0.7rem;color:var(--ink-dim)">Stripe screen · 45 min · 11 answered</span></div>
+        <span class="hire-stamp">LEAN HIRE</span>
+      </div>
+      <h2>Competencies</h2>
+      <div class="comp-line"><span style="width:130px">Event streaming</span><span class="bar"><i style="width:84%;background:var(--green)"></i></span><span class="sc">8.4</span></div>
+      <div class="comp-line"><span style="width:130px">API design</span><span class="bar"><i style="width:71%;background:var(--amber)"></i></span><span class="sc">7.1</span></div>
+      <div class="comp-line"><span style="width:130px">Kubernetes</span><span class="bar"><i style="width:38%;background:var(--redpen)"></i></span><span class="sc">3.8</span></div>
+      <h2>The panel's notes</h2>
+      <p class="pen-note">"Walked the ingestion failure story with real numbers; believed every word. But when we moved to K8s the answers went abstract; would not put them on-call for it yet."</p>
+      <h2>Study plan · trust-ranked</h2>
+      <p style="font-size:0.76rem">Kubernetes: <span class="cite-tick">[kubernetes.io 1.0]</span> Concepts → Workloads · <span class="cite-tick">[learnk8s.io 0.75]</span> production patterns</p>
+    </div>
+  </section>
+
+  <!-- ═══ THE DESK (link out) ═══ -->
+  <section class="room" id="room-desk">
+    <h1 class="room-title bar-tick">The Desk</h1>
+    <p class="room-sub">Already live in React: <a href="/desk/" style="color:var(--teal);text-decoration:underline">open the real Resume Desk</a>. This prototype room exists to show the shell holds it.</p>
+  </section>
+
+  <!-- ═══ BACK OFFICE ═══ -->
+  <section class="room" id="room-office">
+    <h1 class="room-title bar-tick">The Back Office</h1>
+    <p class="room-sub">Provider, models, connections. The utility room keeps today's structure, restyled.</p>
+    <div class="panel" style="max-width:520px">
+      <p class="eyebrow">Provider</p>
+      <p style="font-size:0.85rem">Local CLI (claude) · subscription, no API billing</p>
+      <p style="font-size:0.72rem;color:var(--text-faint);margin-top:0.3rem">Also detected: none · Models: your call, scoped per provider</p>
+    </div>
+  </section>
+</main>
+
+<!-- ⌘K palette -->
+<div id="palette">
+  <div class="pal-box">
+    <input id="pal-input" placeholder="Jump anywhere: rooms, papers, actions…" autocomplete="off" />
+    <div class="pal-list" id="pal-list"></div>
+  </div>
+</div>
+
+<script>
+/* Rooms */
+const go = (room) => {
+  document.querySelectorAll('.room').forEach(r => r.classList.remove('on'));
+  document.getElementById('room-' + room).classList.add('on');
+  document.querySelectorAll('.side .room-btn').forEach(b => b.classList.toggle('on', b.dataset.room === room));
+  window.scrollTo({ top: 0 });
+};
+document.querySelectorAll('[data-room]').forEach(el =>
+  el.addEventListener('click', () => go(el.dataset.room)));
+
+/* ⌘K palette: fuzzy jump across rooms, papers, actions */
+const PAL = [
+  { t:'The Floor', k:'room', go:'floor', g:'⌂' },
+  { t:'Newsroom: write an article', k:'room', go:'newsroom', g:'✎' },
+  { t:'Interview Room: practice', k:'room', go:'interview', g:'◉' },
+  { t:'Job Room: dossiers', k:'room', go:'job', g:'▤' },
+  { t:'The Desk: check a resume', k:'room', go:'desk', g:'≡' },
+  { t:'Back Office: settings', k:'room', go:'office', g:'⚙' },
+  { t:'Idempotent REST APIs', k:'article', go:'newsroom', g:'▤' },
+  { t:'How Kafka Handles Backpressure', k:'article', go:'newsroom', g:'▤' },
+  { t:'Stripe dossier', k:'job target', go:'job', g:'▤' },
+  { t:'Resume: Senior Backend Engineer', k:'report', go:'desk', g:'≡' },
+  { t:'Start a 60-second drill', k:'action', go:'interview', g:'▶' },
+  { t:'Run the press on a new topic', k:'action', go:'newsroom', g:'▶' },
+];
+const palette = document.getElementById('palette');
+const palInput = document.getElementById('pal-input');
+const palList = document.getElementById('pal-list');
+let palSel = 0;
+function renderPal() {
+  const q = palInput.value.toLowerCase();
+  const hits = PAL.filter(p => p.t.toLowerCase().includes(q)).slice(0, 8);
+  palSel = Math.min(palSel, Math.max(0, hits.length - 1));
+  palList.innerHTML = hits.map((p, i) =>
+    `<div class="pal-item ${i === palSel ? 'sel' : ''}" data-go="${p.go}">
+       <span class="glyph">${p.g}</span>${p.t}<span class="kind">${p.k}</span></div>`).join('')
+    || '<div class="pal-item">Nothing on the shelves for that.</div>';
+  palList.querySelectorAll('[data-go]').forEach(el =>
+    el.addEventListener('click', () => { go(el.dataset.go); closePal(); }));
+}
+function openPal() { palette.classList.add('on'); palInput.value = ''; palSel = 0; renderPal(); palInput.focus(); }
+function closePal() { palette.classList.remove('on'); }
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPal(); }
+  if (!palette.classList.contains('on')) return;
+  if (e.key === 'Escape') closePal();
+  if (e.key === 'ArrowDown') { palSel++; renderPal(); e.preventDefault(); }
+  if (e.key === 'ArrowUp') { palSel = Math.max(0, palSel - 1); renderPal(); e.preventDefault(); }
+  if (e.key === 'Enter') {
+    const sel = palList.querySelector('.sel'); if (sel?.dataset.go) { go(sel.dataset.go); closePal(); }
+  }
+});
+palInput?.addEventListener('input', () => { palSel = 0; renderPal(); });
+palette.addEventListener('click', (e) => { if (e.target === palette) closePal(); });
+
+/* Newsroom: the press run — manuscript assembles while stages report */
+const PRESS = [
+  { st: 'kafka.apache.org ✓1.0 · confluent.io ✓0.9 · 2 blogs ✓0.65', ms:
+    null },
+  { st: '14 claims checked · 12 supported · 2 dropped before drafting', ms:
+    `<p><span class="strike">Consumers apply backpressure via broker throttling.</span> <span style="color:#B0552F;font-size:0.7rem">← unsupported, dropped before a word was drafted</span></p>` },
+  { st: 'Sections 1–4 landing with inline citations', ms:
+    `<h2>The consumer is the throttle</h2>
+     <p>Kafka never pushes: consumers poll, so backpressure is the consumer falling behind on purpose <span class="cite-tick">[1]</span>. Lag becomes your pressure gauge <span class="cite-tick">[2]</span>.</p>
+     <h2>fetch.max.bytes and the poll loop</h2>
+     <p>The poll loop budget decides how much you bite off per cycle <span class="cite-tick">[1]</span>…</p>` },
+  { st: 'Editor flagged 1 section for momentum; polish preserved every citation', ms: null },
+];
+let pressAt = -1;
+document.getElementById('press-btn').addEventListener('click', () => {
+  if (pressAt >= 0) return;
+  const body = document.getElementById('ms-body');
+  body.innerHTML = '<div class="ghost-line" style="width:92%"></div><div class="ghost-line" style="width:86%"></div><div class="ghost-line" style="width:64%"></div>';
+  document.querySelectorAll('.stage-row').forEach(r => r.classList.remove('live','done'));
+  let appended = '';
+  const step = () => {
+    pressAt++;
+    if (pressAt >= PRESS.length) {
+      pressAt = -1;
+      document.querySelectorAll('.ghost-line').forEach(g => g.remove());
+      return;
+    }
+    const rows = document.querySelectorAll('.stage-row');
+    rows.forEach((r, i) => {
+      r.classList.toggle('live', i === pressAt);
+      r.classList.toggle('done', i < pressAt);
+    });
+    document.getElementById('st-' + pressAt).textContent = PRESS[pressAt].st;
+    if (PRESS[pressAt].ms) {
+      appended += PRESS[pressAt].ms;
+      body.innerHTML = appended + '<div class="ghost-line" style="width:78%"></div><div class="ghost-line" style="width:52%"></div>';
+    }
+    setTimeout(step, 1500);
+  };
+  step();
+});
+
+/* Interview room: simulated answer → transcript writes → rubric flips */
+const TRANSCRIPT = "Consumer groups split the partitions across members so each partition has exactly one owner, and when someone joins or drops off the group coordinator triggers a rebalance and hands the assignments back out.";
+document.getElementById('answer-btn').addEventListener('click', () => {
+  const pad = document.getElementById('notepad');
+  const rubric = document.getElementById('rubric');
+  rubric.classList.remove('flipped');
+  pad.innerHTML = '';
+  let i = 0;
+  const type = () => {
+    if (i <= TRANSCRIPT.length) {
+      pad.innerHTML = TRANSCRIPT.slice(0, i) + '<span class="interim">▌</span>';
+      i += 3;
+      setTimeout(type, 24);
+    } else {
+      pad.textContent = TRANSCRIPT;
+      setTimeout(() => rubric.classList.add('flipped'), 500);
+    }
+  };
+  type();
+});
+document.getElementById('iv-reset').addEventListener('click', () => {
+  document.getElementById('rubric').classList.remove('flipped');
+  document.getElementById('notepad').innerHTML = '<span class="interim">Tap the mic and your answer writes itself here…</span>';
+});
+
+/* Job room tabs */
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  document.getElementById('tab-fit').style.display = t.dataset.tab === 'fit' ? '' : 'none';
+  document.getElementById('tab-scorecard').style.display = t.dataset.tab === 'scorecard' ? '' : 'none';
+}));
+</script>
+</body>
+</html>
