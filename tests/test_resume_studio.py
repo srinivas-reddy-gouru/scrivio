@@ -365,3 +365,75 @@ def test_weak_language_check_flags_duty_speak():
 def test_weak_language_check_passes_clean_resume():
     check = _check(run_ats_checks(GOOD_RESUME), "weak-language")
     assert check.passed
+
+
+def test_condense_summary_gate_rewrites_overlong_summary():
+    """Over-60-word tailored summaries get one targeted condense pass;
+    the result replaces the summary and the change is logged."""
+    import asyncio
+    from types import SimpleNamespace
+    from pipeline.workers.resume_studio_worker import _condense_summary
+
+    long_summary = " ".join(["word"] * 75)
+    short_summary = "Backend engineer with ten years building event-driven payment systems."
+    tailored = TailoredResume(
+        resume=StructuredResume.model_validate(
+            {"basics": {"name": "J", "summary": long_summary}}
+        ),
+        changes=[], warnings=[],
+    )
+
+    class FakeClient:
+        class messages:
+            @staticmethod
+            async def create(**kwargs):
+                return SimpleNamespace(
+                    content=[SimpleNamespace(type="text", text=short_summary)]
+                )
+
+    out = asyncio.run(_condense_summary(tailored, "jd text", FakeClient(), "balanced"))
+    assert out.resume.basics.summary == short_summary
+    assert any(c.where == "basics.summary" and c.kind == "condensed" for c in out.changes)
+    assert not out.warnings
+
+
+def test_condense_summary_gate_warns_when_condense_fails():
+    """If the condense call errors or stays over 60 words, the summary is
+    left alone and an honest warning is added instead."""
+    import asyncio
+    from pipeline.workers.resume_studio_worker import _condense_summary
+
+    long_summary = " ".join(["word"] * 75)
+    tailored = TailoredResume(
+        resume=StructuredResume.model_validate(
+            {"basics": {"name": "J", "summary": long_summary}}
+        ),
+        changes=[], warnings=[],
+    )
+
+    class ExplodingClient:
+        class messages:
+            @staticmethod
+            async def create(**kwargs):
+                raise RuntimeError("provider down")
+
+    out = asyncio.run(_condense_summary(tailored, "jd", ExplodingClient(), "balanced"))
+    assert out.resume.basics.summary == long_summary
+    assert any("over 60 fails" in w for w in out.warnings)
+
+
+def test_ats_paragraph_length_measured_from_structure():
+    """A long summary hidden by extraction line-wrapping fails the bullets
+    check identically whether measured from wrapped text or the structure —
+    the tailor must not be graded more harshly than the original."""
+    wrapped = GOOD_RESUME.replace(
+        "Backend engineer focused on event-driven systems.",
+        "\n".join(["word " * 8] * 9),  # 72 words hard-wrapped over 9 lines
+    )
+    structured = StructuredResume.model_validate(
+        {"basics": {"name": "J", "summary": "word " * 72}}
+    )
+    report = run_ats_checks(wrapped, None, structured)
+    bullets = next(c for c in report.checks if c.id == "bullets")
+    assert not bullets.passed
+    assert "1 paragraph(s) over 60 words" in bullets.detail

@@ -97,3 +97,54 @@ export function useDocWatch(
 
 export const fmtElapsed = (s: number) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+/* ── Interview Room ── */
+import type {
+  ArticleDetail, GenerateResponse, InterviewAnswerResponse,
+  InterviewSessionPublic, SettingsFull,
+} from "./types";
+
+export const interviewApi = {
+  create: (body: {
+    topic?: string; article_id?: string; level?: string; num_questions?: number;
+    mode?: string; job_profile_id?: string; duration_minutes?: number;
+  }) =>
+    fetch("/interviews", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => r.ok ? r.json() as Promise<InterviewSessionPublic>
+      : r.json().then((b) => Promise.reject(new Error(b.detail || `HTTP ${r.status}`)))),
+  get: (id: string) =>
+    fetch(`/interviews/${id}`).then((r) => r.json() as Promise<InterviewSessionPublic>),
+  answer: (id: string, body: {
+    question_id: string; answer?: string; skip?: boolean; predicted_score?: number | null;
+  }) =>
+    fetch(`/interviews/${id}/answers`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => r.ok ? r.json() as Promise<InterviewAnswerResponse>
+      : r.json().then((b) => Promise.reject(new Error(b.detail || `HTTP ${r.status}`)))),
+};
+
+export const articleApi = {
+  generate: (body: Record<string, unknown>) =>
+    fetch("/generate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => r.ok ? r.json() as Promise<GenerateResponse>
+      : r.json().then((b) => Promise.reject(new Error(b.detail || `HTTP ${r.status}`)))),
+  detail: (id: string, level?: string) =>
+    fetch(`/articles/${id}${level ? `?level=${level}` : ""}`)
+      .then((r) => r.json() as Promise<ArticleDetail>),
+  streamUrl: (jobId: string) => `/jobs/${jobId}/stream`,
+};
+
+export const settingsApi = {
+  full: () => fetch("/settings").then((r) => r.json() as Promise<SettingsFull>),
+  patch: (updates: Record<string, string>) =>
+    fetch("/settings", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ updates }),
+    }).then((r) => r.ok ? r.json()
+      : r.json().then((b) => Promise.reject(new Error(b.detail || `HTTP ${r.status}`)))),
+};

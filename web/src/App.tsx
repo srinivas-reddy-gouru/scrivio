@@ -4,6 +4,9 @@ import { Shell, useHashRoom } from "./components/Shell";
 import type { RoomId } from "./components/Shell";
 import { Floor } from "./rooms/Floor";
 import { JobRoom } from "./rooms/JobRoom";
+import { InterviewRoom } from "./rooms/InterviewRoom";
+import { ArticleStudio } from "./rooms/ArticleStudio";
+import { BackOffice } from "./rooms/BackOffice";
 import { ReportStation, SendStation, TailorStation, TargetStation } from "./components/stations";
 
 const STATIONS = ["Target", "Report", "Tailor", "Send"] as const;
@@ -59,37 +62,15 @@ function DeskRoom() {
   );
 }
 
-/** Rooms that still live in the classic studio during the migration. */
-function ClassicRoom({ title, sub }: { title: string; sub: string }) {
-  return (
-    <div className="room-wrap">
-      <h1 className="room-title bar-tick-left">{title}</h1>
-      <p className="room-sub">{sub}</p>
-      <a className="btn" href="/">Open in the classic studio</a>
-      <p className="classic-note" style={{ maxWidth: 420 }}>
-        This room is next in the migration queue; it moves in here with the
-        full studio treatment. Your data is shared either way.
-      </p>
-    </div>
-  );
-}
-
-const CLASSIC: Record<string, { title: string; sub: string }> = {
-  newsroom: { title: "Article Studio", sub: "The press run lands here soon." },
-  interview: { title: "The Interview Room", sub: "Practice: the sealed rubric card lands here soon." },
-  job: { title: "The Job Room", sub: "Dossiers and marked report cards land here soon." },
-  office: { title: "The Back Office", sub: "Engine, models, and keys land here soon." },
-};
-
 export default function App() {
   const [room, go] = useHashRoom();
   const body: Record<RoomId, React.ReactNode> = {
     floor: <Floor go={go} />,
     desk: <DeskRoom />,
-    newsroom: <ClassicRoom {...CLASSIC.newsroom} />,
-    interview: <ClassicRoom {...CLASSIC.interview} />,
+    newsroom: <ArticleStudio />,
+    interview: <InterviewRoom />,
     job: <JobRoom />,
-    office: <ClassicRoom {...CLASSIC.office} />,
+    office: <BackOffice />,
   };
   return <Shell room={room} go={go}>{body[room]}</Shell>;
 }

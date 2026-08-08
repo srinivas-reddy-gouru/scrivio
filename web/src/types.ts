@@ -136,3 +136,72 @@ export interface InterviewDetail {
     scorecard: JobScorecard | null;
   } | null;
 }
+
+/* ── Interview Room ── */
+
+export interface AnswerEvaluation {
+  score: number; verdict: string; strengths: string[]; gaps: string[];
+  misconceptions: string[]; suggestions: string[]; section_pointers: string[];
+  needs_followup: boolean; followup_question: string;
+}
+export interface InterviewQuestionPublic {
+  id: string; question: string; difficulty: string; section_anchor: string;
+  status: "pending" | "awaiting_followup" | "completed" | "skipped";
+  first_answer: string | null; first_evaluation: AnswerEvaluation | null;
+  followup_question: string | null; followup_answer: string | null;
+  final_evaluation: AnswerEvaluation | null;
+  model_answer: string | null; rubric_key_points: string[] | null;
+  final_score: number | null; predicted_score: number | null;
+}
+export interface InterviewSummaryFull {
+  total_questions: number; answered: number; skipped: number;
+  average_score: number | null;
+  per_question: Array<{ id: string; question: string; final_score: number | null; status: string }>;
+  weak_sections: string[]; top_gaps: string[];
+  calibration_gap: number | null; debrief: string;
+  scorecard: JobScorecard | null;
+}
+export interface InterviewSessionPublic {
+  session_id: string; article_id: string | null; topic: string; level: string;
+  mode: string; job_profile_id: string | null; duration_minutes: number;
+  created_at: string; updated_at: string; complete: boolean;
+  questions: InterviewQuestionPublic[];
+  summary: InterviewSummaryFull | null;
+}
+export interface InterviewAnswerResponse {
+  question: InterviewQuestionPublic;
+  evaluation: AnswerEvaluation | null;
+  followup_question: string | null;
+  session_complete: boolean;
+  summary: InterviewSummaryFull | null;
+}
+
+/* ── Article Studio ── */
+
+export interface ClarificationQuestion { id: string; question: string; options: string[]; }
+export interface GenerateResponse {
+  job_id: string | null; clarification_required: boolean;
+  questions: ClarificationQuestion[]; default_if_skipped: string;
+}
+export interface ProgressEvent {
+  type: string; stage: string; message: string; timestamp: string;
+  data: Record<string, unknown>;
+}
+export interface ArticleDetail {
+  id: string; title: string; topic: string; level: string;
+  generated_at: string; available_levels: string[]; markdown: string;
+  request: Record<string, unknown>; version: number;
+}
+
+/* ── Back Office ── */
+
+export interface KeyStatus {
+  key: string; description: string; present: boolean;
+  masked_value: string; plain: boolean;
+}
+export interface SettingsFull {
+  keys: KeyStatus[]; resolved_provider: string; provider_auto: boolean;
+  provider_preference: string; has_search: boolean;
+  has_anthropic: boolean; has_openai: boolean; has_claude_cli: boolean;
+  active_cli: string; detected_clis: string[];
+}

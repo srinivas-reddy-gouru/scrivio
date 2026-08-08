@@ -54,7 +54,7 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
             )}
             {lastArticle && (
               <button className="floor-paper" style={{ "--i": paperIndex++ } as React.CSSProperties}
-                onClick={() => { window.location.href = "/"; }}>
+                onClick={() => go("newsroom")}>
                 <span className="tag">Article · {lastArticle.level}</span>
                 {lastArticle.version > 1 && <span className="pill" style={{ color: "#8A6420" }}>v{lastArticle.version}</span>}
                 <b>{lastArticle.title || lastArticle.topic}</b>
@@ -63,7 +63,7 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
             )}
             {lastSession && (
               <button className="floor-paper" style={{ "--i": paperIndex++ } as React.CSSProperties}
-                onClick={() => { window.location.href = "/"; }}>
+                onClick={() => go(lastSession.mode === "job" ? "job" : "interview")}>
                 <span className="tag">
                   {lastSession.mode === "job" ? "Job screen" : `Session · ${lastSession.mode}`}
                 </span>
@@ -110,17 +110,13 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
         <div className="quick">
           <p className="eyebrow">Start something</p>
           {weakest && weakest.mastery < 80 ? (
-            <a className="btn" href="/">▶ Drill your weak spot: {weakest.topic}</a>
+            <button className="btn" onClick={() => go("interview")}>▶ Drill your weak spot: {weakest.topic}</button>
           ) : (
-            <a className="btn" href="/">▶ Practice an interview</a>
+            <button className="btn" onClick={() => go("interview")}>▶ Practice an interview</button>
           )}
           <button className="btn btn-quiet" onClick={() => go("desk")}>Check a resume</button>
-          <a className="btn btn-quiet" href="/">Write an article</a>
+          <button className="btn btn-quiet" onClick={() => go("newsroom")}>Write an article</button>
           <button className="btn btn-quiet" onClick={() => go("job")}>Open the Job Room</button>
-          <p className="classic-note">
-            Rooms still marked classic open the original studio; they move in
-            here one by one as the migration lands.
-          </p>
         </div>
       </div>
     </div>

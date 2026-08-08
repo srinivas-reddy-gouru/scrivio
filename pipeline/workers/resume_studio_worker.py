@@ -140,6 +140,59 @@ async def tailor_resume(
             + ", ".join(f"'{p}' ×{n}" for p, n in weak[:4])
             + ". Consider verb-first rewrites ('Led X', 'Cut Y by 30%')."
         )
+    # Length gate: a summary over 60 words fails the same scan check the
+    # tailor is scored on, so an overrun un-earns its own points. The cap
+    # lives in the prompt; this targeted retry is the deterministic belt
+    # for when the model overruns it anyway.
+    if len(tailored.resume.basics.summary.split()) > 60:
+        tailored = await _condense_summary(tailored, jd_text, client, preset)
+    return tailored
+
+
+async def _condense_summary(
+    tailored: TailoredResume, jd_text: str, client, preset: str
+) -> TailoredResume:
+    """Second, single-purpose pass: cut the summary under 60 words without
+    adding anything new. Falls back to an honest warning if it fails."""
+    n_before = len(tailored.resume.basics.summary.split())
+    try:
+        response = await client.messages.create(
+            model=get_model("resume_tailor", preset),
+            max_tokens=400,
+            system=(
+                "Condense the resume summary you are given to 55 words or "
+                "fewer. Keep the claims most relevant to the job description; "
+                "cut the weakest ones entirely. Never add a skill, title, or "
+                "claim that is not already in the summary. No em or en "
+                "dashes. Reply with the condensed summary text only."
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"summary:\n{tailored.resume.basics.summary}\n\n"
+                    f"job_description (for relevance ranking only):\n{jd_text[:2000]}"
+                ),
+            }],
+        )
+        text = "".join(
+            b.text for b in response.content if getattr(b, "type", "") == "text"
+        ).strip()
+    except Exception:
+        text = ""
+    if text and len(text.split()) <= 60:
+        tailored.resume.basics.summary = text
+        scrub_structure_dashes(tailored.resume)
+        tailored.changes.append(ResumeChange(
+            kind="condensed", where="basics.summary",
+            what=(f"Condensed the summary from {n_before} words to "
+                  f"{len(text.split())} so it passes the paragraph-length "
+                  "scan check instead of failing it."),
+        ))
+    else:
+        tailored.warnings.append(
+            f"The summary is {n_before} words; anything over 60 fails the "
+            "scan check. Trim it to the strongest JD-relevant claims."
+        )
     return tailored
 
 
@@ -794,9 +847,23 @@ def run_ats_checks(
            else "Over 1100 words (2+ pages) — condense to the most relevant material."),
     )
 
-    # bullets — enough bullet lines, no wall-of-text paragraphs.
+    # bullets — enough bullet lines, no wall-of-text paragraphs. When the
+    # structure is known, paragraph length comes from the STRUCTURE's prose
+    # fields, not the text: extraction line-wrapping would hide a long
+    # summary in the original while the tailored rendering shows it as one
+    # line, grading the tailor more harshly than the source it improved.
+    # An ATS parses the paragraph, not the line breaks.
     bullet_lines = [ln for ln in nonempty if _BULLET_RE.match(ln)]
-    long_paras = [ln for ln in nonempty if not _BULLET_RE.match(ln) and len(ln.split()) > 60]
+    if structured is not None:
+        prose = [structured.basics.summary]
+        prose += [w.summary for w in structured.work]
+        prose += [p.description for p in structured.projects]
+        long_paras = [p for p in prose if len(p.split()) > 60]
+    else:
+        long_paras = [
+            ln for ln in nonempty
+            if not _BULLET_RE.match(ln) and len(ln.split()) > 60
+        ]
     bullets_ok = len(bullet_lines) >= 5 and not long_paras
     add(
         "bullets", "Bullet-driven experience", bullets_ok, 10,

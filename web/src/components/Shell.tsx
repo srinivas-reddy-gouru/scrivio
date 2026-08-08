@@ -110,14 +110,13 @@ function Palette({ go, close }: { go: (r: RoomId) => void; close: () => void }) 
       .map((r) => ({ title: r.label, kind: "room", glyph: r.glyph, action: () => go(r.id) }));
     const acts: PaletteItem[] = [
       { title: "Check a resume", kind: "action", glyph: "▶", action: () => go("desk") },
-      { title: "Write an article (classic studio)", kind: "action", glyph: "▶",
-        action: () => { window.location.href = "/"; } },
-      { title: "Practice an interview (classic studio)", kind: "action", glyph: "▶",
-        action: () => { window.location.href = "/"; } },
+      { title: "Write an article", kind: "action", glyph: "▶", action: () => go("newsroom") },
+      { title: "Practice an interview", kind: "action", glyph: "▶", action: () => go("interview") },
+      { title: "New job dossier", kind: "action", glyph: "▶", action: () => go("job") },
     ];
     const art: PaletteItem[] = articles.slice(0, 6).map((a) => ({
       title: a.title || a.topic, kind: "article", glyph: "▤",
-      action: () => { window.location.href = "/"; },
+      action: () => go("newsroom"),
     }));
     const res: PaletteItem[] = resumes.slice(0, 6).map((r) => ({
       title: `Resume: ${r.name || "report"}${r.jd_label ? ` vs ${r.jd_label}` : ""}`,
@@ -125,7 +124,7 @@ function Palette({ go, close }: { go: (r: RoomId) => void; close: () => void }) 
     }));
     const ses: PaletteItem[] = sessions.slice(0, 6).map((s) => ({
       title: `Session: ${s.topic} (${s.mode})`, kind: "interview", glyph: "◉",
-      action: () => { window.location.href = "/"; },
+      action: () => go("interview"),
     }));
     return [...rooms, ...acts, ...res, ...art, ...ses];
   }, [articles, resumes, sessions, go]);
