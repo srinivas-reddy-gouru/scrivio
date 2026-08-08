@@ -13,3 +13,8 @@ AGENTS.md
 scope.md
 .claude/*
 !.claude/launch.json
+
+# React desk (web/)
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo

@@ -2374,6 +2374,12 @@ async def speak(body: SpeakRequest) -> Response:
 
 
 # ── Static UI ────────────────────────────────────────────────────────
+# /desk serves the React Resume Desk (web/dist, built with `npm run
+# build` in web/). Mounted BEFORE the root mount so it wins the prefix.
+_DESK_DIR = Path(__file__).resolve().parent.parent / "web" / "dist"
+if _DESK_DIR.exists():
+    app.mount("/desk", StaticFiles(directory=str(_DESK_DIR), html=True), name="desk")
+
 # Serves ui/index.html at GET / and any other files (e.g. ui/style.css)
 # directly. Registered LAST so all the /generate, /jobs/*, /clarify
 # route handlers above take precedence over the static file lookup.

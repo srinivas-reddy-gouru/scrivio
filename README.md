@@ -157,3 +157,14 @@ The verdict so far (Aug 2026, 3 topics + 2 post-fix rematches): **the one-prompt
 - **Rebuild the article flow around one research-grounded generation** (search + trust-ranked evidence + a single strong whole-article draft + verify pass + deterministic gates), re-matched against the same baseline until it wins or the studio is honestly re-scoped
 - **Coding rounds** for job interviews (designed: LLM-rubric-judged code editor, no execution sandbox in v1)
 - Live validation of the codex/gemini/qwen CLI specs against real binaries (specs follow their documented flags; drift is a one-line registry fix)
+
+## The Resume Desk (React)
+
+The resume studio's next generation lives in `web/` as a Vite + React + TypeScript app, served at **/desk** — "The Recruiter's Desk": your resume rendered as paper, findings drawn ON it (red-pen underlines, honesty-amber chips, teal improvement bars) and linked two-way to a review rail, with [METRIC] numbers filled inline right where they print.
+
+```bash
+cd web && npm install && npm run build   # FastAPI then serves /desk
+npm run dev                              # or hot-reload on :5180, proxying the API
+```
+
+The classic single-file UI at `/` remains the home for the other studios while they migrate.
