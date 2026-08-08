@@ -3558,11 +3558,8 @@
   }
 
   function openResumeStudio() {
-    Voice.abort();
-    showView('resume');
-    loadResumeList();
-    loadResumeJobTargets();
-    _refreshResumeEstimates();
+    // The resume studio moved into the Studio as The Desk (React).
+    window.location.href = '/studio/#/desk';
   }
 
   async function loadResumeJobTargets() {

@@ -2374,6 +2374,17 @@ async def speak(body: SpeakRequest) -> Response:
 
 
 # ── Static UI ────────────────────────────────────────────────────────
+# HTML must never be cached: hashed JS/CSS assets change name per build,
+# but a cached index.html keeps pointing at the OLD hashes and users see
+# a stale app after every deploy (bitten twice in verification).
+@app.middleware("http")
+async def _no_html_cache(request, call_next):
+    response = await call_next(request)
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
+
 # /desk serves the React Resume Desk (web/dist, built with `npm run
 # build` in web/). Mounted BEFORE the root mount so it wins the prefix.
 _DESK_DIR = Path(__file__).resolve().parent.parent / "web" / "dist"
