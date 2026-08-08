@@ -178,6 +178,36 @@ main { flex:1; min-width:0; padding:1.6rem 2rem 3rem; }
 .wall .shelf:last-child { border-bottom:none; }
 .wall .shelf .mono { color:var(--teal); }
 
+/* ── Back office ── */
+.office-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.1rem; max-width:1000px; }
+@media (max-width:900px){ .office-grid { grid-template-columns:1fr; } }
+.engine-row { display:flex; gap:0.7rem; align-items:flex-start; width:100%; text-align:left;
+  background:none; border:1px solid transparent; border-radius:10px; cursor:pointer; font-family:inherit;
+  color:var(--text); padding:0.6rem 0.65rem; margin:0 -0.3rem 0.2rem; transition:all .15s; }
+.engine-row:hover { background:rgba(255,255,255,0.04); }
+.engine-row.on { border-color:rgba(32,184,205,0.4); background:rgba(32,184,205,0.06); }
+.engine-row b { font-size:0.83rem; display:block; }
+.engine-row p { font-size:0.7rem; color:var(--text-dim); margin-top:0.15rem; line-height:1.45; }
+.engine-badge { margin-left:auto; font-size:0.62rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase;
+  color:var(--teal); border:1px solid rgba(32,184,205,0.4); border-radius:999px; padding:0.15rem 0.55rem; flex-shrink:0; }
+.dot-live, .dot-idle { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:0.35rem; }
+.dot-live { background:var(--green); box-shadow:0 0 8px var(--green); }
+.dot-idle { background:var(--stroke); }
+.office-note { font-size:0.68rem; color:var(--text-faint); margin-top:0.7rem; line-height:1.5; }
+.model-row { display:flex; align-items:center; justify-content:space-between; gap:0.8rem; padding:0.55rem 0; border-bottom:1px solid var(--stroke); }
+.model-row:last-of-type { border-bottom:none; }
+.model-row b { font-size:0.82rem; display:block; }
+.model-row p { font-size:0.68rem; color:var(--text-faint); margin-top:0.1rem; }
+.model-row select { background:rgba(0,0,0,0.3); color:var(--text); border:1px solid var(--stroke); border-radius:8px;
+  font-family:'JetBrains Mono'; font-size:0.72rem; padding:0.4rem 0.55rem; }
+.key-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+@media (max-width:760px){ .key-grid { grid-template-columns:1fr; } }
+.key-group > b { font-size:0.76rem; display:block; margin-bottom:0.35rem; }
+.key-row { display:flex; align-items:center; gap:0.55rem; font-family:'JetBrains Mono'; font-size:0.72rem; padding:0.3rem 0; }
+.key-row .dot-live, .key-row .dot-idle { margin-top:0; }
+.key-row .masked { margin-left:auto; color:var(--text-faint); }
+.key-row .key-edit { padding:0.2rem 0.6rem; font-size:0.64rem; }
+
 /* ── Job room: the dossier ── */
 .dossier {
   background:linear-gradient(180deg,#20302C,#182420); border:1px solid var(--stroke); border-radius:14px 14px 12px 12px;
@@ -386,11 +416,75 @@ main { flex:1; min-width:0; padding:1.6rem 2rem 3rem; }
   <!-- ═══ BACK OFFICE ═══ -->
   <section class="room" id="room-office">
     <h1 class="room-title bar-tick">The Back Office</h1>
-    <p class="room-sub">Provider, models, connections. The utility room keeps today's structure, restyled.</p>
-    <div class="panel" style="max-width:520px">
-      <p class="eyebrow">Provider</p>
-      <p style="font-size:0.85rem">Local CLI (claude) · subscription, no API billing</p>
-      <p style="font-size:0.72rem;color:var(--text-faint);margin-top:0.3rem">Also detected: none · Models: your call, scoped per provider</p>
+    <p class="room-sub">The engine, the models, the keys. Utility room: calm, labeled, honest about cost.</p>
+
+    <div class="office-grid">
+      <div class="panel">
+        <p class="eyebrow">The engine · who runs the studio</p>
+        <button class="engine-row on" data-engine="cli">
+          <span class="dot-live"></span>
+          <span><b>Local CLI (claude)</b>
+          <p>Your subscription sign-in. $0 per call, slower per call. Also powers live web search.</p></span>
+          <span class="engine-badge">active</span>
+        </button>
+        <button class="engine-row" data-engine="anthropic">
+          <span class="dot-idle"></span>
+          <span><b>Anthropic API</b>
+          <p>Fastest. Metered billing on your key.</p></span>
+        </button>
+        <button class="engine-row" data-engine="openai">
+          <span class="dot-idle"></span>
+          <span><b>OpenAI API</b>
+          <p>Runs the full pipeline when it is the only key; always handles claim verification.</p></span>
+        </button>
+        <p class="office-note">Keys are stripped from CLI subprocesses so the subscription is really what pays. Switching engines never edits your work.</p>
+      </div>
+
+      <div class="panel">
+        <p class="eyebrow">Models · the task names its size, you name the model</p>
+        <div class="model-row">
+          <span><b>Large tasks</b><p>writing, grading, tailoring, panel notes</p></span>
+          <select><option>claude-sonnet-4-6</option><option>claude-opus-5</option><option selected>claude-fable-5</option><option>Other…</option></select>
+        </div>
+        <div class="model-row">
+          <span><b>Small tasks</b><p>routing, checks, extraction, diagrams</p></span>
+          <select><option selected>claude-haiku-4-5</option><option>claude-sonnet-4-6</option><option>Other…</option></select>
+        </div>
+        <div class="model-row">
+          <span><b>Pin everything</b><p>quota-saver: one model for every call</p></span>
+          <select><option selected>off</option><option>claude-haiku-4-5</option><option>Other…</option></select>
+        </div>
+        <p class="office-note">Scoped to the active engine. Presets (Fast / Balanced / Best) choose which tier a stage uses; these choose what each tier is.</p>
+      </div>
+
+      <div class="panel" style="grid-column:1/-1">
+        <p class="eyebrow">Connections · keys by what they unlock</p>
+        <div class="key-grid">
+          <div class="key-group">
+            <b>Writing engines</b>
+            <div class="key-row"><span class="dot-live"></span> ANTHROPIC_API_KEY <span class="mono masked">••••qQAA</span><button class="btn btn-quiet key-edit">edit</button></div>
+            <div class="key-row"><span class="dot-live"></span> OPENAI_API_KEY <span class="mono masked">••••JOEA</span><button class="btn btn-quiet key-edit">edit</button></div>
+          </div>
+          <div class="key-group">
+            <b>Live web search</b>
+            <div class="key-row"><span class="dot-live"></span> TAVILY_API_KEY <span class="mono masked">••••8x2f</span><button class="btn btn-quiet key-edit">edit</button></div>
+            <div class="key-row"><span class="dot-idle"></span> BRAVE_API_KEY <span class="mono masked">not set</span><button class="btn btn-quiet key-edit">add</button></div>
+          </div>
+          <div class="key-group">
+            <b>Voice · TTS + dictation fallback</b>
+            <div class="key-row"><span class="dot-live"></span> uses OPENAI_API_KEY <span class="mono masked">shared</span></div>
+            <p class="office-note" style="margin:0.3rem 0 0">Without it, the browser's own voice takes over. Chrome dictation stays free.</p>
+          </div>
+          <div class="key-group">
+            <b>Fetch fallback</b>
+            <div class="key-row"><span class="dot-idle"></span> JINA_API_KEY <span class="mono masked">not set</span><button class="btn btn-quiet key-edit">add</button></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:0.8rem;align-items:center;margin-top:0.9rem">
+          <button class="btn" id="office-save">Save changes</button>
+          <span id="office-status" style="font-size:0.76rem;color:var(--text-faint)">Stored in .env · applies immediately, no restart</span>
+        </div>
+      </div>
     </div>
   </section>
 </main>
@@ -524,6 +618,18 @@ document.getElementById('answer-btn').addEventListener('click', () => {
 document.getElementById('iv-reset').addEventListener('click', () => {
   document.getElementById('rubric').classList.remove('flipped');
   document.getElementById('notepad').innerHTML = '<span class="interim">Tap the mic and your answer writes itself here…</span>';
+});
+
+/* Back office: engine selection + save */
+document.querySelectorAll('.engine-row').forEach(r => r.addEventListener('click', () => {
+  document.querySelectorAll('.engine-row').forEach(x => { x.classList.toggle('on', x === r); x.querySelector('.engine-badge')?.remove(); });
+  const badge = document.createElement('span'); badge.className = 'engine-badge'; badge.textContent = 'active';
+  r.appendChild(badge);
+}));
+document.getElementById('office-save')?.addEventListener('click', () => {
+  const s = document.getElementById('office-status');
+  s.textContent = 'Saved ✓ · live now, nothing restarted'; s.style.color = 'var(--green)';
+  setTimeout(() => { s.textContent = 'Stored in .env · applies immediately, no restart'; s.style.color = 'var(--text-faint)'; }, 2600);
 });
 
 /* Job room tabs */
