@@ -1,5 +1,8 @@
-/** The four stations of the desk. All data is the real API's. */
-import { useEffect, useMemo, useState } from "react";
+/** The four stations of the desk. All data is the real API's; all the
+ * play is in service of it: papers settle, numbers count, marks pulse,
+ * the stamp slaps. Everything stills under prefers-reduced-motion. */
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { DragEvent } from "react";
 import { api, fmtElapsed, useDocWatch } from "../api";
 import { countMetrics } from "../marks";
 import type { JobProfileSummary, ResumeDoc, ResumeSummaryItem } from "../types";
@@ -7,7 +10,31 @@ import { Paper } from "./Paper";
 
 /* ── Shared bits ── */
 
+const reducedMotion = () =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** Ease-out count-up that lands exactly on target. rAF pauses in hidden
+ * tabs, so a timeout guarantees the landing regardless. */
+function useCountUp(target: number, ms = 900) {
+  const [value, setValue] = useState(reducedMotion() ? target : 0);
+  useEffect(() => {
+    if (reducedMotion()) { setValue(target); return; }
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / ms);
+      setValue(Math.round(target * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const land = window.setTimeout(() => setValue(target), ms + 150);
+    return () => { cancelAnimationFrame(raf); clearTimeout(land); };
+  }, [target, ms]);
+  return value;
+}
+
 export function Dial({ score, tone }: { score: number; tone: string }) {
+  const shown = useCountUp(score);
   return (
     <div className="dial">
       <svg width="84" height="84" viewBox="0 0 84 84">
@@ -15,11 +42,10 @@ export function Dial({ score, tone }: { score: number; tone: string }) {
         <circle
           cx="42" cy="42" r="36" fill="none" stroke={tone} strokeWidth="8"
           strokeLinecap="round" strokeDasharray="226"
-          strokeDashoffset={226 - (226 * score) / 100}
-          style={{ transition: "stroke-dashoffset .8s ease-out" }}
+          strokeDashoffset={226 - (226 * shown) / 100}
         />
       </svg>
-      <div className="num">{score}</div>
+      <div className="num">{shown}</div>
     </div>
   );
 }
@@ -29,8 +55,17 @@ export const scoreTone = (s: number) =>
 export const scoreVerdict = (s: number) =>
   s >= 80 ? "Strong shape" : s >= 60 ? "Getting there" : "Needs work";
 
+/** Honest staged copy: checks are instant, the AI passes take the time. */
+const READ_STAGES: Array<[number, string]> = [
+  [0, "Deterministic checks: instant ✓"],
+  [4, "Mapping structure: sections, roles, dates…"],
+  [30, "The recruiter is reading against your JD…"],
+  [75, "Taking longer than usual; subscription providers queue under load…"],
+];
+
 function Progress({ title, elapsed, estimate }: { title: string; elapsed: number; estimate: number }) {
   const pct = Math.min(94, 2 + (elapsed / estimate) * 92);
+  const stage = [...READ_STAGES].reverse().find(([at]) => elapsed >= at)!;
   return (
     <div className="working">
       <p className="line font-display" style={{ fontSize: "1.1rem" }}>{title}</p>
@@ -38,46 +73,75 @@ function Progress({ title, elapsed, estimate }: { title: string; elapsed: number
       <p className="line mono">
         {fmtElapsed(elapsed)} <span style={{ color: "var(--text-faint)" }}>/ ~{fmtElapsed(estimate)} est.</span>
       </p>
-      <p className="line" style={{ fontSize: "0.72rem", color: "var(--text-faint)" }}>
-        The checklist is computed instantly; the AI passes take the time. Estimate depends on your provider.
-      </p>
+      <p className="line" style={{ fontSize: "0.76rem" }}>{stage[1]}</p>
     </div>
   );
 }
 
 /* ── Station 1: Target ── */
 
+interface PickedFile { name: string; sizeKb: number; b64: string; }
+
+const readFile = (file: File) =>
+  new Promise<PickedFile>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({
+      name: file.name,
+      sizeKb: Math.round(file.size / 1024),
+      b64: String(reader.result).split(",")[1] || "",
+    });
+    reader.onerror = () => reject(new Error("Could not read the file."));
+    reader.readAsDataURL(file);
+  });
+
 export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
   const [resumeText, setResumeText] = useState("");
+  const [file, setFile] = useState<PickedFile | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [jdText, setJdText] = useState("");
+  const [jdUrl, setJdUrl] = useState("");
   const [profileId, setProfileId] = useState("");
   const [profiles, setProfiles] = useState<JobProfileSummary[]>([]);
   const [past, setPast] = useState<ResumeSummaryItem[]>([]);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const refreshLists = () => {
     api.listJobProfiles().then(setProfiles).catch(() => {});
     api.listResumes().then(setPast).catch(() => {});
-  }, []);
+  };
+  useEffect(refreshLists, []);
 
   const elapsed = useDocWatch(pendingId, pendingId !== null, (doc) => {
     if (doc.status !== "analyzing") { setPendingId(null); onDoc(doc); }
   });
 
+  const pick = async (f: File | undefined) => {
+    if (!f) return;
+    setError("");
+    try { setFile(await readFile(f)); setResumeText(""); }
+    catch (e) { setError((e as Error).message); }
+  };
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault(); setDragging(false);
+    pick(e.dataTransfer.files?.[0]);
+  };
+
   const analyze = async () => {
     setError("");
     try {
       const doc = await api.createResume({
-        resume_text: resumeText,
+        resume_text: file ? "" : resumeText,
+        resume_file_b64: file?.b64,
+        resume_filename: file?.name,
         jd_text: jdText,
+        jd_url: jdUrl,
         job_profile_id: profileId || null,
       });
-      onDoc(doc); // deterministic report exists already; App stays on 1 until ready
+      onDoc(doc);
       if (doc.status === "analyzing") setPendingId(doc.resume_id);
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    } catch (e) { setError((e as Error).message); }
   };
 
   if (pendingId) return <Progress title="The recruiter is reading…" elapsed={elapsed} estimate={90} />;
@@ -88,15 +152,49 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
         <h1 className="bar-tick">Put your resume <em>on the desk</em></h1>
         <p className="sub">Scrivio reads it like a recruiter, marks it like an editor, and never writes a word that is not true.</p>
         <div className="tray-grid">
-          <div className="tray">
+          <div
+            className={"tray" + (dragging ? " dragging" : "")}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+          >
             <p className="eyebrow">Your resume</p>
-            <textarea
-              value={resumeText}
-              onChange={(e) => setResumeText(e.target.value)}
-              placeholder="Paste your resume text here…"
-              spellCheck={false}
-            />
-            <p className="hint">Paste for now; PDF/DOCX upload arrives with the full port.</p>
+            {file ? (
+              <>
+                <div className="mini-paper">
+                  <b>{file.name}</b>
+                  <span className="thin">{file.sizeKb} KB · landed on the desk ✓</span>
+                </div>
+                <p className="hint">
+                  Drop another file to replace it, or{" "}
+                  <a href="#" style={{ textDecoration: "underline" }}
+                    onClick={(e) => { e.preventDefault(); setFile(null); }}>
+                    switch to pasting text
+                  </a>.
+                </p>
+              </>
+            ) : (
+              <>
+                <textarea
+                  value={resumeText}
+                  onChange={(e) => setResumeText(e.target.value)}
+                  placeholder={dragging ? "Drop it right here…" : "Drag a PDF/DOCX here, or paste your resume text…"}
+                  spellCheck={false}
+                />
+                <p className="hint">
+                  PDF, DOCX, TXT, or JSON Resume ·{" "}
+                  <a href="#" style={{ textDecoration: "underline" }}
+                    onClick={(e) => { e.preventDefault(); fileInput.current?.click(); }}>
+                    browse files
+                  </a>
+                </p>
+                <input
+                  ref={fileInput} type="file" hidden
+                  accept=".pdf,.docx,.txt,.md,.json"
+                  onChange={(e) => pick(e.target.files?.[0])}
+                />
+              </>
+            )}
           </div>
           <div className="tray">
             <p className="eyebrow">The job it must win</p>
@@ -108,10 +206,14 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
                 </option>
               ))}
             </select>
+            <input
+              type="text" value={jdUrl} onChange={(e) => setJdUrl(e.target.value)}
+              placeholder="https://… (fetches the posting)"
+            />
             <textarea
               value={jdText}
               onChange={(e) => setJdText(e.target.value)}
-              placeholder="…or paste the job description here (optional)"
+              placeholder="…or paste the job description (optional)"
               spellCheck={false}
             />
             <p className="hint">A JD unlocks keyword match and tailoring.</p>
@@ -119,7 +221,8 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
         </div>
         {error && <div className="errbox" style={{ marginTop: "1rem" }}>{error}</div>}
         <div className="go-row">
-          <button className="btn" onClick={analyze} disabled={!resumeText.trim() && !profileId}>
+          <button className="btn" onClick={analyze}
+            disabled={!resumeText.trim() && !file && !profileId}>
             Read my resume
           </button>
         </div>
@@ -128,8 +231,9 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
       {past.length > 0 && (
         <div className="past">
           <p className="eyebrow">Past reports</p>
-          {past.map((item) => (
-            <div className="past-card" key={item.resume_id}>
+          {past.map((item, i) => (
+            <div className="past-card" key={item.resume_id}
+              style={{ animation: "rise .35s both", animationDelay: `${i * 50}ms` }}>
               <div>
                 <b>{item.name || "Resume"}</b>
                 <div className="meta">{item.jd_label || "no target JD"}</div>
@@ -140,11 +244,13 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
                     {item.score}{item.tailored_score != null ? ` → ${item.tailored_score}` : ""}
                   </span>
                 )}
-                <button
-                  className="btn btn-quiet"
-                  onClick={() => api.getResume(item.resume_id).then(onDoc).catch(() => {})}
-                >
+                <button className="btn btn-quiet"
+                  onClick={() => api.getResume(item.resume_id).then(onDoc).catch(() => {})}>
                   Open
+                </button>
+                <button className="btn btn-quiet" aria-label={`Delete ${item.name}`}
+                  onClick={() => api.deleteResume(item.resume_id).then(refreshLists)}>
+                  ✕
                 </button>
               </div>
             </div>
@@ -167,11 +273,15 @@ export function ReportStation({ doc, onDoc, onTailored }: {
   const [error, setError] = useState("");
   const report = doc.report;
 
-  const elapsed = useDocWatch(doc.resume_id, tailoring, (fresh) => {
-    if (fresh.tailor_status === "tailoring") return;
-    setTailoring(false);
-    if (fresh.tailor_status === "error") setError(fresh.tailor_error);
-    else onTailored(fresh);
+  // A doc opened mid-analysis keeps filling in live.
+  const analyzing = doc.status === "analyzing";
+  const elapsed = useDocWatch(doc.resume_id, tailoring || analyzing, (fresh) => {
+    if (analyzing && fresh.status !== "analyzing") { onDoc(fresh); return; }
+    if (tailoring && fresh.tailor_status !== "tailoring") {
+      setTailoring(false);
+      if (fresh.tailor_status === "error") { setError(fresh.tailor_error); onDoc(fresh); }
+      else onTailored(fresh);
+    }
   });
 
   const findings = useMemo(() => {
@@ -189,14 +299,12 @@ export function ReportStation({ doc, onDoc, onTailored }: {
 
   const startTailor = async () => {
     setError("");
-    try {
-      await api.tailor(doc.resume_id);
-      setTailoring(true);
-    } catch (e) { setError((e as Error).message); }
+    try { await api.tailor(doc.resume_id); setTailoring(true); }
+    catch (e) { setError((e as Error).message); }
   };
 
   if (!doc.structured || !report) {
-    return <div className="stage"><div className="errbox">{doc.error || "Structure extraction failed. Re-analyze from the Target station."}</div></div>;
+    return <div className="errbox">{doc.error || "Structure extraction failed. Re-analyze from the Target station."}</div>;
   }
 
   return (
@@ -207,7 +315,7 @@ export function ReportStation({ doc, onDoc, onTailored }: {
           <Dial score={report.score} tone={scoreTone(report.score)} />
           <div>
             <div className="verdict" style={{ color: scoreTone(report.score) }}>
-              {scoreVerdict(report.score)}
+              {scoreVerdict(report.score)}{analyzing ? " · provisional" : ""}
             </div>
             <div className="score-sub">
               {doc.jd_label ? `vs ${doc.jd_label}` : "no target JD"}<br />
@@ -218,8 +326,9 @@ export function ReportStation({ doc, onDoc, onTailored }: {
 
         <div className="panel">
           <p className="eyebrow">The pen's marks · tap one to see it on the paper</p>
-          {findings.map((c) => (
-            <button key={c.id} className={"finding" + (lit === c.id ? " lit" : "")} onClick={() => light(c.id)}>
+          {findings.map((c, i) => (
+            <button key={c.id} className={"finding" + (lit === c.id ? " lit" : "")}
+              style={{ "--i": i } as React.CSSProperties} onClick={() => light(c.id)}>
               <span className="sig" style={{ background: c.passed ? "var(--green)" : "var(--redpen)" }} />
               <span>
                 <b>{c.label} {c.passed ? "✓" : `· weight ${c.weight}`}</b>
@@ -232,21 +341,29 @@ export function ReportStation({ doc, onDoc, onTailored }: {
         {report.keyword_coverage && (
           <div className="panel">
             <p className="eyebrow">Keyword match · {report.keyword_coverage.percent}%</p>
-            {report.keyword_coverage.found.map((k) => <span key={k} className="kchip found">{k}</span>)}
-            {report.keyword_coverage.missing.map((k) => <span key={k} className="kchip missing">{k}</span>)}
+            {report.keyword_coverage.found.map((k, i) => (
+              <span key={k} className="kchip found" style={{ "--i": i } as React.CSSProperties}>{k}</span>
+            ))}
+            {report.keyword_coverage.missing.map((k, i) => (
+              <span key={k} className="kchip missing"
+                style={{ "--i": report.keyword_coverage!.found.length + i } as React.CSSProperties}>
+                {k}
+              </span>
+            ))}
           </div>
         )}
 
-        {doc.review && (
+        {doc.review ? (
           <div className="panel">
             <p className="eyebrow" style={{ color: "var(--teal)" }}>Recruiter's read</p>
             <p style={{ fontSize: "0.8rem", lineHeight: 1.55, color: "var(--text-dim)" }}>{doc.review.summary}</p>
           </div>
-        )}
-        {doc.status === "analyzing" && (
+        ) : analyzing && (
           <div className="panel" style={{ borderStyle: "dashed" }}>
             <p className="eyebrow">Recruiter's read</p>
-            <p style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>Being written now; the checklist above is already final.</p>
+            <p style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
+              Being written now ({fmtElapsed(elapsed)})… the checklist above is already final.
+            </p>
           </div>
         )}
 
@@ -266,11 +383,8 @@ export function ReportStation({ doc, onDoc, onTailored }: {
             </button>
           ) : (
             <>
-              <button
-                className="btn" style={{ width: "100%" }}
-                onClick={startTailor}
-                disabled={!doc.jd_text || doc.status === "analyzing"}
-              >
+              <button className="btn" style={{ width: "100%" }} onClick={startTailor}
+                disabled={!doc.jd_text || analyzing}>
                 Tailor it to this JD
               </button>
               <p style={{ fontSize: "0.72rem", color: "var(--text-faint)", marginTop: "0.5rem", textAlign: "center" }}>
@@ -281,7 +395,6 @@ export function ReportStation({ doc, onDoc, onTailored }: {
             </>
           )}
         </div>
-        <span style={{ display: "none" }}>{void onDoc}</span>
       </aside>
     </div>
   );
@@ -296,6 +409,7 @@ export function TailorStation({ doc, onDoc, onSend }: {
 }) {
   const [values, setValues] = useState<Map<number, string>>(new Map());
   const [saving, setSaving] = useState(false);
+  const [peek, setPeek] = useState(false);
   const [error, setError] = useState("");
   const t = doc.tailored!;
   const remaining = countMetrics(t.resume);
@@ -314,72 +428,88 @@ export function TailorStation({ doc, onDoc, onSend }: {
   };
 
   return (
-    <div className="desk-grid">
-      <Paper
-        resume={t.resume} mode="tailored" report={doc.tailored_report}
-        changes={t.changes} metricValues={values}
-        onMetric={(i, v) => setValues((m) => new Map(m).set(i, v))}
-      />
-      <aside className="rail">
-        <div className="panel score-panel" style={{ justifyContent: "space-between" }}>
-          <div className="delta">
-            <span className="pill from">{doc.report?.score ?? "-"}</span>
-            <span className="arrow">→</span>
-            <span className="pill to">{doc.tailored_report?.score ?? "-"}</span>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div className="verdict" style={{ color: scoreTone(doc.tailored_report?.score ?? 0) }}>
-              {scoreVerdict(doc.tailored_report?.score ?? 0)}
-            </div>
-            <div className="fill-count">
-              {remaining === 0 ? "All numbers filled ✓"
-                : `${remaining} number${remaining > 1 ? "s" : ""} to fill on the paper`}
-            </div>
-          </div>
-        </div>
-
-        {remaining > 0 && (
-          <div className="panel" style={{ borderColor: "rgba(229,176,76,0.4)" }}>
-            <p className="eyebrow" style={{ color: "var(--amber)" }}>Finish it on the paper</p>
-            <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
-              The amber chips are your numbers to type, right where they will print.
-              Scrivio never invents metrics; blanks ship as [METRIC] until you fill them.
-            </p>
-            <button className="btn" style={{ width: "100%", marginTop: "0.7rem" }} onClick={save}
-              disabled={saving || typed === 0}>
-              {saving ? "Saving…" : `Save ${typed || ""} number${typed === 1 ? "" : "s"}`}
-            </button>
-          </div>
+    <div>
+      <div className="peek-row">
+        <button className={"peek-btn" + (peek ? "" : " on")} onClick={() => setPeek(false)}>
+          Tailored
+        </button>
+        <button className={"peek-btn" + (peek ? " on" : "")} onClick={() => setPeek(true)}>
+          Peek at the original
+        </button>
+      </div>
+      <div className="desk-grid">
+        {/* key remount replays the paper-settle animation on flip */}
+        {peek && doc.structured ? (
+          <Paper key="original" resume={doc.structured} mode="report" report={doc.report} />
+        ) : (
+          <Paper
+            key="tailored"
+            resume={t.resume} mode="tailored" report={doc.tailored_report}
+            changes={t.changes} metricValues={values}
+            onMetric={(i, v) => setValues((m) => new Map(m).set(i, v))}
+          />
         )}
-
-        <div className="panel">
-          <p className="eyebrow">What changed, and why</p>
-          {t.changes.map((c, i) => (
-            <div className="change-note" key={i}>
-              <span className="where">{c.where}</span> {c.what}
+        <aside className="rail">
+          <div className="panel score-panel" style={{ justifyContent: "space-between" }}>
+            <div className="delta">
+              <span className="pill from">{doc.report?.score ?? "-"}</span>
+              <span className="arrow">→</span>
+              <span className="pill to">{doc.tailored_report?.score ?? "-"}</span>
             </div>
-          ))}
-        </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="verdict" style={{ color: scoreTone(doc.tailored_report?.score ?? 0) }}>
+                {scoreVerdict(doc.tailored_report?.score ?? 0)}
+              </div>
+              <div className="fill-count">
+                {remaining === 0 ? "All numbers filled ✓"
+                  : `${remaining} number${remaining > 1 ? "s" : ""} to fill on the paper`}
+              </div>
+            </div>
+          </div>
 
-        {t.warnings.length > 0 && (
-          <div className="panel" style={{ borderColor: "rgba(229,176,76,0.4)" }}>
-            <p className="eyebrow" style={{ color: "var(--amber)" }}>Honesty notes</p>
-            {t.warnings.map((w, i) => (
-              <p key={i} style={{ fontSize: "0.74rem", color: "var(--text-dim)", lineHeight: 1.5, padding: "0.2rem 0" }}>
-                • {w}
+          {remaining > 0 && (
+            <div className="panel" style={{ borderColor: "rgba(229,176,76,0.4)" }}>
+              <p className="eyebrow" style={{ color: "var(--amber)" }}>Finish it on the paper</p>
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
+                The amber chips are your numbers to type, right where they will print.
+                Scrivio never invents metrics; blanks ship as [METRIC] until you fill them.
               </p>
+              <button className="btn" style={{ width: "100%", marginTop: "0.7rem" }} onClick={save}
+                disabled={saving || typed === 0}>
+                {saving ? "Saving…" : `Save ${typed || ""} number${typed === 1 ? "" : "s"}`}
+              </button>
+            </div>
+          )}
+
+          <div className="panel">
+            <p className="eyebrow">What changed, and why</p>
+            {t.changes.map((c, i) => (
+              <div className="change-note" key={i} style={{ "--i": i } as React.CSSProperties}>
+                <span className="where">{c.where}</span> {c.what}
+              </div>
             ))}
           </div>
-        )}
 
-        {error && <div className="errbox">{error}</div>}
+          {t.warnings.length > 0 && (
+            <div className="panel" style={{ borderColor: "rgba(229,176,76,0.4)" }}>
+              <p className="eyebrow" style={{ color: "var(--amber)" }}>Honesty notes</p>
+              {t.warnings.map((w, i) => (
+                <p key={i} style={{ fontSize: "0.74rem", color: "var(--text-dim)", lineHeight: 1.5, padding: "0.2rem 0" }}>
+                  • {w}
+                </p>
+              ))}
+            </div>
+          )}
 
-        <div className="panel cta-panel">
-          <button className="btn" style={{ width: "100%" }} onClick={onSend}>
-            Looks right, package it
-          </button>
-        </div>
-      </aside>
+          {error && <div className="errbox">{error}</div>}
+
+          <div className="panel cta-panel">
+            <button className="btn" style={{ width: "100%" }} onClick={onSend}>
+              Looks right, package it
+            </button>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -414,17 +544,17 @@ export function SendStation({ doc }: { doc: ResumeDoc }) {
         <a className="btn btn-quiet" href={dl("json")} download>JSON Resume</a>
       </div>
       <div className="recap">
-        <div>
+        <div style={{ "--i": 0 } as React.CSSProperties}>
           <span className="mono" style={{ color: "var(--green)" }}>
             {doc.report?.score} → {doc.tailored_report?.score}
           </span>
           <span className="lbl">ATS readiness</span>
         </div>
-        <div>
+        <div style={{ "--i": 1 } as React.CSSProperties}>
           <span className="mono" style={{ color: "var(--teal)" }}>{t.changes.length}</span>
           <span className="lbl">honest rewrites</span>
         </div>
-        <div>
+        <div style={{ "--i": 2 } as React.CSSProperties}>
           <span className="mono" style={{ color: "var(--amber)" }}>0</span>
           <span className="lbl">facts invented</span>
         </div>

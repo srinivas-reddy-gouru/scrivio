@@ -253,3 +253,73 @@ header {
   border-radius: 10px; padding: 0.7rem 0.9rem; font-size: 0.8rem; color: #f2b3a6;
 }
 a { color: inherit; text-decoration: none; }
+
+/* ── Motion system: the desk feels handled, not animated at random.
+   One vocabulary: papers settle, marks pulse, numbers count, the stamp
+   slaps. All of it stills under prefers-reduced-motion (global rule). */
+@keyframes paper-in {
+  from { opacity: 0; transform: translateY(18px) rotate(-0.5deg); }
+  to { opacity: 1; transform: none; }
+}
+.paper { animation: paper-in 0.5s cubic-bezier(0.2, 0.8, 0.25, 1) both; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.finding, .kchip, .change-note { animation: rise 0.35s both; animation-delay: calc(var(--i, 0) * 45ms); }
+
+@keyframes lit-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(32, 184, 205, 0.35); }
+  100% { box-shadow: 0 0 0 10px rgba(32, 184, 205, 0); }
+}
+.lit-teal, .lit-red, .lit-amber { animation: lit-pulse 0.9s ease-out 2; }
+
+@keyframes chip-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.metric-chip.filled { animation: chip-pop 0.35s cubic-bezier(0.3, 1.4, 0.5, 1); }
+
+/* Target: the drop zone reacts like a desk accepting paper. */
+.tray.dragging { border-color: var(--teal); background: rgba(32, 184, 205, 0.07); transform: scale(1.01); }
+.tray { transition: border-color 0.2s, background 0.2s, transform 0.15s; }
+.mini-paper {
+  background: var(--paper); color: var(--ink); border-radius: 4px;
+  padding: 0.8rem 0.95rem; font-size: 0.66rem; line-height: 1.5;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4); margin-top: 0.6rem;
+  transform: rotate(-0.6deg); animation: paper-in 0.45s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+.mini-paper b { display: block; font-size: 0.74rem; }
+.mini-paper .thin { color: var(--ink-dim); }
+.tray input[type="text"] {
+  background: rgba(0, 0, 0, 0.3); color: var(--text);
+  border: 1px solid var(--stroke); border-radius: 10px;
+  font-family: inherit; font-size: 0.78rem; padding: 0.6rem 0.75rem; margin-top: 0.6rem;
+}
+
+/* Tailor: peek at the original, the paper flips in your hands. */
+.peek-row { display: flex; justify-content: center; margin-bottom: 0.8rem; gap: 0.5rem; }
+.peek-btn {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--stroke);
+  color: var(--text-dim); font-family: inherit; font-size: 0.76rem; font-weight: 600;
+  padding: 0.45rem 1rem; border-radius: 999px; cursor: pointer; transition: all 0.15s;
+}
+.peek-btn:hover { color: var(--text); border-color: rgba(32, 184, 205, 0.5); }
+.peek-btn.on { color: var(--teal); border-color: rgba(32, 184, 205, 0.5); background: rgba(32, 184, 205, 0.08); }
+
+/* Send: the package lands, then the stamp slaps on. */
+@keyframes package-in {
+  from { opacity: 0; transform: translateY(-26px) rotate(-4deg); }
+  to { opacity: 1; transform: rotate(-1deg); }
+}
+.package { animation: package-in 0.55s cubic-bezier(0.2, 0.8, 0.25, 1) both; }
+@keyframes stamp-in {
+  0% { opacity: 0; transform: rotate(3deg) scale(2.2); }
+  60% { opacity: 1; transform: rotate(3deg) scale(0.92); }
+  100% { transform: rotate(3deg) scale(1); }
+}
+.package .stamp { animation: stamp-in 0.4s cubic-bezier(0.3, 1.2, 0.4, 1) 0.5s both; }
+.recap div { animation: rise 0.4s both; animation-delay: calc(0.7s + var(--i, 0) * 120ms); }
