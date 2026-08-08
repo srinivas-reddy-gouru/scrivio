@@ -407,3 +407,84 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 .quick { display: flex; flex-direction: column; gap: 0.55rem; }
 .quick .btn, .quick a.btn { justify-content: flex-start; width: 100%; }
 .classic-note { font-size: 0.72rem; color: var(--text-faint); margin-top: 0.6rem; line-height: 1.5; }
+
+/* ══ THE JOB ROOM — dossiers and the marked report card ══ */
+.dossier {
+  background: linear-gradient(180deg, #20302C, #182420);
+  border: 1px solid var(--stroke); border-radius: 14px 14px 12px 12px;
+  overflow: hidden; max-width: 900px; animation: rise 0.4s both;
+}
+.dossier .clip {
+  min-height: 40px; background: rgba(0, 0, 0, 0.25);
+  display: flex; align-items: center; padding: 0.5rem 1.1rem; gap: 0.7rem; flex-wrap: wrap;
+}
+.dossier .clip b { font-size: 0.88rem; }
+.dossier .clip .meta { font-size: 0.68rem; color: var(--text-faint); }
+.dossier .clip .btn-quiet { margin-left: auto; padding: 0.3rem 0.8rem; font-size: 0.7rem; }
+.tabs { display: flex; gap: 0.2rem; padding: 0.6rem 1rem 0; }
+.tab {
+  background: none; border: none; font-family: inherit; cursor: pointer;
+  color: var(--text-faint); font-size: 0.76rem; font-weight: 700;
+  padding: 0.45rem 0.9rem; border-radius: 8px 8px 0 0;
+}
+.tab.on { color: var(--text); background: var(--rail-bg); }
+.dossier-body { background: var(--rail-bg); margin: 0 1rem 1rem; border-radius: 0 10px 10px 10px; padding: 1rem 1.2rem; }
+.comp-row { display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.5rem 0; border-bottom: 1px solid var(--stroke); font-size: 0.8rem; }
+.comp-row:last-child { border-bottom: none; }
+.comp-row .m { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; margin-top: 0.35rem; }
+.comp-row .note { margin-left: auto; font-size: 0.68rem; color: var(--text-faint); text-align: right; max-width: 46%; }
+.dossier-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.8rem;
+  background: linear-gradient(180deg, #1D2B27, #16211E);
+  border: 1px solid var(--stroke); border-radius: 12px;
+  padding: 0.8rem 1.05rem; margin-bottom: 0.6rem; cursor: pointer; width: 100%;
+  font-family: inherit; color: var(--text); text-align: left; transition: border-color 0.15s, transform 0.15s;
+  animation: rise 0.35s both; animation-delay: calc(var(--i, 0) * 50ms);
+}
+.dossier-card:hover { border-color: rgba(32, 184, 205, 0.4); transform: translateY(-1px); }
+.dossier-card b { font-size: 0.86rem; display: block; }
+.dossier-card .meta { font-size: 0.7rem; color: var(--text-faint); margin-top: 0.15rem; }
+
+/* The marked report card */
+.report-card {
+  background: var(--paper); color: var(--ink); border-radius: 6px; max-width: 900px;
+  margin-top: 1.2rem; padding: 1.9rem 2.2rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); animation: paper-in 0.5s both; font-size: 0.83rem;
+}
+.report-card .rc-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.report-card h2 {
+  font-size: 0.7rem; letter-spacing: 0.09em; text-transform: uppercase; color: #1A5450;
+  font-weight: 700; border-bottom: 1px solid #D8D2C2; padding-bottom: 0.3rem; margin: 1.1rem 0 0.5rem;
+}
+.hire-stamp {
+  font-family: "Space Grotesk"; font-weight: 700; font-size: 0.82rem;
+  color: #8A6420; border: 2px solid var(--amber); border-radius: 6px;
+  padding: 0.22rem 0.75rem; transform: rotate(-2deg); background: var(--amber-soft);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  animation: stamp-in 0.4s cubic-bezier(0.3, 1.2, 0.4, 1) 0.4s both;
+}
+.comp-line { display: flex; align-items: center; gap: 0.6rem; padding: 0.32rem 0; }
+.comp-line .nm { width: 160px; flex-shrink: 0; font-size: 0.78rem; }
+.comp-line .bar { flex: 1; height: 6px; border-radius: 3px; background: #E7E2D3; overflow: hidden; }
+.comp-line .bar i { display: block; height: 100%; border-radius: 3px; transition: width 0.7s ease-out; }
+.comp-line .sc { font-family: "JetBrains Mono"; font-size: 0.72rem; width: 46px; text-align: right; }
+.pen-note {
+  font-style: italic; color: #7A4438; border-left: 3px solid var(--redpen);
+  padding: 0.25rem 0 0.25rem 0.75rem; margin: 0.5rem 0; line-height: 1.55;
+}
+.cover-row { display: flex; gap: 0.55rem; align-items: baseline; padding: 0.2rem 0; font-size: 0.78rem; }
+.cover-row .ok { color: #1A7A4E; font-weight: 700; }
+.cover-row .part { color: #8A6420; font-weight: 700; }
+.cover-row .miss { color: #B0472F; font-weight: 700; }
+.study-row { font-size: 0.76rem; padding: 0.18rem 0; }
+.study-row a { color: #0E7490; text-decoration: underline; text-underline-offset: 2px; }
+.trust-tick { font-family: "JetBrains Mono"; font-size: 0.64rem; color: #1A5450; }
+.jr-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+@media (max-width: 720px) { .jr-form .row2 { grid-template-columns: 1fr; } }
+.jr-form input[type="text"], .jr-form select, .jr-form textarea {
+  width: 100%; background: rgba(0, 0, 0, 0.3); color: var(--text);
+  border: 1px solid var(--stroke); border-radius: 10px;
+  font-family: inherit; font-size: 0.8rem; padding: 0.6rem 0.75rem; margin: 0.25rem 0 0.7rem;
+}
+.jr-form textarea { min-height: 90px; resize: vertical; }
+.jr-form label { font-size: 0.7rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }

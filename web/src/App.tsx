@@ -3,6 +3,7 @@ import type { ResumeDoc } from "./types";
 import { Shell, useHashRoom } from "./components/Shell";
 import type { RoomId } from "./components/Shell";
 import { Floor } from "./rooms/Floor";
+import { JobRoom } from "./rooms/JobRoom";
 import { ReportStation, SendStation, TailorStation, TargetStation } from "./components/stations";
 
 const STATIONS = ["Target", "Report", "Tailor", "Send"] as const;
@@ -87,7 +88,7 @@ export default function App() {
     desk: <DeskRoom />,
     newsroom: <ClassicRoom {...CLASSIC.newsroom} />,
     interview: <ClassicRoom {...CLASSIC.interview} />,
-    job: <ClassicRoom {...CLASSIC.job} />,
+    job: <JobRoom />,
     office: <ClassicRoom {...CLASSIC.office} />,
   };
   return <Shell room={room} go={go}>{body[room]}</Shell>;

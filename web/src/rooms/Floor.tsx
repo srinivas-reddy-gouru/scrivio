@@ -116,7 +116,7 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
           )}
           <button className="btn btn-quiet" onClick={() => go("desk")}>Check a resume</button>
           <a className="btn btn-quiet" href="/">Write an article</a>
-          <a className="btn btn-quiet" href="/">Open job prep</a>
+          <button className="btn btn-quiet" onClick={() => go("job")}>Open the Job Room</button>
           <p className="classic-note">
             Rooms still marked classic open the original studio; they move in
             here one by one as the migration lands.

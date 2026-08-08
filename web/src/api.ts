@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type {
-  ArticleSummary, InterviewSessionItem, InterviewStats,
-  JobProfileSummary, ResumeDoc, ResumeSummaryItem, SettingsInfo,
+  ArticleSummary, InterviewDetail, InterviewSessionItem, InterviewStats,
+  JobProfileDetail, JobProfileSummary, ResumeDoc, ResumeSummaryItem, SettingsInfo,
 } from "./types";
 
 async function json<T>(res: Response): Promise<T> {
@@ -40,9 +40,25 @@ export const api = {
   listArticles: () => fetch("/articles").then((r) => json<ArticleSummary[]>(r)),
   listInterviews: () =>
     fetch("/interviews").then((r) => json<InterviewSessionItem[]>(r)),
+  getInterview: (id: string) =>
+    fetch(`/interviews/${id}`).then((r) => json<InterviewDetail>(r)),
   interviewStats: () =>
     fetch("/interviews/stats").then((r) => json<InterviewStats>(r)),
   settings: () => fetch("/settings").then((r) => json<SettingsInfo>(r)),
+  getJobProfile: (id: string) =>
+    fetch(`/job-profiles/${id}`).then((r) => json<JobProfileDetail>(r)),
+  createJobProfile: (body: {
+    role_title: string; company?: string; location?: string; seniority?: string;
+    extra_notes?: string; job_description?: string; jd_url?: string;
+    resume_text?: string; resume_file_b64?: string; resume_filename?: string;
+  }) =>
+    fetch("/job-profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => json<JobProfileDetail>(r)),
+  deleteJobProfile: (id: string) =>
+    fetch(`/job-profiles/${id}`, { method: "DELETE" }),
 };
 
 /** Poll the doc every 2.5s while `active`; hand every fresh doc to the

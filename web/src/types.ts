@@ -98,3 +98,41 @@ export interface InterviewStats {
 export interface SettingsInfo {
   resolved_provider: string; provider_auto: boolean; active_cli: string;
 }
+
+/* ── Job Room ── */
+
+export interface Competency {
+  name: string; why_it_matters: string;
+  evidence_in_resume: "strong" | "partial" | "missing";
+  probe_note: string;
+}
+export interface JobAnalysis {
+  competencies: Competency[]; resume_highlights: string[];
+  gaps: string[]; company_context: string;
+}
+export interface JobProfile {
+  profile_id: string; role_title: string; company: string; location: string;
+  seniority: string; job_description: string; resume_text: string;
+  extra_notes: string; created_at: string;
+}
+export interface JobProfileDetail { profile: JobProfile; analysis: JobAnalysis; }
+
+export interface CompetencyScore {
+  name: string; score: number | null; band: string;
+  evidence: string[]; gaps: string[];
+}
+export interface StudyResource {
+  competency: string; title: string; url: string; trust_score: number;
+}
+export interface JobScorecard {
+  competency_scores: CompetencyScore[];
+  requirement_coverage: Array<{ requirement: string; status: string }>;
+  hire_signal: string; debrief: string; study_plan: StudyResource[];
+}
+export interface InterviewDetail {
+  session_id: string; topic: string; level: string; mode: string;
+  summary: {
+    answered: number; average_score: number | null; debrief: string;
+    scorecard: JobScorecard | null;
+  } | null;
+}
