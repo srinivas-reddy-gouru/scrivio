@@ -75,7 +75,7 @@ function ClassicRoom({ title, sub }: { title: string; sub: string }) {
 }
 
 const CLASSIC: Record<string, { title: string; sub: string }> = {
-  newsroom: { title: "The Newsroom", sub: "Articles: the press run lands here soon." },
+  newsroom: { title: "Article Studio", sub: "The press run lands here soon." },
   interview: { title: "The Interview Room", sub: "Practice: the sealed rubric card lands here soon." },
   job: { title: "The Job Room", sub: "Dossiers and marked report cards land here soon." },
   office: { title: "The Back Office", sub: "Engine, models, and keys land here soon." },

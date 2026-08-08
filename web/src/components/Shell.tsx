@@ -8,7 +8,7 @@ export type RoomId = "floor" | "newsroom" | "interview" | "job" | "desk" | "offi
 
 export const ROOMS: Array<{ id: RoomId; label: string; glyph: string }> = [
   { id: "floor", label: "The Floor", glyph: "⌂" },
-  { id: "newsroom", label: "Newsroom", glyph: "✎" },
+  { id: "newsroom", label: "Article Studio", glyph: "✎" },
   { id: "interview", label: "Interview Room", glyph: "◉" },
   { id: "job", label: "Job Room", glyph: "▤" },
   { id: "desk", label: "The Desk", glyph: "≡" },

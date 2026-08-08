@@ -247,7 +247,7 @@ main { flex:1; min-width:0; padding:1.6rem 2rem 3rem; }
   <div class="brand">Scrivio</div>
   <div class="health"><i></i> subscription connected</div>
   <button class="room-btn on" data-room="floor"><span class="glyph">⌂</span> The Floor</button>
-  <button class="room-btn" data-room="newsroom"><span class="glyph">✎</span> Newsroom</button>
+  <button class="room-btn" data-room="newsroom"><span class="glyph">✎</span> Article Studio</button>
   <button class="room-btn" data-room="interview"><span class="glyph">◉</span> Interview Room</button>
   <button class="room-btn" data-room="job"><span class="glyph">▤</span> Job Room</button>
   <button class="room-btn" data-room="desk"><span class="glyph">≡</span> The Desk</button>
@@ -300,7 +300,7 @@ main { flex:1; min-width:0; padding:1.6rem 2rem 3rem; }
 
   <!-- ═══ THE NEWSROOM ═══ -->
   <section class="room" id="room-newsroom">
-    <h1 class="room-title bar-tick">The Newsroom</h1>
+    <h1 class="room-title bar-tick">Article Studio</h1>
     <p class="room-sub">Your article assembles on the page while the press run reports every stage. <button class="btn" id="press-btn" style="margin-left:0.6rem">Run the press</button></p>
     <div class="press-grid">
       <div class="manuscript" id="manuscript">
@@ -511,7 +511,7 @@ document.querySelectorAll('[data-room]').forEach(el =>
 /* ⌘K palette: fuzzy jump across rooms, papers, actions */
 const PAL = [
   { t:'The Floor', k:'room', go:'floor', g:'⌂' },
-  { t:'Newsroom: write an article', k:'room', go:'newsroom', g:'✎' },
+  { t:'Article Studio: write an article', k:'room', go:'newsroom', g:'✎' },
   { t:'Interview Room: practice', k:'room', go:'interview', g:'◉' },
   { t:'Job Room: dossiers', k:'room', go:'job', g:'▤' },
   { t:'The Desk: check a resume', k:'room', go:'desk', g:'≡' },

@@ -33,7 +33,7 @@ everywhere.
 
 ## Shell
 
-- **Left rail sidebar**, compact (icons + labels): Floor, Newsroom,
+- **Left rail sidebar**, compact (icons + labels): Floor, Article Studio,
   Interview Room, Job Room, Desk, Back Office (settings) pinned bottom.
   Provider health dot lives under the brand.
 - **⌘K command palette**: fuzzy jump across artifacts and actions
@@ -51,7 +51,7 @@ continue-where-you-left-off as the primary CTA, a quiet stats strip
 (streak flame, topics mastered, last hire signal), and one quick action
 per room. Signature: the mini-papers ARE the navigation.
 
-### 2. The Newsroom (article studio) — watch the press run
+### 2. Article Studio — watch the press run
 Compose: a brief card (topic, level, steering) styled as an assignment
 slip. Generation is the room's signature — **the press run**: the
 manuscript sits center-stage as paper and visibly assembles while the
@@ -96,7 +96,7 @@ tokens. No metaphor theatrics; it is the utility room.
 1. Shell + Floor + ⌘K (reads existing list endpoints only)
 2. Job Room (closest to Desk components: paper + rail + marks)
 3. Interview Room (orb/mic/transcript port + rubric flip)
-4. Newsroom (SSE press run + reading paper + library)
+4. Article Studio (SSE press run + reading paper + library)
 5. Back Office; then `/` redirects to the React app and ui/index.html
    retires; Vitest component tests land with each room
 
