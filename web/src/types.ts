@@ -70,3 +70,31 @@ export interface JobProfileSummary {
   profile_id: string; role_title: string; company: string;
   location: string; seniority: string; created_at: string;
 }
+
+/* ── Studio shell + Floor ── */
+
+export interface ArticleSummary {
+  id: string; title: string; topic: string; level: string;
+  generated_at: string; available_levels: string[]; version: number;
+}
+
+export interface InterviewSessionItem {
+  session_id: string; article_id: string | null; topic: string;
+  level: string; mode: string; created_at: string;
+  complete: boolean; answered: number; total: number;
+  average_score: number | null;
+}
+
+export interface TopicStats {
+  topic: string; sessions: number; average_score: number | null; mastery: number;
+}
+
+export interface InterviewStats {
+  total_sessions: number; completed_sessions: number; total_answered: number;
+  average_score: number | null; per_topic: TopicStats[];
+  recent_scores: number[]; streak_days: number;
+}
+
+export interface SettingsInfo {
+  resolved_provider: string; provider_auto: boolean; active_cli: string;
+}

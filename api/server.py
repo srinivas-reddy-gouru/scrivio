@@ -2378,6 +2378,9 @@ async def speak(body: SpeakRequest) -> Response:
 # build` in web/). Mounted BEFORE the root mount so it wins the prefix.
 _DESK_DIR = Path(__file__).resolve().parent.parent / "web" / "dist"
 if _DESK_DIR.exists():
+    # /studio is the canonical home of the React app (the whole Studio);
+    # /desk stays as an alias because it shipped first.
+    app.mount("/studio", StaticFiles(directory=str(_DESK_DIR), html=True), name="studio")
     app.mount("/desk", StaticFiles(directory=str(_DESK_DIR), html=True), name="desk")
 
 # Serves ui/index.html at GET / and any other files (e.g. ui/style.css)

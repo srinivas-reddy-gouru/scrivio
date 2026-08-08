@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import type { JobProfileSummary, ResumeDoc, ResumeSummaryItem } from "./types";
+import type {
+  ArticleSummary, InterviewSessionItem, InterviewStats,
+  JobProfileSummary, ResumeDoc, ResumeSummaryItem, SettingsInfo,
+} from "./types";
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -34,6 +37,12 @@ export const api = {
     fetch("/job-profiles").then((r) => json<JobProfileSummary[]>(r)),
   downloadUrl: (id: string, fmt: string, version: "original" | "tailored") =>
     `/resumes/${id}/download?fmt=${fmt}&version=${version}`,
+  listArticles: () => fetch("/articles").then((r) => json<ArticleSummary[]>(r)),
+  listInterviews: () =>
+    fetch("/interviews").then((r) => json<InterviewSessionItem[]>(r)),
+  interviewStats: () =>
+    fetch("/interviews/stats").then((r) => json<InterviewStats>(r)),
+  settings: () => fetch("/settings").then((r) => json<SettingsInfo>(r)),
 };
 
 /** Poll the doc every 2.5s while `active`; hand every fresh doc to the
