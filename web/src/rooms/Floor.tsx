@@ -31,13 +31,35 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
     : null;
   let paperIndex = 0;
 
+  const STUDIOS: Array<{ room: RoomId; glyph: string; name: string; what: string }> = [
+    { room: "newsroom", glyph: "✎", name: "Articles",
+      what: "Write a technical article. Every claim is searched and verified before the ink dries." },
+    { room: "interview", glyph: "◉", name: "Interviews",
+      what: "Practice out loud. The grading bar is written before you answer, then revealed." },
+    { room: "job", glyph: "▤", name: "Job prep",
+      what: "Upload a resume and a job posting; get a fit report and a role-specific mock screen." },
+    { room: "desk", glyph: "≡", name: "Resume",
+      what: "ATS score, honest JD tailoring, and polished downloads. No invented facts, ever." },
+  ];
+
   return (
     <div className="room-wrap">
-      <h1 className="room-title bar-tick-left">The studio floor</h1>
-      <p className="room-sub">Where you left off, and what is on your desk.</p>
+      <h1 className="room-title bar-tick-left">Welcome back</h1>
+      <p className="room-sub">Four studios, one honest toolchain: articles, interview practice, job prep, and your resume.</p>
+      <p className="eyebrow">The studios</p>
+      <div className="studio-grid">
+        {STUDIOS.map((s, i) => (
+          <button key={s.room} className="studio-card" style={{ "--i": i } as React.CSSProperties}
+            onClick={() => go(s.room)}>
+            <span className="glyph">{s.glyph}</span>
+            <b>{s.name}</b>
+            <span className="what">{s.what}</span>
+          </button>
+        ))}
+      </div>
       <div className="floor-grid">
         <div>
-          <p className="eyebrow">On your desk</p>
+          <p className="eyebrow">Pick up where you left off</p>
           <div className="desk-row">
             {lastResume && (
               <button className="floor-paper" style={{ "--i": paperIndex++ } as React.CSSProperties}
@@ -78,7 +100,7 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
             )}
             {paperIndex === 0 && (
               <p className="classic-note">
-                Nothing on the desk yet. Start below; your work lands here as it happens.
+                Nothing yet. Open a studio above; your work lands here as it happens.
               </p>
             )}
           </div>
@@ -116,7 +138,7 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
           )}
           <button className="btn btn-quiet" onClick={() => go("desk")}>Check a resume</button>
           <button className="btn btn-quiet" onClick={() => go("newsroom")}>Write an article</button>
-          <button className="btn btn-quiet" onClick={() => go("job")}>Open the Job Room</button>
+          <button className="btn btn-quiet" onClick={() => go("job")}>Prep for a job</button>
         </div>
       </div>
     </div>

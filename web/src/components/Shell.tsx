@@ -6,12 +6,14 @@ import type { ArticleSummary, InterviewSessionItem, ResumeSummaryItem } from "..
 
 export type RoomId = "floor" | "newsroom" | "interview" | "job" | "desk" | "office";
 
+// Labels say what the page does. The workplace flavor lives inside the
+// rooms; navigation is not the place to make people decode a metaphor.
 export const ROOMS: Array<{ id: RoomId; label: string; glyph: string }> = [
-  { id: "floor", label: "The Floor", glyph: "⌂" },
-  { id: "newsroom", label: "Article Studio", glyph: "✎" },
-  { id: "interview", label: "Interview Room", glyph: "◉" },
-  { id: "job", label: "Job Room", glyph: "▤" },
-  { id: "desk", label: "The Desk", glyph: "≡" },
+  { id: "floor", label: "Home", glyph: "⌂" },
+  { id: "newsroom", label: "Articles", glyph: "✎" },
+  { id: "interview", label: "Interviews", glyph: "◉" },
+  { id: "job", label: "Job prep", glyph: "▤" },
+  { id: "desk", label: "Resume", glyph: "≡" },
 ];
 
 export function useHashRoom(): [RoomId, (r: RoomId) => void] {
@@ -68,7 +70,10 @@ export function Shell({ room, go, children }: {
     <div className="studio">
       <nav className="side">
         <div className="brand-block">
-          <div className="brand-name">Scrivio</div>
+          <div className="brand-name">
+            <span className="brand-mark" aria-hidden="true" />
+            Scrivio
+          </div>
           <div className="health">
             <i className={health?.up ? "" : "down"} /> {health?.label ?? "checking…"}
           </div>
@@ -82,7 +87,7 @@ export function Shell({ room, go, children }: {
         <div className="spacer" />
         <button className={"room-btn" + (room === "office" ? " on" : "")}
           onClick={() => go("office")}>
-          <span className="glyph">⚙</span> Back Office
+          <span className="glyph">⚙</span> Settings
         </button>
         <div className="kbd-hint"><kbd>⌘K</kbd> jump anywhere</div>
       </nav>

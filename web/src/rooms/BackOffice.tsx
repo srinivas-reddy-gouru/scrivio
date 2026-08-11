@@ -58,7 +58,7 @@ export function BackOffice() {
   };
 
   if (!s) {
-    return <div className="room-wrap"><h1 className="room-title bar-tick-left">Back Office</h1>
+    return <div className="room-wrap"><h1 className="room-title bar-tick-left">Settings</h1>
       <p className="room-sub">{status ? status.msg : "Opening the ledger…"}</p></div>;
   }
 
@@ -73,7 +73,7 @@ export function BackOffice() {
 
   return (
     <div className="room-wrap">
-      <h1 className="room-title bar-tick-left">Back Office</h1>
+      <h1 className="room-title bar-tick-left">Settings</h1>
       <p className="room-sub">
         Running on {s.resolved_provider === "claude-cli" ? `the ${s.active_cli || "claude"} subscription CLI` : `the ${s.resolved_provider} API`}
         {s.provider_auto ? " (auto-resolved)" : " (pinned)"}.
@@ -139,7 +139,7 @@ export function BackOffice() {
         </div>
       </div>
 
-      <div className="panel" style={{ marginTop: "1.1rem", maxWidth: 1020 }}>
+      <div className="panel room-col" style={{ marginTop: "1.1rem" }}>
         <p className="eyebrow">Keys and connections</p>
         <div className="key-grid">
           {keyGroups.map(([group, keys]) => (
@@ -172,7 +172,7 @@ export function BackOffice() {
         <p className="office-note">Keys live in your local .env; they never leave this machine. Values shown masked.</p>
       </div>
 
-      <div style={{ display: "flex", gap: "0.7rem", alignItems: "center", marginTop: "1.1rem", flexWrap: "wrap" }}>
+      <div className="room-col" style={{ display: "flex", gap: "0.7rem", alignItems: "center", marginTop: "1.1rem", flexWrap: "wrap" }}>
         <button className="btn" onClick={save} disabled={!dirty || saving}>
           {saving ? "Writing the ledger…" : dirty ? `Save ${Object.keys(edits).length} change${Object.keys(edits).length > 1 ? "s" : ""}` : "Nothing to save"}
         </button>

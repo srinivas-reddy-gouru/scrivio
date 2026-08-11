@@ -61,9 +61,9 @@ export function JobRoom() {
 
   return (
     <div className="room-wrap">
-      <h1 className="room-title bar-tick-left">The Job Room</h1>
+      <h1 className="room-title bar-tick-left">Job prep</h1>
       <p className="room-sub">Every target is a dossier: your resume and the JD, clipped together and worked.</p>
-      <div style={{ maxWidth: 700 }}>
+      <div className="room-col">
         {profiles.map((p, i) => (
           <button key={p.profile_id} className="dossier-card"
             style={{ "--i": i } as React.CSSProperties}
@@ -79,10 +79,10 @@ export function JobRoom() {
           </button>
         ))}
         {profiles.length === 0 && (
-          <p className="classic-note">No dossiers yet. Open your first target below.</p>
+          <p className="classic-note">No job targets yet. Add your first below.</p>
         )}
         <button className="btn" style={{ marginTop: "0.8rem" }} onClick={() => setCreating(true)}>
-          + Open a new dossier
+          + Add a job target
         </button>
       </div>
     </div>
@@ -130,7 +130,7 @@ function Dossier({ detail, screens, scorecard, onBack, onOpenScorecard }: {
   return (
     <div className="room-wrap">
       <button className="btn btn-quiet" style={{ marginBottom: "1rem" }} onClick={onBack}>
-        ← All dossiers
+        ← All job targets
       </button>
       <div className="dossier">
         <div className="clip">
@@ -340,8 +340,8 @@ function NewDossier({ onDone, onCancel }: {
   }
 
   return (
-    <div className="room-wrap jr-form" style={{ maxWidth: 700 }}>
-      <h1 className="room-title bar-tick-left">Open a dossier</h1>
+    <div className="room-wrap jr-form room-col">
+      <h1 className="room-title bar-tick-left">Add a job target</h1>
       <p className="room-sub">The role, the JD, and your resume. Scrivio derives the rubric from the JD itself.</p>
       <div className="row2">
         <div><label>Role title *</label>

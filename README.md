@@ -160,7 +160,7 @@ The verdict so far (Aug 2026, 3 topics + 2 post-fix rematches): **the one-prompt
 
 ## The Studio (React)
 
-The app is a Vite + React + TypeScript workspace in `web/`, served at **/** — one workplace, five rooms: the Floor (your day at a glance), the Article Studio (watch the press run assemble the manuscript from live pipeline events), the Interview Room (the rubric sits sealed on the table and flips when your answer closes), the Job Room (dossiers, fit reports, marked report cards), and the Recruiter's Desk (your resume as paper with findings drawn ON it, [METRIC] numbers filled inline right where they print). `⌘K` jumps anywhere, including straight into your own resumes, articles, and sessions.
+The app is a Vite + React + TypeScript workspace in `web/`, served at **/**. Plain navigation, five pages: **Home** (your recent work and stats), **Articles** (watch the press run assemble the manuscript from live pipeline events), **Interviews** (the rubric sits sealed on the table and flips when your answer closes), **Job prep** (job targets, fit reports, marked report cards), and **Resume** (your resume as paper with findings drawn ON it, [METRIC] numbers filled inline right where they print). `⌘K` jumps anywhere, including straight into your own resumes, articles, and sessions.
 
 ```bash
 cd web && npm install && npm run build   # FastAPI then serves the app at /

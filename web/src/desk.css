@@ -341,8 +341,14 @@ a { color: inherit; text-decoration: none; }
 }
 .side .brand-block { padding: 0.4rem 0.7rem 0.9rem; }
 .side .brand-name {
-  font-family: "Space Grotesk"; font-weight: 700; font-size: 1.05rem;
+  font-family: "Space Grotesk"; font-weight: 700; font-size: 1.3rem;
+  display: flex; align-items: center; gap: 0.5rem;
   background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.brand-mark {
+  width: 20px; height: 20px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 32% 28%, #7FE7DC, var(--teal) 55%, #17766C);
+  box-shadow: 0 0 12px rgba(45, 212, 191, 0.45);
 }
 .side .health { font-size: 0.62rem; color: var(--text-faint); display: flex; gap: 0.4rem; align-items: center; margin-top: 0.3rem; }
 .side .health i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
@@ -364,6 +370,26 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 
 .room-main { flex: 1; min-width: 0; padding: 1.6rem 2rem 3rem; }
 .room-wrap { max-width: 1240px; margin: 0 auto; animation: rise 0.4s cubic-bezier(0.2, 0.8, 0.25, 1); }
+/* THE column. Every narrow flow (forms, documents, readers) sits on this
+ * one width, anchored to the same left edge as the room header — never
+ * centered in one room and left in another, never 640 here and 700 there. */
+.room-col { max-width: 720px; }
+.studio-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.8rem; margin: 0.5rem 0 1.6rem;
+}
+.studio-card {
+  display: flex; flex-direction: column; gap: 0.3rem; text-align: left;
+  padding: 0.95rem 1rem 1rem; border: 1px solid var(--stroke);
+  border-radius: 12px; background: var(--surface); cursor: pointer;
+  animation: rise 0.4s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.studio-card:hover { border-color: var(--teal); transform: translateY(-2px); }
+.studio-card .glyph { color: var(--teal); font-size: 1rem; }
+.studio-card b { font-family: "Space Grotesk"; font-size: 0.95rem; }
+.studio-card .what { font-size: 0.72rem; color: var(--text-dim); line-height: 1.45; }
 .room-title { font-family: "Space Grotesk"; font-size: 1.5rem; letter-spacing: -0.015em; margin-bottom: 0.3rem; }
 .room-sub { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1.6rem; }
 .bar-tick-left { position: relative; padding-bottom: 0.55rem; }
@@ -551,7 +577,7 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 .predict-row { display: flex; align-items: center; gap: 0.7rem; justify-content: center; margin-top: 0.7rem; font-size: 0.76rem; color: var(--text-dim); }
 .predict-row input[type="range"] { accent-color: var(--teal); width: 180px; }
 .verdict-chip { display: inline-block; padding: 0.2rem 0.75rem; border-radius: 999px; font-weight: 700; font-size: 0.78rem; }
-.iv-setup { max-width: 620px; margin: 0 auto; }
+.iv-setup { max-width: none; }
 .iv-setup .seg { display: flex; gap: 0.4rem; margin: 0.3rem 0 0.9rem; flex-wrap: wrap; }
 .seg-pill {
   background: rgba(255, 255, 255, 0.04); border: 1px solid var(--stroke); border-radius: 999px;
@@ -603,7 +629,7 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 .stage-row.done .dot { border-color: var(--green); color: var(--green); }
 .stage-row b { font-size: 0.8rem; display: block; }
 .stage-row p { font-size: 0.7rem; color: var(--text-dim); margin-top: 0.1rem; overflow-wrap: anywhere; }
-.compose-card { max-width: 640px; }
+
 .compose-card textarea {
   width: 100%; background: rgba(0, 0, 0, 0.3); color: var(--text); border: 1px solid var(--stroke);
   border-radius: 10px; font-family: inherit; font-size: 0.9rem; padding: 0.75rem; min-height: 76px; resize: vertical;
@@ -623,7 +649,7 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 .clarify-opt.on { border-color: rgba(32, 184, 205, 0.55); color: var(--text); background: rgba(32, 184, 205, 0.08); }
 
 /* ══ BACK OFFICE ══ */
-.office-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; max-width: 1020px; }
+.office-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; max-width: 720px; }
 @media (max-width: 900px) { .office-grid { grid-template-columns: 1fr; } }
 .engine-row {
   display: flex; gap: 0.7rem; align-items: flex-start; width: 100%; text-align: left;

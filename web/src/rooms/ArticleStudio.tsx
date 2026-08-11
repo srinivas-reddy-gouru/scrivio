@@ -93,9 +93,9 @@ function Compose({ brief, setBrief, error, onGo, onOpen }: {
 
   return (
     <div className="room-wrap">
-      <h1 className="room-title bar-tick-left">Article Studio</h1>
+      <h1 className="room-title bar-tick-left">Articles</h1>
       <p className="room-sub">Every claim is searched, verified, or dropped before the ink dries. Watch it happen.</p>
-      <div className="panel compose-card">
+      <div className="panel compose-card room-col">
         <p className="eyebrow">The assignment slip</p>
         <textarea value={brief.topic} placeholder="What should the studio explain? e.g. How does Kafka handle backpressure?"
           onChange={(e) => setBrief({ ...brief, topic: e.target.value })} />
@@ -122,7 +122,7 @@ function Compose({ brief, setBrief, error, onGo, onOpen }: {
       </div>
 
       {library.length > 0 && (
-        <div style={{ marginTop: "1.6rem", maxWidth: 640 }}>
+        <div className="room-col" style={{ marginTop: "1.6rem" }}>
           <p className="eyebrow">The library</p>
           {library.slice(0, 10).map((a) => (
             <button key={a.id} className="lib-row" onClick={() => onOpen(a.id)}>
@@ -151,7 +151,7 @@ function Clarify({ questions, defaultNote, onSubmit, onSkip, onBack }: {
   const set = (id: string, v: string) => setAnswers((a) => ({ ...a, [id]: v }));
 
   return (
-    <div className="room-wrap" style={{ maxWidth: 640 }}>
+    <div className="room-wrap room-col">
       <h1 className="room-title bar-tick-left">The editor has questions</h1>
       <p className="room-sub">A broad topic writes a mushy article. Thirty seconds here buys a sharper one.</p>
       {questions.map((q) => (
@@ -318,7 +318,7 @@ function Reading({ articleId, level, onBack, onLevel }: {
             a.click(); URL.revokeObjectURL(a.href);
           }}>Download .md</button>
       </div>
-      <div className="manuscript" style={{ maxWidth: 820 }}
+      <div className="manuscript room-col"
         dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );

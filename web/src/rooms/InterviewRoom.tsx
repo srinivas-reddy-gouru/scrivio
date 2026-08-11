@@ -168,7 +168,7 @@ function Setup({ onStart, onReview }: {
 
   return (
     <div className="room-wrap">
-      <h1 className="room-title bar-tick-left">The Interview Room</h1>
+      <h1 className="room-title bar-tick-left">Interviews</h1>
       <p className="room-sub">The rubric is written before you speak, and sits face-down until your answer closes.</p>
       <div className="iv-grid">
         <div className="iv-setup">
@@ -308,7 +308,7 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
   const vs = evaluation ? (VERDICT_STYLE[evaluation.verdict] || VERDICT_STYLE.adequate) : null;
 
   return (
-    <div className="room-wrap" style={{ maxWidth: 760, margin: "0 auto" }}>
+    <div className="room-wrap room-col">
       <div className={"orb" + (grading ? " speaking" : "")} />
       {isDrill && !reveal && (
         <div className="drill-ring">
@@ -366,7 +366,7 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
           </div>
         </>
       )}
-      {error && <div className="errbox" style={{ maxWidth: 560, margin: "0.8rem auto" }}>{error}</div>}
+      {error && <div className="errbox" style={{ margin: "0.8rem 0" }}>{error}</div>}
 
       <div className={"rubric-flip" + (flipped ? " flipped" : "")}>
         <div className="rubric-inner">
@@ -419,7 +419,7 @@ function Summary({ session, onBack }: { session: InterviewSessionPublic; onBack:
   const tone = scoreTone((s.average_score ?? 0) * 10);
   const goJobRoom = () => { window.location.hash = "/job"; };
   return (
-    <div className="room-wrap" style={{ maxWidth: 760 }}>
+    <div className="room-wrap room-col">
       <h1 className="room-title bar-tick-left">Session review</h1>
       <p className="room-sub">{session.topic} · {session.mode} · {s.answered} answered, {s.skipped} skipped</p>
       <div className="panel score-panel" style={{ marginBottom: "1rem" }}>
