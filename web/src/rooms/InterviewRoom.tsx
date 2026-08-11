@@ -79,6 +79,26 @@ type View =
 
 export function InterviewRoom() {
   const [view, setView] = useState<View>({ kind: "setup" });
+
+  // A session handed over by another room (the Job Room's "Take the
+  // screen", a palette hit) arrives as an id in sessionStorage: pick it
+  // up on mount, and on the nudge event when the room is already open.
+  useEffect(() => {
+    const pickUp = () => {
+      const handed = sessionStorage.getItem("studio-open-session");
+      if (!handed) return;
+      sessionStorage.removeItem("studio-open-session");
+      interviewApi.get(handed).then((s) => {
+        setView(s.complete
+          ? { kind: "summary", session: s }
+          : { kind: "live", session: s, qIndex: firstOpen(s) });
+      }).catch(() => {});
+    };
+    pickUp();
+    window.addEventListener("studio-open-session", pickUp);
+    return () => window.removeEventListener("studio-open-session", pickUp);
+  }, []);
+
   return view.kind === "setup" ? (
     <Setup onStart={(s) => setView({ kind: "live", session: s, qIndex: firstOpen(s) })}
       onReview={(s) => setView(s.complete

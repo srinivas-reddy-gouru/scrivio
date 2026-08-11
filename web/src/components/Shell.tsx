@@ -1,7 +1,7 @@
 /** The Studio shell: sidebar of rooms + the command palette.
  * Hash-routed (#/floor, #/desk, …) with no router dependency. */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "../api";
+import { api, openSession } from "../api";
 import type { ArticleSummary, InterviewSessionItem, ResumeSummaryItem } from "../types";
 
 export type RoomId = "floor" | "newsroom" | "interview" | "job" | "desk" | "office";
@@ -124,7 +124,7 @@ function Palette({ go, close }: { go: (r: RoomId) => void; close: () => void }) 
     }));
     const ses: PaletteItem[] = sessions.slice(0, 6).map((s) => ({
       title: `Session: ${s.topic} (${s.mode})`, kind: "interview", glyph: "◉",
-      action: () => go("interview"),
+      action: () => openSession(s.session_id),
     }));
     return [...rooms, ...acts, ...res, ...art, ...ses];
   }, [articles, resumes, sessions, go]);

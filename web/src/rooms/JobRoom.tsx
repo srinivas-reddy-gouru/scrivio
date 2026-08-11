@@ -3,10 +3,17 @@
  * voice screen itself still happens in the classic Interview Room until
  * migration step 3. */
 import { useEffect, useMemo, useState } from "react";
-import { api, fmtElapsed } from "../api";
+import { api, fmtElapsed, interviewApi, openSession } from "../api";
 import type {
   InterviewDetail, InterviewSessionItem, JobProfileDetail, JobProfileSummary,
 } from "../types";
+
+/** Sessions written since Aug 2026 carry job_profile_id; older job-mode
+ * files predate it, so the topic string stays as their fallback match. */
+function screenBelongsTo(s: InterviewSessionItem, profileId: string, roleTitle: string): boolean {
+  if (s.job_profile_id) return s.job_profile_id === profileId;
+  return s.mode === "job" && s.topic.includes(roleTitle);
+}
 
 const EVIDENCE_COLOR: Record<string, string> = {
   strong: "var(--green)", partial: "var(--amber)", missing: "var(--redpen)",
@@ -65,7 +72,7 @@ export function JobRoom() {
               <b>{p.role_title}{p.company ? ` @ ${p.company}` : ""}</b>
               <span className="meta">
                 {[p.seniority, p.location].filter(Boolean).join(" · ") || "no details"} ·{" "}
-                {screens.filter((s) => s.topic.includes(p.role_title)).length} screen(s) taken
+                {screens.filter((s) => screenBelongsTo(s, p.profile_id, p.role_title)).length} screen(s) taken
               </span>
             </span>
             <span className="glyph" style={{ color: "var(--text-faint)" }}>→</span>
@@ -92,10 +99,32 @@ function Dossier({ detail, screens, scorecard, onBack, onOpenScorecard }: {
   onOpenScorecard: (id: string) => void;
 }) {
   const [tab, setTab] = useState<"fit" | "screens">("fit");
+  const [minutes, setMinutes] = useState(30);
+  const [starting, setStarting] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [startError, setStartError] = useState("");
   const { profile, analysis } = detail;
+
+  useEffect(() => {
+    if (!starting) return;
+    const t = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [starting]);
+
+  const takeScreen = async () => {
+    setStarting(true); setElapsed(0); setStartError("");
+    try {
+      const s = await interviewApi.create({
+        mode: "job", job_profile_id: profile.profile_id, duration_minutes: minutes,
+      });
+      openSession(s.session_id);
+    } catch (e) {
+      setStartError((e as Error).message); setStarting(false);
+    }
+  };
   const mine = useMemo(
-    () => screens.filter((s) => s.topic.includes(profile.role_title)),
-    [screens, profile.role_title],
+    () => screens.filter((s) => screenBelongsTo(s, profile.profile_id, profile.role_title)),
+    [screens, profile.profile_id, profile.role_title],
   );
 
   return (
@@ -110,7 +139,20 @@ function Dossier({ detail, screens, scorecard, onBack, onOpenScorecard }: {
             resume + JD clipped · {mine.length} screen(s) taken
             {profile.seniority ? ` · ${profile.seniority}` : ""}
           </span>
-          <a className="btn btn-quiet" href="/">Take the screen → (classic room)</a>
+          {starting ? (
+            <span className="meta" style={{ color: "var(--accent)" }}>
+              The interviewer is reading your file… {fmtElapsed(elapsed)} (about a minute)
+            </span>
+          ) : (
+            <span style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+              {[30, 45].map((m) => (
+                <button key={m} className={"seg-pill" + (minutes === m ? " on" : "")}
+                  onClick={() => setMinutes(m)}>{m} min</button>
+              ))}
+              <button className="btn" onClick={takeScreen}>Take the screen →</button>
+            </span>
+          )}
+          {startError && <span className="meta" style={{ color: "var(--redpen)" }}>{startError}</span>}
         </div>
         <div className="tabs">
           <button className={"tab" + (tab === "fit" ? " on" : "")} onClick={() => setTab("fit")}>Fit</button>
@@ -139,13 +181,14 @@ function Dossier({ detail, screens, scorecard, onBack, onOpenScorecard }: {
         ) : (
           <div className="dossier-body">
             {mine.map((s) => (
-              <button key={s.session_id} className="dossier-card" onClick={() => onOpenScorecard(s.session_id)}>
+              <button key={s.session_id} className="dossier-card"
+                onClick={() => s.complete ? onOpenScorecard(s.session_id) : openSession(s.session_id)}>
                 <span>
                   <b>{new Date(s.created_at).toLocaleDateString()} · {s.answered}/{s.total} answered</b>
                   <span className="meta">
                     {s.complete
                       ? `complete · avg ${s.average_score ?? "-"}/10`
-                      : "in progress (finish it in the classic room)"}
+                      : "in progress, resume it"}
                   </span>
                 </span>
                 <span className="glyph" style={{ color: "var(--text-faint)" }}>

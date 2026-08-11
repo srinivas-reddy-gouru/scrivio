@@ -1031,6 +1031,7 @@ class InterviewSessionSummaryItem(BaseModel):
     topic: str
     level: str
     mode: str = "practice"
+    job_profile_id: str | None = None
     created_at: str
     complete: bool
     answered: int
@@ -1299,6 +1300,7 @@ async def list_interviews(
                 topic=session.topic,
                 level=session.level,
                 mode=session.mode,
+                job_profile_id=session.job_profile_id,
                 created_at=session.created_at.isoformat(),
                 complete=all(
                     q.status in ("completed", "skipped")
@@ -2385,19 +2387,19 @@ async def _no_html_cache(request, call_next):
     return response
 
 
-# /desk serves the React Resume Desk (web/dist, built with `npm run
-# build` in web/). Mounted BEFORE the root mount so it wins the prefix.
+# The React Studio (web/dist, built with `npm run build` in web/) is
+# the app. It owns the root; /studio and /desk stay as aliases because
+# they shipped first and live in bookmarks. The classic single-file UI
+# is parked at /classic for one transition release, then deleted.
 _DESK_DIR = Path(__file__).resolve().parent.parent / "web" / "dist"
-if _DESK_DIR.exists():
-    # /studio is the canonical home of the React app (the whole Studio);
-    # /desk stays as an alias because it shipped first.
-    app.mount("/studio", StaticFiles(directory=str(_DESK_DIR), html=True), name="studio")
-    app.mount("/desk", StaticFiles(directory=str(_DESK_DIR), html=True), name="desk")
-
-# Serves ui/index.html at GET / and any other files (e.g. ui/style.css)
-# directly. Registered LAST so all the /generate, /jobs/*, /clarify
-# route handlers above take precedence over the static file lookup.
-# `html=True` makes the mount serve index.html for the root path.
 _UI_DIR = Path(__file__).resolve().parent.parent / "ui"
 if _UI_DIR.exists():
+    app.mount("/classic", StaticFiles(directory=str(_UI_DIR), html=True), name="classic")
+if _DESK_DIR.exists():
+    app.mount("/studio", StaticFiles(directory=str(_DESK_DIR), html=True), name="studio")
+    app.mount("/desk", StaticFiles(directory=str(_DESK_DIR), html=True), name="desk")
+    # Root goes LAST so every API route above wins the match first.
+    app.mount("/", StaticFiles(directory=str(_DESK_DIR), html=True), name="app")
+elif _UI_DIR.exists():
+    # No React build on disk (fresh clone, no npm): classic UI still works.
     app.mount("/", StaticFiles(directory=str(_UI_DIR), html=True), name="ui")

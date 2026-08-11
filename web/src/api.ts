@@ -95,6 +95,17 @@ export function useDocWatch(
   return elapsed;
 }
 
+/** Hand a session to the Interview Room: the room reads the id from
+ * sessionStorage on mount, so it opens seated at the first open
+ * question (or the summary when the session is complete). */
+export function openSession(sessionId: string) {
+  sessionStorage.setItem("studio-open-session", sessionId);
+  const already = window.location.hash.replace(/^#\/?/, "") === "interview";
+  window.location.hash = "/interview";
+  // Already in the room: no remount happens, so nudge it directly.
+  if (already) window.dispatchEvent(new Event("studio-open-session"));
+}
+
 export const fmtElapsed = (s: number) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 

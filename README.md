@@ -158,13 +158,13 @@ The verdict so far (Aug 2026, 3 topics + 2 post-fix rematches): **the one-prompt
 - **Coding rounds** for job interviews (designed: LLM-rubric-judged code editor, no execution sandbox in v1)
 - Live validation of the codex/gemini/qwen CLI specs against real binaries (specs follow their documented flags; drift is a one-line registry fix)
 
-## The Resume Desk (React)
+## The Studio (React)
 
-The resume studio's next generation lives in `web/` as a Vite + React + TypeScript app, served at **/desk** — "The Recruiter's Desk": your resume rendered as paper, findings drawn ON it (red-pen underlines, honesty-amber chips, teal improvement bars) and linked two-way to a review rail, with [METRIC] numbers filled inline right where they print.
+The app is a Vite + React + TypeScript workspace in `web/`, served at **/** — one workplace, five rooms: the Floor (your day at a glance), the Article Studio (watch the press run assemble the manuscript from live pipeline events), the Interview Room (the rubric sits sealed on the table and flips when your answer closes), the Job Room (dossiers, fit reports, marked report cards), and the Recruiter's Desk (your resume as paper with findings drawn ON it, [METRIC] numbers filled inline right where they print). `⌘K` jumps anywhere, including straight into your own resumes, articles, and sessions.
 
 ```bash
-cd web && npm install && npm run build   # FastAPI then serves /desk
+cd web && npm install && npm run build   # FastAPI then serves the app at /
 npm run dev                              # or hot-reload on :5180, proxying the API
 ```
 
-The classic single-file UI at `/` remains the home for the other studios while they migrate.
+`/studio` and `/desk` stay as aliases for old bookmarks. The retired single-file UI is parked at `/classic` for one release; without a `web/dist` build on disk the server falls back to serving it at `/`.

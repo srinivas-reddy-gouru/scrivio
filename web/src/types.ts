@@ -80,7 +80,8 @@ export interface ArticleSummary {
 
 export interface InterviewSessionItem {
   session_id: string; article_id: string | null; topic: string;
-  level: string; mode: string; created_at: string;
+  level: string; mode: string; job_profile_id: string | null;
+  created_at: string;
   complete: boolean; answered: number; total: number;
   average_score: number | null;
 }
