@@ -399,6 +399,29 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 .prose .mermaid { background: #fff; padding: 1.5rem; border-radius: 0.875rem; border: 1px solid #e6e2da; margin: 1.75rem 0; text-align: center; }
 .prose .mermaid svg { max-width: 100%; height: auto; }
 
+/* Full-page text editor overlay */
+.fulledit-overlay {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(6, 10, 10, 0.8); backdrop-filter: blur(6px);
+  display: grid; place-items: center; padding: 1.2rem;
+}
+.fulledit-card {
+  width: min(920px, 100%); height: 100%;
+  display: flex; flex-direction: column;
+  background: #0E1716; border: 1px solid rgba(32, 184, 205, 0.35);
+  border-radius: 16px; padding: 1rem 1.2rem 1.1rem;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+  animation: rise 0.25s cubic-bezier(0.2, 0.8, 0.25, 1);
+}
+.fulledit-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.7rem; }
+.fulledit-card textarea {
+  flex: 1; width: 100%; resize: none;
+  background: rgba(0, 0, 0, 0.3); color: var(--text);
+  border: 1px solid var(--stroke); border-radius: 10px;
+  font-family: "JetBrains Mono", monospace; font-size: 0.8rem; line-height: 1.6;
+  padding: 0.9rem 1rem;
+}
+
 /* The composer: classic article compose parity */
 .compose-hero { text-align: center; margin: 11vh auto 2.2rem; max-width: 620px; }
 .compose-hero h1 { font-family: "Space Grotesk"; font-size: 2.5rem; font-weight: 700; letter-spacing: -0.02em; }

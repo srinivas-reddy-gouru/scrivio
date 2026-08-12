@@ -78,6 +78,40 @@ function Progress({ title, elapsed, estimate }: { title: string; elapsed: number
   );
 }
 
+/* ── Full-page text editor: pasted text expands to the whole screen ── */
+
+function FullEditor({ title, value, onSave, onClose }: {
+  title: string; value: string;
+  onSave: (v: string) => void; onClose: () => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { boxRef.current?.focus(); }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="fulledit-overlay" role="dialog" aria-label={title}>
+      <div className="fulledit-card">
+        <div className="fulledit-head">
+          <p className="eyebrow" style={{ marginBottom: 0 }}>{title}</p>
+          <span style={{ display: "flex", gap: "0.5rem" }}>
+            <button className="btn" onClick={() => { onSave(draft); onClose(); }}>Save</button>
+            <button className="btn btn-quiet" onClick={onClose}>Cancel</button>
+          </span>
+        </div>
+        <textarea ref={boxRef} value={draft} spellCheck={false}
+          onChange={(e) => setDraft(e.target.value)} />
+        <p className="hint" style={{ marginTop: "0.5rem" }}>
+          Esc cancels. Save writes back to the box; nothing is analyzed until you press "Read my resume".
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /* ── Station 1: Target ── */
 
 interface PickedFile { name: string; sizeKb: number; b64: string; }
@@ -105,6 +139,7 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
   const [past, setPast] = useState<ResumeSummaryItem[]>([]);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState<"" | "resume" | "jd">("");
   const fileInput = useRef<HTMLInputElement>(null);
 
   const refreshLists = () => {
@@ -181,8 +216,10 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
                 <textarea
                   value={resumeText}
                   onChange={(e) => setResumeText(e.target.value)}
+                  onClick={() => { if (resumeText.trim()) setExpanded("resume"); }}
                   placeholder={dragging ? "Drop it right here…" : "Drag a PDF/DOCX here, or paste your resume text…"}
                   spellCheck={false}
+                  title={resumeText.trim() ? "Click to edit full-screen" : undefined}
                 />
                 <p className="hint">
                   PDF, DOCX, TXT, or JSON Resume ·{" "}
@@ -190,6 +227,14 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
                     onClick={(e) => { e.preventDefault(); fileInput.current?.click(); }}>
                     browse files
                   </a>
+                  {resumeText.trim() && (
+                    <> ·{" "}
+                      <a href="#" style={{ textDecoration: "underline" }}
+                        onClick={(e) => { e.preventDefault(); setExpanded("resume"); }}>
+                        ⤢ edit full-screen
+                      </a>
+                    </>
+                  )}
                 </p>
                 <input
                   ref={fileInput} type="file" hidden
@@ -221,9 +266,19 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
               className="jd-box"
               value={jdText}
               onChange={(e) => setJdText(e.target.value)}
+              onClick={() => { if (jdText.trim()) setExpanded("jd"); }}
               placeholder="Or paste the job description text here…"
               spellCheck={false}
+              title={jdText.trim() ? "Click to edit full-screen" : undefined}
             />
+            {jdText.trim() && (
+              <p className="hint">
+                <a href="#" style={{ textDecoration: "underline" }}
+                  onClick={(e) => { e.preventDefault(); setExpanded("jd"); }}>
+                  ⤢ edit full-screen
+                </a>
+              </p>
+            )}
           </div>
         </div>
         {error && <div className="errbox" style={{ marginTop: "1rem" }}>{error}</div>}
@@ -234,6 +289,15 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
           </button>
         </div>
       </div>
+
+      {expanded === "resume" && (
+        <FullEditor title="Edit your resume text" value={resumeText}
+          onSave={setResumeText} onClose={() => setExpanded("")} />
+      )}
+      {expanded === "jd" && (
+        <FullEditor title="Edit the job description" value={jdText}
+          onSave={setJdText} onClose={() => setExpanded("")} />
+      )}
 
       {past.length > 0 && (
         <div className="past">

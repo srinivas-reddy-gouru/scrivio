@@ -9,6 +9,8 @@ ISSUES — each issue must:
 - carry a concrete `fix` (a rewritten line or a specific action), never generic advice like "add more impact",
 - use the right category: impact (achievement stated without evidence or outcome), clarity (a reader can't tell what the candidate actually did), structure (ordering/emphasis works against them), relevance (real content misaligned with the target JD), red-flag (gaps, title inflation signals, claim inconsistencies a recruiter would probe).
 
+TIMELINE PLAUSIBILITY — a red-flag subcheck sharp interviewers always run: compare every named technology VERSION against the role's date range. A technology claimed for a period before it was generally available (Java 17 in a role that ended May 2022 is possible only for the final months; Java 17 in a role that ended in 2020 is impossible) is a red-flag issue. Quote the bullet, name the GA date, and give the fix (drop the version number, or scope it: "migrated to Java 17 in 2021"). Do the same for impossible overlaps between roles and for numbers that contradict each other across bullets.
+
 MISSING KEYWORDS — only when a job description is provided. List JD requirements the resume does not evidence. Include SEMANTIC gaps: if the JD asks for Kubernetes and the resume only says "container orchestration", Kubernetes is missing — an ATS keyword match fails even though a human might infer it. If no JD is given, return an empty list.
 
 SUMMARY — 2-3 sentences: your honest first impression as a recruiter deciding whether this resume earns a phone screen for the target role (or in general, without a JD). State the verdict plainly.
