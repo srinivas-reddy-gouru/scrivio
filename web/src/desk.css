@@ -444,11 +444,14 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 .note-row { padding: 0.55rem 0 0.65rem; border-bottom: 1px solid var(--surface-2); }
 .note-row:last-child { border-bottom: none; padding-bottom: 0.2rem; }
 .note-row p { font-size: 0.74rem; color: var(--text-dim); line-height: 1.5; }
-.note-pick { display: flex; gap: 0.55rem; align-items: flex-start; cursor: pointer; }
-.note-pick input {
-  margin-top: 0.2rem; width: 14px; height: 14px; flex: none;
-  accent-color: var(--teal); cursor: pointer;
+.note-answer { display: flex; gap: 0.4rem; margin-top: 0.5rem; }
+.note-answer input {
+  flex: 1; min-width: 0; background: var(--input-bg); color: var(--text);
+  border: 1px solid var(--stroke); border-radius: 8px;
+  font-family: inherit; font-size: 0.74rem; padding: 0.4rem 0.6rem;
 }
+.note-answer input:focus { outline: 2px solid var(--teal); outline-offset: 1px; }
+.note-answer input::placeholder { color: var(--text-faint); }
 .note-actions { display: flex; gap: 0.45rem; margin-top: 0.45rem; }
 .note-btn {
   border: 1px solid var(--stroke); border-radius: 7px; cursor: pointer;

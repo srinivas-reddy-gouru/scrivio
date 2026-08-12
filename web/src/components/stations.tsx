@@ -488,6 +488,17 @@ export function ReportStation({ doc, onDoc, onTailored }: {
   );
 }
 
+/** An honesty note exists precisely BECAUSE the studio would not write
+ * that claim on its own: measured across a real 18-note document, an
+ * editor pass on any note is a no-op. So notes do not offer a "fix" —
+ * they ask for the missing fact. Guards are the exception: they exist to
+ * keep claims out and need nothing at all. */
+function noteKind(w: string): "guard" | "needs-you" {
+  return w.startsWith("Cannot honestly claim") || w.startsWith("Reverted ")
+    || /not a defect|standing guard/i.test(w)
+    ? "guard" : "needs-you";
+}
+
 /* ── Station 3: Tailor ── */
 
 export function TailorStation({ doc, onDoc, onSend }: {
@@ -503,10 +514,12 @@ export function TailorStation({ doc, onDoc, onSend }: {
   const [savingEdits, setSavingEdits] = useState(false);
   const [undoing, setUndoing] = useState(false);
   const [fixingNote, setFixingNote] = useState<number | null>(null);
-  const [selectedNotes, setSelectedNotes] = useState<Set<number>>(new Set());
+  const [answers, setAnswers] = useState<Map<number, string>>(new Map());
   const [lastPass, setLastPass] = useState<{ resolved: number; edits: number; note: string } | null>(null);
   const [error, setError] = useState("");
   const t = doc.tailored!;
+  const answerable = t.warnings.filter((w) => noteKind(w) === "needs-you").length;
+  const answered = [...answers.values()].filter((v) => v.trim()).length;
   const remaining = countMetrics(t.resume);
   const typed = [...values.values()].filter((v) => v.trim()).length;
 
@@ -554,14 +567,6 @@ export function TailorStation({ doc, onDoc, onSend }: {
     finally { setUndoing(false); }
   };
 
-  // Not every honesty note is an edit waiting to happen. Guards state
-  // what must NOT be added; metric notes wait for the user's number in
-  // the amber chip. Only the rest can honestly offer "Fix this one".
-  const noteKind = (w: string): "guard" | "metric" | "fixable" =>
-    w.startsWith("Cannot honestly claim") || w.startsWith("Reverted ") ? "guard"
-    : /\[METRIC\] placeholder at/.test(w) ? "metric"
-    : "fixable";
-
   // What did that pass accomplish? Diff the doc before/after so the
   // panel can say "3 notes resolved, 5 edits on the paper" instead of
   // silently re-rendering a near-identical list.
@@ -576,56 +581,50 @@ export function TailorStation({ doc, onDoc, onSend }: {
       : "Fix pass done: nothing changed.");
   };
 
-  const fixNote = async (i: number, note: string) => {
+  const askCoachAbout = (w: string) =>
+    window.dispatchEvent(new CustomEvent("coach-prefill", {
+      detail: `About this honesty note: "${w}" What should I do here?`,
+    }));
+
+  /** The instruction that actually moves a note: the note plus the fact
+   * the user just supplied, with their figures quoted as authoritative. */
+  const answerInstruction = (pairs: Array<[string, string]>) =>
+    "I am supplying the real facts these honesty notes asked for. Apply " +
+    "each one to the bullet the note names, using MY figures exactly as " +
+    "given, and rewrite that bullet so the number reads with its baseline, " +
+    "unit, or scope. Then drop the note it resolves.\n\n" +
+    pairs.map(([note, answer], n) =>
+      `${n + 1}. NOTE: ${note}\n   MY ANSWER: ${answer}`).join("\n\n") +
+    "\n\nChange nothing else. If an answer does not actually resolve its " +
+    "note, leave that bullet alone, keep the note, and say what is still " +
+    "missing in your note field.";
+
+  const applyOne = async (i: number, note: string) => {
+    const answer = (answers.get(i) || "").trim();
+    if (!answer || fixingNote !== null) return;
     setFixingNote(i); setError("");
     try {
-      const fresh = await api.requestEdit(doc.resume_id,
-        `Apply the fix this honesty note suggests: "${note}". Change only what ` +
-        "the note names. If the fix needs a fact or number only I know and the " +
-        "note does not call for a [METRIC] placeholder, leave the text as it is " +
-        "and keep the note.");
+      const fresh = await api.requestEdit(doc.resume_id, answerInstruction([[note, answer]]));
+      setAnswers((m) => { const next = new Map(m); next.delete(i); return next; });
       recordPass(fresh);
       onDoc(fresh);
     } catch (e) { setError((e as Error).message); }
     finally { setFixingNote(null); }
   };
 
-  // One editor pass over every note, not one call per note: the editor
-  // already receives the full warnings list, so it can sweep everything
-  // fixable at once. Sentinel -1 = fix-all in flight.
-  const fixAll = async () => {
+  // One editor pass for every answer typed, not one call per note.
+  // Sentinel -1 = apply-all in flight.
+  const applyAnswers = async () => {
+    const pairs = [...answers.entries()]
+      .filter(([, v]) => v.trim())
+      .sort((a, b) => a[0] - b[0])
+      .map(([i, v]) => [t.warnings[i], v.trim()] as [string, string])
+      .filter(([note]) => note);
+    if (!pairs.length) return;
     setFixingNote(-1); setError("");
     try {
-      const fresh = await api.requestEdit(doc.resume_id,
-        "Go through every honesty note in current_warnings and apply each " +
-        "note's suggested fix where it can be done honestly: rewording, " +
-        "scoping a claim, dropping an unverifiable version number, or a " +
-        "[METRIC] placeholder where the note itself calls for one. Notes " +
-        "whose fix requires facts or numbers only I know (team sizes, real " +
-        "measurements, whether I actually used a technology) must leave the " +
-        "text unchanged and stay in the warnings. Log one change per bullet " +
-        "you touch.");
-      recordPass(fresh);
-      onDoc(fresh);
-    } catch (e) { setError((e as Error).message); }
-    finally { setFixingNote(null); }
-  };
-
-  // Sentinel -2 = fix-selected in flight. One call listing the chosen
-  // notes verbatim, so the editor's scope is exactly the selection.
-  const fixSelected = async () => {
-    const chosen = [...selectedNotes].sort((a, b) => a - b)
-      .map((i) => t.warnings[i]).filter(Boolean);
-    if (chosen.length === 0) return;
-    setFixingNote(-2); setError("");
-    try {
-      const fresh = await api.requestEdit(doc.resume_id,
-        "Apply the fixes these honesty notes suggest, and ONLY these notes:\n" +
-        chosen.map((w, n) => `${n + 1}. "${w}"`).join("\n") +
-        "\nChange only what these notes name. Where a fix needs facts or " +
-        "numbers only I know and the note does not call for a [METRIC] " +
-        "placeholder, leave that text unchanged and keep the note.");
-      setSelectedNotes(new Set());
+      const fresh = await api.requestEdit(doc.resume_id, answerInstruction(pairs));
+      setAnswers(new Map());
       recordPass(fresh);
       onDoc(fresh);
     } catch (e) { setError((e as Error).message); }
@@ -739,63 +738,57 @@ export function TailorStation({ doc, onDoc, onSend }: {
           {t.warnings.length > 0 && (
             <div className="panel" style={{ borderColor: "rgba(229,176,76,0.4)" }}>
               <p className="eyebrow" style={{ color: "var(--amber)" }}>
-                Honesty notes · {t.warnings.length} need you
+                Honesty notes · {answerable} awaiting your answer
               </p>
               <p style={{ fontSize: "0.7rem", color: "var(--text-faint)", lineHeight: 1.5 }}>
-                Tick the notes you want handled, or fix everything fixable in one pass.
-                Edits take about a minute, land teal-marked, and are one Undo away.
-                Notes needing your real facts are left for you.
+                These are the things Scrivio will not write for you. Type the real
+                figure or fact under a note and it gets applied in your words.
+                Guards need nothing: they exist to keep claims out.
               </p>
-              <div style={{ display: "flex", gap: "0.5rem", margin: "0.55rem 0 0.3rem" }}>
-                <button className="btn" style={{ flex: 1 }}
-                  disabled={fixingNote !== null} onClick={fixAll}
-                  title="One editor pass applies every note that can be fixed honestly; notes needing your real facts stay. Undoable.">
-                  {fixingNote === -1 ? "Fixing… (about a minute)" : "Fix all"}
+              {answered > 0 && (
+                <button className="btn" style={{ width: "100%", margin: "0.6rem 0 0.2rem" }}
+                  disabled={fixingNote !== null} onClick={applyAnswers}
+                  title="One editor pass applies every answer you typed, in your words. Undoable.">
+                  {fixingNote === -1
+                    ? "Applying your answers… (about a minute)"
+                    : `Apply ${answered} answer${answered > 1 ? "s" : ""}`}
                 </button>
-                <button className="btn btn-quiet" style={{ flex: 1 }}
-                  disabled={fixingNote !== null || selectedNotes.size === 0} onClick={fixSelected}
-                  title="Applies only the ticked notes. Undoable.">
-                  {fixingNote === -2 ? "Fixing…" : `Fix selected (${selectedNotes.size})`}
-                </button>
-              </div>
+              )}
               {t.warnings.map((w, i) => {
-                const kind = noteKind(w);
+                const guard = noteKind(w) === "guard";
                 return (
                   <div className="note-row" key={i}>
-                    {kind === "fixable" ? (
-                      <label className="note-pick">
-                        <input type="checkbox" checked={selectedNotes.has(i)}
-                          disabled={fixingNote !== null}
-                          onChange={(e) => setSelectedNotes((s) => {
-                            const next = new Set(s);
-                            if (e.target.checked) next.add(i); else next.delete(i);
-                            return next;
-                          })} />
-                        <p>{w}</p>
-                      </label>
-                    ) : (
-                      <p>{w}</p>
-                    )}
-                    <div className="note-actions">
-                      {kind === "fixable" && (
-                        <button className="note-btn fix" disabled={fixingNote !== null}
-                          onClick={() => fixNote(i, w)}>
-                          {fixingNote === i ? "Fixing…" : "Fix this one"}
-                        </button>
-                      )}
-                      {kind === "guard" && (
+                    <p>{w}</p>
+                    {guard ? (
+                      <div className="note-actions">
                         <span className="note-tag">standing guard · nothing to fix</span>
-                      )}
-                      {kind === "metric" && (
-                        <span className="note-tag">your number goes in the amber chip on the paper</span>
-                      )}
-                      <button className="note-btn" disabled={fixingNote !== null}
-                        onClick={() => window.dispatchEvent(new CustomEvent("coach-prefill", {
-                          detail: `About this honesty note: "${w}" What should I do here?`,
-                        }))}>
-                        Ask the coach
-                      </button>
-                    </div>
+                        <button className="note-btn" disabled={fixingNote !== null}
+                          onClick={() => askCoachAbout(w)}>
+                          Ask the coach
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="note-answer">
+                          <input type="text" value={answers.get(i) ?? ""}
+                            aria-label={`Your answer for note ${i + 1}`}
+                            placeholder="Your real figure or answer, e.g. 5k to 7k events/sec"
+                            disabled={fixingNote !== null}
+                            onChange={(e) => setAnswers((m) => new Map(m).set(i, e.target.value))}
+                            onKeyDown={(e) => { if (e.key === "Enter") applyOne(i, w); }} />
+                          <button className="note-btn fix" disabled={fixingNote !== null || !(answers.get(i) || "").trim()}
+                            onClick={() => applyOne(i, w)}>
+                            {fixingNote === i ? "Applying…" : "Apply"}
+                          </button>
+                        </div>
+                        <div className="note-actions">
+                          <button className="note-btn" disabled={fixingNote !== null}
+                            onClick={() => askCoachAbout(w)}>
+                            Not sure? Ask the coach
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
