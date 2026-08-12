@@ -31,29 +31,48 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
     : null;
   let paperIndex = 0;
 
-  const STUDIOS: Array<{ room: RoomId; glyph: string; name: string; what: string }> = [
-    { room: "newsroom", glyph: "✎", name: "Articles",
-      what: "Write a technical article. Every claim is searched and verified before the ink dries." },
-    { room: "interview", glyph: "◉", name: "Interviews",
-      what: "Practice out loud. The grading bar is written before you answer, then revealed." },
-    { room: "job", glyph: "▤", name: "Job prep",
-      what: "Upload a resume and a job posting; get a fit report and a role-specific mock screen." },
-    { room: "desk", glyph: "≡", name: "Resume",
-      what: "ATS score, honest JD tailoring, and polished downloads. No invented facts, ever." },
+  const STUDIOS: Array<{
+    room: RoomId; name: string; what: string; points: string[]; cta: string;
+    icon: React.ReactNode; badge?: string;
+  }> = [
+    { room: "newsroom", name: "Articles", cta: "Write an article",
+      what: "Deep technical articles researched from trusted sources, fact-checked claim by claim, written at your reading level.",
+      points: ["Live web research with cited sources", "Every claim verified before it ships", "Basic, intermediate, or advanced depth"],
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg> },
+    { room: "interview", name: "Interviews", cta: "Start practicing",
+      what: "Voice interviews on any topic. The interviewer speaks, you answer out loud, and the grading never flatters.",
+      points: ["Practice, simulation, and 60s drills", "Hidden rubric: feedback you can trust", "Mastery tracking, streaks, weak-spot drills"],
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg> },
+    { room: "job", name: "Job prep", cta: "Prep for a job",
+      what: "Upload your resume and the job description to get a realistic 30-45 minute screen and a recruiter-grade scorecard.",
+      points: ["Questions real interviewers ask for the role", "Grills your resume's own claims", "Hire signal plus a cited study plan for gaps"],
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg> },
+    { room: "desk", name: "Resume", cta: "Check my resume",
+      what: "A transparent ATS readiness report, every point explained, then an honest rewrite tailored to the job description.",
+      points: ["Explainable score, not a magic number", "Tailoring that refuses to invent facts", "PDF, Word, Markdown, JSON Resume exports"],
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="17" x2="13" y2="17" /></svg> },
   ];
 
   return (
     <div className="room-wrap">
-      <h1 className="room-title bar-tick-left">Welcome back</h1>
-      <p className="room-sub">Four studios, one honest toolchain: articles, interview practice, job prep, and your resume.</p>
-      <p className="eyebrow">The studios</p>
-      <div className="studio-grid">
+      <div className="home-hero">
+        <h1>Learn it. <span className="grad-text">Prove it.</span> Get the job.</h1>
+        <div className="bar" />
+        <p>
+          Scrivio researches like a journalist, interviews like a senior engineer,
+          and gives feedback like a hiring panel, all on your own AI subscription.
+        </p>
+      </div>
+      <div className="feature-grid">
         {STUDIOS.map((s, i) => (
-          <button key={s.room} className="studio-card" style={{ "--i": i } as React.CSSProperties}
+          <button key={s.room} className="feature-card" style={{ "--i": i } as React.CSSProperties}
             onClick={() => go(s.room)}>
-            <span className="glyph">{s.glyph}</span>
-            <b>{s.name}</b>
-            <span className="what">{s.what}</span>
+            {s.badge && <span className="feature-badge">{s.badge}</span>}
+            <span className="feature-icon">{s.icon}</span>
+            <h3>{s.name}</h3>
+            <span className="desc">{s.what}</span>
+            <ul>{s.points.map((p) => <li key={p}>✓ {p}</li>)}</ul>
+            <span className="cta">{s.cta}</span>
           </button>
         ))}
       </div>

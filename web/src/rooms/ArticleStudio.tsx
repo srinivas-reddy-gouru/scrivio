@@ -3,7 +3,7 @@
  * is the shelf below the slip. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
-import { api, articleApi, fmtElapsed } from "../api";
+import { api, articleApi, fmtElapsed, interviewApi, openSession } from "../api";
 import type { ArticleSummary, ClarificationQuestion, ProgressEvent } from "../types";
 
 const STAGES: Array<[string, string, string]> = [
@@ -19,12 +19,43 @@ const STAGES: Array<[string, string, string]> = [
   ["critic", "The critic", "final read before it ships"],
 ];
 
-/** Swap mermaid fences for honest placeholders, then render. Our own
- * pipeline wrote this markdown; it is trusted content. */
+/** Render article markdown. Our own pipeline wrote it; trusted content.
+ * Mermaid fences pass through as code blocks that useMermaid() then
+ * renders into real diagrams, exactly like the classic studio did. */
 function renderMarkdown(md: string): string {
-  const swapped = md.replace(/```mermaid[\s\S]*?```/g, () =>
-    `<div class="diagram-hold">Diagram lives in the downloaded article; the studio shows prose.</div>`);
-  return marked.parse(swapped, { async: false }) as string;
+  return marked.parse(md, { async: false }) as string;
+}
+
+let mermaidReady = false;
+/** Turn `pre > code.language-mermaid` blocks inside the container into
+ * live mermaid diagrams. Re-runs whenever the html changes. */
+function useMermaid(ref: React.RefObject<HTMLElement | null>, html: string) {
+  useEffect(() => {
+    const host = ref.current;
+    if (!host) return;
+    const blocks = host.querySelectorAll("pre code.language-mermaid");
+    if (!blocks.length) return;
+    let cancelled = false;
+    import("mermaid").then(({ default: mermaid }) => {
+      if (cancelled) return;
+      if (!mermaidReady) {
+        mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose" });
+        mermaidReady = true;
+      }
+      const nodes: HTMLElement[] = [];
+      blocks.forEach((code) => {
+        const div = document.createElement("div");
+        div.className = "mermaid";
+        div.textContent = code.textContent || "";
+        code.closest("pre")?.replaceWith(div);
+        nodes.push(div);
+      });
+      mermaid.run({ nodes }).catch(() => {
+        // A malformed diagram stays as its source text; never break the page.
+      });
+    });
+    return () => { cancelled = true; };
+  }, [ref, html]);
 }
 
 type View =
@@ -122,18 +153,20 @@ function Compose({ brief, setBrief, error, onGo, onOpen }: {
       </div>
 
       {library.length > 0 && (
-        <div className="room-col" style={{ marginTop: "1.6rem" }}>
-          <p className="eyebrow">The library</p>
-          {library.slice(0, 10).map((a) => (
-            <button key={a.id} className="lib-row" onClick={() => onOpen(a.id)}>
-              <span><b>{a.title || a.topic}</b>
-                <span className="meta" style={{ display: "block" }}>
+        <div style={{ marginTop: "1.8rem" }}>
+          <p className="eyebrow">The library · {library.length} article{library.length > 1 ? "s" : ""}</p>
+          <div className="lib-grid">
+            {library.map((a, i) => (
+              <button key={a.id} className="lib-card" style={{ "--i": Math.min(i, 12) } as React.CSSProperties}
+                onClick={() => onOpen(a.id)}>
+                <b>{a.title || a.topic}</b>
+                <span className="meta">
                   {a.level} · {a.available_levels.length} level{a.available_levels.length > 1 ? "s" : ""}
                   {a.version > 1 ? ` · v${a.version}` : ""}
-                </span></span>
-              <span style={{ color: "var(--text-faint)" }}>→</span>
-            </button>
-          ))}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -284,6 +317,9 @@ function Reading({ articleId, level, onBack, onLevel }: {
 }) {
   const [detail, setDetail] = useState<Awaited<ReturnType<typeof articleApi.detail>> | null>(null);
   const [error, setError] = useState("");
+  const [practicing, setPracticing] = useState(false);
+  const [practiceError, setPracticeError] = useState("");
+  const proseRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setDetail(null);
@@ -293,6 +329,17 @@ function Reading({ articleId, level, onBack, onLevel }: {
   }, [articleId, level]);
 
   const html = useMemo(() => (detail ? renderMarkdown(detail.markdown) : ""), [detail]);
+  useMermaid(proseRef, html);
+
+  const practice = async () => {
+    setPracticing(true); setPracticeError("");
+    try {
+      const s = await interviewApi.create({ article_id: articleId, level: detail?.level });
+      openSession(s.session_id);
+    } catch (e) {
+      setPracticeError((e as Error).message); setPracticing(false);
+    }
+  };
 
   if (error) {
     return <div className="room-wrap"><div className="errbox">{error}</div>
@@ -309,17 +356,27 @@ function Reading({ articleId, level, onBack, onLevel }: {
           <button key={l} className={"seg-pill" + (l === detail.level ? " on" : "")}
             onClick={() => onLevel(l)}>{l}</button>
         ))}
-        <button className="btn btn-quiet" style={{ marginLeft: "auto" }}
-          onClick={() => {
-            const blob = new Blob([detail.markdown], { type: "text/markdown" });
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(blob);
-            a.download = `${(detail.title || detail.topic || "article").replace(/[^\w.-]+/g, "_")}_${detail.level}.md`;
-            a.click(); URL.revokeObjectURL(a.href);
-          }}>Download .md</button>
+        <span style={{ marginLeft: "auto", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <button className="btn" disabled={practicing}
+            title="A practice interview grounded in this article: questions and rubrics written from its verified claims"
+            onClick={practice}>
+            {practicing ? "Writing the rubric…" : "◉ Practice interview"}
+          </button>
+          <button className="btn btn-quiet"
+            onClick={() => {
+              const blob = new Blob([detail.markdown], { type: "text/markdown" });
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob);
+              a.download = `${(detail.title || detail.topic || "article").replace(/[^\w.-]+/g, "_")}_${detail.level}.md`;
+              a.click(); URL.revokeObjectURL(a.href);
+            }}>Download .md</button>
+        </span>
       </div>
-      <div className="manuscript room-col"
-        dangerouslySetInnerHTML={{ __html: html }} />
+      {practiceError && <div className="errbox" style={{ marginBottom: "0.8rem" }}>{practiceError}</div>}
+      <div className="read-paper">
+        <article className="prose" ref={proseRef}
+          dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
     </div>
   );
 }
