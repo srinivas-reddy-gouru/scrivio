@@ -115,10 +115,10 @@ export function BackOffice() {
               <div className="model-row" key={m.env}>
                 <span><b>{m.label}</b><p>{m.blurb}</p></span>
                 {custom ? (
-                  <input type="text" value={current}
+                  <input type="text" value={current} aria-label={m.label}
                     onChange={(e) => stage(m.env, e.target.value)} />
                 ) : (
-                  <select value={current || m.options[0]}
+                  <select value={current || m.options[0]} aria-label={m.label}
                     onChange={(e) => e.target.value === "__other" ? stage(m.env, " ") : stage(m.env, e.target.value)}>
                     {m.options.map((o) => <option key={o} value={o}>{o}</option>)}
                     <option value="__other">Other…</option>
@@ -130,6 +130,7 @@ export function BackOffice() {
           <div className="model-row">
             <span><b>Subscription · CLI</b><p>Which installed CLI runs subscription calls</p></span>
             <select value={keyValue("LLM_CLI") || s.active_cli || "claude"}
+              aria-label="Subscription CLI"
               onChange={(e) => stage("LLM_CLI", e.target.value)}>
               {[...new Set([...(s.detected_clis.length ? s.detected_clis : ["claude"]), keyValue("LLM_CLI")].filter(Boolean))]
                 .map((c) => <option key={c} value={c}>{c}</option>)}
@@ -154,7 +155,7 @@ export function BackOffice() {
                     <span className={k.present ? "dot-live" : "dot-idle"} />
                     {env}
                     {editing ? (
-                      <input autoFocus type="text" placeholder="paste the new value"
+                      <input autoFocus type="text" aria-label={env} placeholder="paste the new value"
                         value={edits[env] ?? ""}
                         onChange={(e) => stage(env, e.target.value)} />
                     ) : (

@@ -24,7 +24,7 @@
   --green: #34D399;
   --text: #E8EDEA;
   --text-dim: #93A5A2;
-  --text-faint: #5C6C6A;
+  --text-faint: #7C8D89;
   --stroke: rgba(255, 255, 255, 0.09);
   --rail-bg: rgba(255, 255, 255, 0.033);
 }
@@ -82,6 +82,11 @@ header {
 .station.done .dot { border-color: var(--green); color: var(--green); }
 .station:disabled { cursor: not-allowed; opacity: 0.55; }
 .station-rule { width: 26px; height: 1.5px; background: var(--stroke); }
+@media (max-width: 640px) {
+  .stations { flex-wrap: wrap; justify-content: center; row-gap: 0.2rem; }
+  .station { padding: 0.35rem 0.45rem; font-size: 0.74rem; }
+  .station-rule { width: 12px; }
+}
 
 /* Stage + desk grid */
 .stage { max-width: 1240px; margin: 0 auto; padding: 1.6rem; animation: settle 0.45s cubic-bezier(0.2, 0.8, 0.25, 1); }
@@ -1005,7 +1010,7 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
   --green: #147A52;
   --text: #1C2523;
   --text-dim: #4E5F5C;
-  --text-faint: #74847F;
+  --text-faint: #5B6C68;
   --stroke: rgba(12, 32, 30, 0.14);
   --rail-bg: rgba(12, 32, 30, 0.04);
   --surface: rgba(12, 32, 30, 0.04);
@@ -1038,4 +1043,26 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 :root[data-theme="light"] .btn-quiet { background: var(--surface-2); }
 :root[data-theme="light"] .composer-card {
   box-shadow: 0 0 60px rgba(20, 147, 166, 0.1), 0 14px 40px rgba(28, 37, 35, 0.12);
+}
+
+
+/* Touch ergonomics: coarse pointers get at least 40px of target */
+@media (pointer: coarse) {
+  .note-btn, .seg-pill, .peek-btn, .theme-btn, .expand-btn, .pill-toggle,
+  .pill-select, .tab, .station { min-height: 40px; }
+  .theme-btn, .expand-btn { width: 40px; }
+}
+
+/* Skip link: first tab stop, visible only on focus */
+.skip-link {
+  position: absolute; left: 0.8rem; top: -100px; z-index: 100;
+  background: var(--grad); color: #06282c; font-weight: 700; font-size: 0.8rem;
+  padding: 0.6rem 1rem; border-radius: 0 0 10px 10px; transition: top 0.15s;
+}
+.skip-link:focus { top: 0; }
+
+/* Screen-reader-only live region */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  clip-path: inset(50%); overflow: hidden; white-space: nowrap;
 }

@@ -31,6 +31,22 @@ export function useHashRoom(): [RoomId, (r: RoomId) => void] {
   return [room, go];
 }
 
+/** Post a message to the app-wide polite live region. Anything async
+ * that changes state visually should also say so aloud. */
+export function announce(message: string) {
+  window.dispatchEvent(new CustomEvent("studio-announce", { detail: message }));
+}
+
+function Announcer() {
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    const on = (e: Event) => setMsg((e as CustomEvent<string>).detail);
+    window.addEventListener("studio-announce", on);
+    return () => window.removeEventListener("studio-announce", on);
+  }, []);
+  return <div className="sr-only" role="status" aria-live="polite">{msg}</div>;
+}
+
 interface PaletteItem {
   title: string; kind: string; glyph: string;
   action: () => void;
@@ -51,6 +67,14 @@ export function Shell({ room, go, children }: {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("studio-theme", theme);
   }, [theme]);
+
+  // The tab reflects where you are; screen readers hear room changes.
+  useEffect(() => {
+    const label = room === "office" ? "Settings"
+      : ROOMS.find((r) => r.id === room)?.label ?? "Home";
+    document.title = `${label} · Scrivio`;
+    announce(`${label} page`);
+  }, [room]);
 
   useEffect(() => {
     api.settings()
@@ -76,7 +100,9 @@ export function Shell({ room, go, children }: {
 
   return (
     <div className="studio">
-      <nav className="side">
+      <a className="skip-link" href="#studio-main">Skip to content</a>
+      <Announcer />
+      <nav className="side" aria-label="Studio navigation">
         <div className="brand-block">
           <div className="brand-name">
             <span className="brand-mark" aria-hidden="true" />
@@ -105,7 +131,7 @@ export function Shell({ room, go, children }: {
         </button>
         <div className="kbd-hint"><kbd>⌘K</kbd> jump anywhere</div>
       </nav>
-      <main className="room-main">{children}</main>
+      <main className="room-main" id="studio-main" tabIndex={-1}>{children}</main>
       {palOpen && <Palette go={(r) => { go(r); setPalOpen(false); }} close={() => setPalOpen(false)} />}
     </div>
   );
@@ -154,10 +180,14 @@ function Palette({ go, close }: { go: (r: RoomId) => void; close: () => void }) 
   }, [items, q]);
 
   return (
-    <div className="palette" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
+    <div className="palette" onClick={(e) => { if (e.target === e.currentTarget) close(); }}
+      role="dialog" aria-modal="true" aria-label="Jump anywhere">
       <div className="pal-box">
         <input
           autoFocus value={q} placeholder="Jump anywhere: rooms, papers, actions…"
+          aria-label="Search rooms, papers, and actions"
+          role="combobox" aria-expanded={hits.length > 0}
+          aria-controls="pal-list" aria-activedescendant={hits[sel] ? `pal-opt-${sel}` : undefined}
           onChange={(e) => { setQ(e.target.value); setSel(0); }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") { setSel((s) => Math.min(s + 1, hits.length - 1)); e.preventDefault(); }
@@ -165,16 +195,17 @@ function Palette({ go, close }: { go: (r: RoomId) => void; close: () => void }) 
             if (e.key === "Enter" && hits[sel]) hits[sel].action();
           }}
         />
-        <div className="pal-list">
+        <div className="pal-list" id="pal-list" role="listbox" aria-label="Results">
           {hits.map((h, i) => (
             <button key={`${h.kind}:${h.title}`} className={"pal-item" + (i === sel ? " sel" : "")}
+              id={`pal-opt-${i}`} role="option" aria-selected={i === sel}
               onClick={h.action}>
-              <span className="glyph">{h.glyph}</span>
+              <span className="glyph" aria-hidden="true">{h.glyph}</span>
               {h.title}
               <span className="kind">{h.kind}</span>
             </button>
           ))}
-          {hits.length === 0 && <div className="pal-item">Nothing on the shelves for that.</div>}
+          {hits.length === 0 && <div className="pal-item" role="option" aria-selected="false">Nothing on the shelves for that.</div>}
         </div>
       </div>
     </div>

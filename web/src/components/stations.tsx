@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
 import { api, fmtElapsed, useDocWatch } from "../api";
+import { announce } from "./Shell";
 import { countMetrics } from "../marks";
 import type { ChatTurn, JobProfileSummary, ResumeDoc, ResumeSummaryItem } from "../types";
 import { Paper } from "./Paper";
@@ -86,15 +87,28 @@ function FullEditor({ title, value, onSave, onClose }: {
 }) {
   const [draft, setDraft] = useState(value);
   const boxRef = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { boxRef.current?.focus(); }, []);
+  const cardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const opener = document.activeElement as HTMLElement | null;
+    boxRef.current?.focus();
+    return () => opener?.focus?.();
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key !== "Tab" || !cardRef.current) return;
+      // Keep Tab inside the dialog until it closes.
+      const focusables = cardRef.current.querySelectorAll<HTMLElement>("button, textarea");
+      const first = focusables[0], last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
+      else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="fulledit-overlay" role="dialog" aria-label={title}>
-      <div className="fulledit-card">
+    <div className="fulledit-overlay" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="fulledit-card" ref={cardRef}>
         <div className="fulledit-head">
           <p className="eyebrow" style={{ marginBottom: 0 }}>{title}</p>
           <span style={{ display: "flex", gap: "0.5rem" }}>
@@ -223,6 +237,7 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
               <>
                 <textarea
                   value={resumeText}
+                  aria-label="Your resume text"
                   onChange={(e) => setResumeText(e.target.value)}
                   onClick={() => { if (resumeText.trim()) setExpanded("resume"); }}
                   placeholder={dragging ? "Drop it right here…" : "Drag a PDF/DOCX here, or paste your resume text…"}
@@ -237,7 +252,7 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
                   </a>
                 </p>
                 <input
-                  ref={fileInput} type="file" hidden
+                  ref={fileInput} type="file" hidden aria-label="Resume file"
                   accept=".pdf,.docx,.txt,.md,.json"
                   onChange={(e) => pick(e.target.files?.[0])}
                 />
@@ -268,11 +283,13 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
             </select>
             <input
               type="text" value={jdUrl} onChange={(e) => setJdUrl(e.target.value)}
+              aria-label="Job posting URL"
               placeholder="Posting URL: https://… (Scrivio fetches it)"
             />
             <textarea
               className="jd-box"
               value={jdText}
+              aria-label="Job description text"
               onChange={(e) => setJdText(e.target.value)}
               onClick={() => { if (jdText.trim()) setExpanded("jd"); }}
               placeholder="Or paste the job description text here…"
@@ -546,6 +563,9 @@ export function TailorStation({ doc, onDoc, onSend }: {
     const edits = Math.max(0,
       (fresh.tailored?.changes.length ?? 0) - (doc.tailored?.changes.length ?? 0));
     setLastPass({ resolved, edits, note: fresh.tailored?.note || "" });
+    announce(edits > 0
+      ? `Fix pass done: ${edits} edits made, ${resolved} notes resolved.`
+      : "Fix pass done: nothing changed.");
   };
 
   const fixNote = async (i: number, note: string) => {
@@ -824,6 +844,7 @@ function CoachDock({ doc, onDoc }: {
   onDoc: (d: ResumeDoc) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [focusOnOpen, setFocusOnOpen] = useState(false);
   const [unread, setUnread] = useState(false);
   const [log, setLog] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
@@ -835,6 +856,13 @@ function CoachDock({ doc, onDoc }: {
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [log, busy, open]);
+
+  useEffect(() => {
+    if (open && focusOnOpen) {
+      (document.querySelector(".coach-dock .coach-input") as HTMLElement | null)?.focus();
+      setFocusOnOpen(false);
+    }
+  }, [open, focusOnOpen]);
 
   // "Ask the coach" on an honesty note opens the dock with the note loaded.
   useEffect(() => {
@@ -949,7 +977,7 @@ function CoachDock({ doc, onDoc }: {
           </div>
         </div>
       )}
-      <button className="coach-fab" onClick={() => { setOpen((o) => !o); setUnread(false); }}
+      <button className="coach-fab" onClick={() => { setOpen((o) => !o); setUnread(false); setFocusOnOpen(true); }}
         aria-expanded={open} aria-label="Open the coach">
         {unread && <span className="dot" aria-label="New reply" />}
         ◉ Coach{busy ? "…" : ""}

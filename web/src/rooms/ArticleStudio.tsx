@@ -141,6 +141,7 @@ function Compose({ brief, setBrief, error, onGo, onOpen }: {
       </div>
       <div className="composer-card">
         <textarea value={brief.topic}
+          aria-label="Article topic or question"
           placeholder={'Describe a topic or ask a question… e.g. "How does Kafka handle backpressure?"'}
           onChange={(e) => setBrief({ ...brief, topic: e.target.value })}
           onKeyDown={(e) => {

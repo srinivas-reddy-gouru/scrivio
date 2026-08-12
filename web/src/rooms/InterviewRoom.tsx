@@ -173,7 +173,8 @@ function Setup({ onStart, onReview }: {
       <div className="iv-grid">
         <div className="iv-setup">
           <p className="eyebrow">Topic</p>
-          <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
+          <input type="text" value={topic} aria-label="Interview topic"
+            onChange={(e) => setTopic(e.target.value)}
             placeholder={stats?.per_topic.length
               ? `Empty = drill your weak spots (${[...stats.per_topic].sort((a, b) => a.mastery - b.mastery)[0]?.topic})`
               : "Kafka consumer groups, Python's GIL, anything"} />
