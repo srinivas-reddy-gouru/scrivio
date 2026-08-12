@@ -486,6 +486,7 @@ export function TailorStation({ doc, onDoc, onSend }: {
   const [savingEdits, setSavingEdits] = useState(false);
   const [undoing, setUndoing] = useState(false);
   const [fixingNote, setFixingNote] = useState<number | null>(null);
+  const [selectedNotes, setSelectedNotes] = useState<Set<number>>(new Set());
   const [error, setError] = useState("");
   const t = doc.tailored!;
   const remaining = countMetrics(t.resume);
@@ -543,6 +544,46 @@ export function TailorStation({ doc, onDoc, onSend }: {
         "the note names. If the fix needs a fact or number only I know and the " +
         "note does not call for a [METRIC] placeholder, leave the text as it is " +
         "and keep the note.");
+      onDoc(fresh);
+    } catch (e) { setError((e as Error).message); }
+    finally { setFixingNote(null); }
+  };
+
+  // One editor pass over every note, not one call per note: the editor
+  // already receives the full warnings list, so it can sweep everything
+  // fixable at once. Sentinel -1 = fix-all in flight.
+  const fixAll = async () => {
+    setFixingNote(-1); setError("");
+    try {
+      const fresh = await api.requestEdit(doc.resume_id,
+        "Go through every honesty note in current_warnings and apply each " +
+        "note's suggested fix where it can be done honestly: rewording, " +
+        "scoping a claim, dropping an unverifiable version number, or a " +
+        "[METRIC] placeholder where the note itself calls for one. Notes " +
+        "whose fix requires facts or numbers only I know (team sizes, real " +
+        "measurements, whether I actually used a technology) must leave the " +
+        "text unchanged and stay in the warnings. Log one change per bullet " +
+        "you touch.");
+      onDoc(fresh);
+    } catch (e) { setError((e as Error).message); }
+    finally { setFixingNote(null); }
+  };
+
+  // Sentinel -2 = fix-selected in flight. One call listing the chosen
+  // notes verbatim, so the editor's scope is exactly the selection.
+  const fixSelected = async () => {
+    const chosen = [...selectedNotes].sort((a, b) => a - b)
+      .map((i) => t.warnings[i]).filter(Boolean);
+    if (chosen.length === 0) return;
+    setFixingNote(-2); setError("");
+    try {
+      const fresh = await api.requestEdit(doc.resume_id,
+        "Apply the fixes these honesty notes suggest, and ONLY these notes:\n" +
+        chosen.map((w, n) => `${n + 1}. "${w}"`).join("\n") +
+        "\nChange only what these notes name. Where a fix needs facts or " +
+        "numbers only I know and the note does not call for a [METRIC] " +
+        "placeholder, leave that text unchanged and keep the note.");
+      setSelectedNotes(new Set());
       onDoc(fresh);
     } catch (e) { setError((e as Error).message); }
     finally { setFixingNote(null); }
@@ -634,15 +675,38 @@ export function TailorStation({ doc, onDoc, onSend }: {
                 Honesty notes · {t.warnings.length} need you
               </p>
               <p style={{ fontSize: "0.7rem", color: "var(--text-faint)", lineHeight: 1.5 }}>
-                Fix hands the note to the editor (about half a minute, undoable). Ask opens the coach with the note loaded.
+                Tick the notes you want handled, or fix everything fixable in one pass.
+                Edits take about a minute, land teal-marked, and are one Undo away.
+                Notes needing your real facts are left for you.
               </p>
+              <div style={{ display: "flex", gap: "0.5rem", margin: "0.55rem 0 0.3rem" }}>
+                <button className="btn" style={{ flex: 1 }}
+                  disabled={fixingNote !== null} onClick={fixAll}
+                  title="One editor pass applies every note that can be fixed honestly; notes needing your real facts stay. Undoable.">
+                  {fixingNote === -1 ? "Fixing… (about a minute)" : "Fix all"}
+                </button>
+                <button className="btn btn-quiet" style={{ flex: 1 }}
+                  disabled={fixingNote !== null || selectedNotes.size === 0} onClick={fixSelected}
+                  title="Applies only the ticked notes. Undoable.">
+                  {fixingNote === -2 ? "Fixing…" : `Fix selected (${selectedNotes.size})`}
+                </button>
+              </div>
               {t.warnings.map((w, i) => (
                 <div className="note-row" key={i}>
-                  <p>{w}</p>
+                  <label className="note-pick">
+                    <input type="checkbox" checked={selectedNotes.has(i)}
+                      disabled={fixingNote !== null}
+                      onChange={(e) => setSelectedNotes((s) => {
+                        const next = new Set(s);
+                        if (e.target.checked) next.add(i); else next.delete(i);
+                        return next;
+                      })} />
+                    <p>{w}</p>
+                  </label>
                   <div className="note-actions">
                     <button className="note-btn fix" disabled={fixingNote !== null}
                       onClick={() => fixNote(i, w)}>
-                      {fixingNote === i ? "Fixing…" : "Fix it for me"}
+                      {fixingNote === i ? "Fixing…" : "Fix this one"}
                     </button>
                     <button className="note-btn" disabled={fixingNote !== null}
                       onClick={() => window.dispatchEvent(new CustomEvent("coach-prefill", {

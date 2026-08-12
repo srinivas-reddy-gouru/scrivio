@@ -29,7 +29,7 @@ function DeskRoom() {
     <div className="room-wrap">
       <h1 className="room-title bar-tick-left">Resume</h1>
       <p className="room-sub">ATS report, honest tailoring, and downloads that pass the robots without inventing a word.</p>
-      <header style={{ position: "static", background: "none", border: "none", padding: "0 0 1rem" }}>
+      <header style={{ position: "static", background: "none", border: "none", padding: "0 0 1rem", justifyContent: "center" }}>
         <nav className="stations" aria-label="Steps">
           {STATIONS.map((label, i) => {
             const n = i + 1;
