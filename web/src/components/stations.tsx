@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
 import { api, fmtElapsed, useDocWatch } from "../api";
 import { announce } from "./Shell";
-import { countMetrics } from "../marks";
+import { countMetrics, noteIndex } from "../marks";
+import type { PaperNote } from "../marks";
 import type { ChatTurn, JobProfileSummary, ResumeDoc, ResumeSummaryItem } from "../types";
 import { Paper } from "./Paper";
 
@@ -515,11 +516,27 @@ export function TailorStation({ doc, onDoc, onSend }: {
   const [undoing, setUndoing] = useState(false);
   const [fixingNote, setFixingNote] = useState<number | null>(null);
   const [answers, setAnswers] = useState<Map<number, string>>(new Map());
+  const [activeNote, setActiveNote] = useState<string | null>(null);
   const [lastPass, setLastPass] = useState<{ resolved: number; edits: number; note: string } | null>(null);
   const [error, setError] = useState("");
   const t = doc.tailored!;
-  const answerable = t.warnings.filter((w) => noteKind(w) === "needs-you").length;
   const answered = [...answers.values()].filter((v) => v.trim()).length;
+  // Notes that name a line live ON that line; guards and document-wide
+  // notes have no anchor and stay listed beside the paper.
+  const { onPaper, listed } = useMemo(() => {
+    const { byPath, unplaced } = noteIndex(t.warnings);
+    const onPaper = new Map<string, PaperNote[]>();
+    const listed: PaperNote[] = [...unplaced];
+    for (const [path, hits] of byPath) {
+      const anchored = hits.filter((h) => noteKind(h.text) === "needs-you");
+      if (anchored.length) onPaper.set(path, anchored);
+      listed.push(...hits.filter((h) => noteKind(h.text) === "guard"));
+    }
+    listed.sort((a, b) => a.index - b.index);
+    return { onPaper, listed };
+  }, [t.warnings]);
+  const paperPaths = [...onPaper.keys()];
+  const answerable = [...onPaper.values()].reduce((n, v) => n + v.length, 0);
   const remaining = countMetrics(t.resume);
   const typed = [...values.values()].filter((v) => v.trim()).length;
 
@@ -581,6 +598,20 @@ export function TailorStation({ doc, onDoc, onSend }: {
       : "Fix pass done: nothing changed.");
   };
 
+  useEffect(() => {
+    if (!activeNote) return;
+    document.querySelector(".paper .note-flag.open")
+      ?.scrollIntoView({ block: "center", behavior: reducedMotion() ? "auto" : "smooth" });
+  }, [activeNote]);
+
+  /** Step to the next unanswered note on the paper: findability without
+   * hunting for amber lines. */
+  const nextNote = () => {
+    if (!paperPaths.length) return;
+    const at = activeNote ? paperPaths.indexOf(activeNote) : -1;
+    setActiveNote(paperPaths[(at + 1) % paperPaths.length]);
+  };
+
   const askCoachAbout = (w: string) =>
     window.dispatchEvent(new CustomEvent("coach-prefill", {
       detail: `About this honesty note: "${w}" What should I do here?`,
@@ -631,6 +662,38 @@ export function TailorStation({ doc, onDoc, onSend }: {
     finally { setFixingNote(null); }
   };
 
+  const answerCard = (path: string, hits: PaperNote[]) => (
+    <div className="note-card" onClick={(e) => e.stopPropagation()}>
+      {hits.map((n) => (
+        <div key={n.index} className="note-card-body">
+          <p className="note-card-text">{n.text}</p>
+          <div className="note-answer">
+            <input type="text" value={answers.get(n.index) ?? ""}
+              autoFocus
+              aria-label="Your real figure or answer"
+              placeholder="Your real figure or answer…"
+              disabled={fixingNote !== null}
+              onChange={(e) => setAnswers((m) => new Map(m).set(n.index, e.target.value))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") applyOne(n.index, n.text);
+                if (e.key === "Escape") setActiveNote(null);
+              }} />
+            <button className="note-btn fix"
+              disabled={fixingNote !== null || !(answers.get(n.index) || "").trim()}
+              onClick={() => applyOne(n.index, n.text)}>
+              {fixingNote === n.index ? "Applying…" : "Apply"}
+            </button>
+          </div>
+          <div className="note-actions">
+            <button className="note-btn" disabled={fixingNote !== null}
+              onClick={() => askCoachAbout(n.text)}>Not sure? Ask the coach</button>
+            <button className="note-btn" onClick={() => setActiveNote(null)}>Close</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div>
       <div className="peek-row">
@@ -677,6 +740,9 @@ export function TailorStation({ doc, onDoc, onSend }: {
             resume={t.resume} mode="tailored" report={doc.tailored_report}
             changes={t.changes} metricValues={values}
             onMetric={(i, v) => setValues((m) => new Map(m).set(i, v))}
+            notes={onPaper} activeNote={activeNote}
+            onNote={(p) => setActiveNote((cur) => (cur === p ? null : p))}
+            answerSlot={answerCard}
           />
         )}
         <aside className="rail">
@@ -735,63 +801,49 @@ export function TailorStation({ doc, onDoc, onSend }: {
             </div>
           )}
 
-          {t.warnings.length > 0 && (
+          {answerable > 0 && (
             <div className="panel" style={{ borderColor: "rgba(229,176,76,0.4)" }}>
               <p className="eyebrow" style={{ color: "var(--amber)" }}>
-                Honesty notes · {answerable} awaiting your answer
+                {answerable} note{answerable > 1 ? "s" : ""} on the paper
               </p>
-              <p style={{ fontSize: "0.7rem", color: "var(--text-faint)", lineHeight: 1.5 }}>
-                These are the things Scrivio will not write for you. Type the real
-                figure or fact under a note and it gets applied in your words.
-                Guards need nothing: they exist to keep claims out.
+              <p style={{ fontSize: "0.74rem", color: "var(--text-dim)", lineHeight: 1.55 }}>
+                The amber lines are the claims Scrivio will not write for you.
+                Click one to see what it needs and type the real figure; the
+                line turns teal once it is answered.
               </p>
-              {answered > 0 && (
-                <button className="btn" style={{ width: "100%", margin: "0.6rem 0 0.2rem" }}
-                  disabled={fixingNote !== null} onClick={applyAnswers}
-                  title="One editor pass applies every answer you typed, in your words. Undoable.">
-                  {fixingNote === -1
-                    ? "Applying your answers… (about a minute)"
-                    : `Apply ${answered} answer${answered > 1 ? "s" : ""}`}
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem" }}>
+                <button className="btn" style={{ flex: 1 }} onClick={nextNote}
+                  disabled={fixingNote !== null}>
+                  {activeNote ? "Next note →" : "Show me the first →"}
                 </button>
-              )}
-              {t.warnings.map((w, i) => {
-                const guard = noteKind(w) === "guard";
-                return (
-                  <div className="note-row" key={i}>
-                    <p>{w}</p>
-                    {guard ? (
-                      <div className="note-actions">
-                        <span className="note-tag">standing guard · nothing to fix</span>
-                        <button className="note-btn" disabled={fixingNote !== null}
-                          onClick={() => askCoachAbout(w)}>
-                          Ask the coach
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="note-answer">
-                          <input type="text" value={answers.get(i) ?? ""}
-                            aria-label={`Your answer for note ${i + 1}`}
-                            placeholder="Your real figure or answer, e.g. 5k to 7k events/sec"
-                            disabled={fixingNote !== null}
-                            onChange={(e) => setAnswers((m) => new Map(m).set(i, e.target.value))}
-                            onKeyDown={(e) => { if (e.key === "Enter") applyOne(i, w); }} />
-                          <button className="note-btn fix" disabled={fixingNote !== null || !(answers.get(i) || "").trim()}
-                            onClick={() => applyOne(i, w)}>
-                            {fixingNote === i ? "Applying…" : "Apply"}
-                          </button>
-                        </div>
-                        <div className="note-actions">
-                          <button className="note-btn" disabled={fixingNote !== null}
-                            onClick={() => askCoachAbout(w)}>
-                            Not sure? Ask the coach
-                          </button>
-                        </div>
-                      </>
-                    )}
+                {answered > 1 && (
+                  <button className="btn btn-quiet" style={{ flex: 1 }}
+                    disabled={fixingNote !== null} onClick={applyAnswers}>
+                    {fixingNote === -1 ? "Applying…" : `Apply all ${answered}`}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {listed.length > 0 && (
+            <div className="panel">
+              <p className="eyebrow">Standing guards · {listed.length}</p>
+              <p style={{ fontSize: "0.7rem", color: "var(--text-faint)", lineHeight: 1.5 }}>
+                Not tasks. These record what stays off the resume because
+                nothing in your history supports it.
+              </p>
+              {listed.map((n) => (
+                <div className="note-row" key={n.index}>
+                  <p>{n.text}</p>
+                  <div className="note-actions">
+                    <button className="note-btn" disabled={fixingNote !== null}
+                      onClick={() => askCoachAbout(n.text)}>
+                      I have done this work
+                    </button>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
 

@@ -5,6 +5,7 @@
 import { Fragment, useRef } from "react";
 import type { AtsReport, ResumeChange, StructuredResume } from "../types";
 import { changeIndex, markForHighlight, METRIC_TOKEN } from "../marks";
+import type { PaperNote } from "../marks";
 
 interface PaperProps {
   resume: StructuredResume;
@@ -18,6 +19,12 @@ interface PaperProps {
    * new text by where-path. Metric chips render as plain text so the
    * whole sentence (placeholder included) is the user's to change. */
   onEdit?: (path: string, value: string) => void;
+  /** Honesty notes placed on the lines they name: amber until answered,
+   * then the line goes teal like any other change. */
+  notes?: Map<string, PaperNote[]>;
+  activeNote?: string | null;
+  onNote?: (path: string) => void;
+  answerSlot?: (path: string, notes: PaperNote[]) => React.ReactNode;
 }
 
 function EditableText({ path, text, onEdit, as: Tag = "p", className = "" }: {
@@ -91,11 +98,34 @@ function MetricText({ text, counter, values, onMetric }: {
 
 export function Paper({
   resume, mode, report, changes = [], litFinding, metricValues, onMetric, onEdit,
+  notes, activeNote, onNote, answerSlot,
 }: PaperProps) {
   const counter = useRef({ n: 0 });
   counter.current.n = 0; // occurrence numbering restarts every render
   const idx = changeIndex(changes);
   const b = resume.basics;
+
+  /** Props that turn any line into a note flag when a note names it.
+   * Amber outranks teal: an open question matters more than a done edit. */
+  const flag = (path: string) => {
+    const hits = notes?.get(path);
+    if (!hits?.length) return null;
+    return {
+      className: "marked mark-amber note-flag" + (activeNote === path ? " open" : ""),
+      "data-note": hits[0].text,
+      role: "button" as const,
+      tabIndex: 0,
+      title: "Answer this honesty note",
+      onClick: () => onNote?.(path),
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNote?.(path); }
+      },
+    };
+  };
+  const slot = (path: string) => {
+    const hits = notes?.get(path);
+    return activeNote === path && hits?.length ? answerSlot?.(path, hits) : null;
+  };
 
   const lit = (findingIds: string[], tone: string) =>
     litFinding && findingIds.includes(litFinding) ? ` lit-${tone}` : "";
@@ -125,12 +155,15 @@ export function Paper({
           {onEdit ? (
             <EditableText path="basics.summary" text={b.summary} onEdit={onEdit} />
           ) : (
-            <p
-              className={mode === "tailored" && idx.byField.has("basics.summary") ? "marked mark-teal note-tip" : ""}
-              data-note={mode === "tailored" ? idx.byField.get("basics.summary")?.what : undefined}
-            >
-              {metric(b.summary)}
-            </p>
+            <>
+              <p {...(flag("basics.summary") ?? {
+                className: mode === "tailored" && idx.byField.has("basics.summary") ? "marked mark-teal note-tip" : "",
+                "data-note": mode === "tailored" ? idx.byField.get("basics.summary")?.what : undefined,
+              })}>
+                {metric(b.summary)}
+              </p>
+              {slot("basics.summary")}
+            </>
           )}
         </>
       )}
@@ -146,7 +179,10 @@ export function Paper({
               </div>
               {w.summary && (onEdit
                 ? <EditableText path={`work[${wi}].summary`} text={w.summary} onEdit={onEdit} />
-                : <p>{metric(w.summary)}</p>)}
+                : <>
+                    <p {...(flag(`work[${wi}].summary`) ?? {})}>{metric(w.summary)}</p>
+                    {slot(`work[${wi}].summary`)}
+                  </>)}
               <ul>
                 {w.highlights.map((h, hi) => {
                   if (onEdit) {
@@ -168,15 +204,20 @@ export function Paper({
                   const findingId = mode === "report" && cls.includes("mark-red")
                     ? "weak-language"
                     : cls.includes("mark-amber") ? "quantification" : undefined;
+                  const path = `work[${wi}].highlights[${hi}]`;
+                  const noteFlag = flag(path);
                   const note = mode === "tailored" ? idx.byHighlight.get(`${wi}:${hi}`)?.what : undefined;
                   return (
-                    <li key={hi} className={cls + (note ? " note-tip" : "")}
-                      data-finding={findingId} data-note={note}>
+                    <li key={hi} {...(noteFlag ?? {
+                      className: cls + (note ? " note-tip" : ""),
+                      "data-finding": findingId, "data-note": note,
+                    })}>
                       {underline ? (
                         <UnderlinedText text={h} phrase={underline} />
                       ) : (
                         metric(h)
                       )}
+                      {slot(path)}
                     </li>
                   );
                 })}
@@ -194,13 +235,19 @@ export function Paper({
               <h3>{p.name || "Project"}</h3>
               {p.description && (onEdit
                 ? <EditableText path={`projects[${pi}].description`} text={p.description} onEdit={onEdit} />
-                : <p>{metric(p.description)}</p>)}
+                : <>
+                    <p {...(flag(`projects[${pi}].description`) ?? {})}>{metric(p.description)}</p>
+                    {slot(`projects[${pi}].description`)}
+                  </>)}
               <ul>
                 {p.highlights.map((h, hi) => onEdit ? (
                   <EditableText key={hi} as="li"
                     path={`projects[${pi}].highlights[${hi}]`} text={h} onEdit={onEdit} />
                 ) : (
-                  <li key={hi}>{metric(h)}</li>
+                  <li key={hi} {...(flag(`projects[${pi}].highlights[${hi}]`) ?? {})}>
+                    {metric(h)}
+                    {slot(`projects[${pi}].highlights[${hi}]`)}
+                  </li>
                 ))}
               </ul>
             </Fragment>

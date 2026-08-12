@@ -88,6 +88,25 @@ export function changeIndex(changes: ResumeChange[]) {
   return { byHighlight, byField, skills };
 }
 
+/** An honesty note that names a field belongs ON that line of the paper.
+ * Notes without a path (standing guards, document-wide observations) have
+ * no home there and stay in the list. */
+export interface PaperNote { index: number; text: string; path: string; }
+
+const NOTE_PATH_RE = /(basics\.(?:summary|label)|work\[\d+\]\.summary|work\[\d+\]\.highlights\[\d+\]|projects\[\d+\]\.description|projects\[\d+\]\.highlights\[\d+\])/;
+
+export function noteIndex(warnings: string[]) {
+  const byPath = new Map<string, PaperNote[]>();
+  const unplaced: PaperNote[] = [];
+  warnings.forEach((text, index) => {
+    const m = NOTE_PATH_RE.exec(text);
+    if (!m) { unplaced.push({ index, text, path: "" }); return; }
+    const path = m[1];
+    byPath.set(path, [...(byPath.get(path) ?? []), { index, text, path }]);
+  });
+  return { byPath, unplaced };
+}
+
 export const METRIC_TOKEN = "[METRIC]";
 
 /** Occurrence order MUST mirror the server traversal

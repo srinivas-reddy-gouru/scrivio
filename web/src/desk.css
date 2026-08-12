@@ -440,6 +440,41 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
   border: 5px solid transparent; border-top-color: var(--tip-bg);
 }
 
+/* Honesty notes anchored on the paper: the line stays highlighted and
+   readable, the action sits in a card attached to it (the Google Docs
+   comment pattern, adapted to a single-reader document). */
+.note-flag { cursor: pointer; border-radius: 3px; transition: background 0.15s; }
+.note-flag::after {
+  content: "?"; display: inline-grid; place-items: center;
+  width: 15px; height: 15px; margin-left: 0.4rem; vertical-align: 1px;
+  border-radius: 50%; background: var(--amber); color: #2A1F06;
+  font-size: 0.62rem; font-weight: 800; font-family: "Inter", sans-serif;
+}
+.note-flag:hover { background: var(--amber-soft); }
+.note-flag:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.note-flag.open { background: var(--amber-soft); }
+.note-card {
+  margin: 0.6rem 0 0.4rem; cursor: default;
+  background: #FFFDF8; border: 1px solid #E4DCC6;
+  border-left: 3px solid var(--amber); border-radius: 8px;
+  padding: 0.75rem 0.85rem;
+  box-shadow: 0 8px 22px rgba(28, 37, 35, 0.16);
+  animation: rise 0.2s cubic-bezier(0.2, 0.8, 0.25, 1);
+}
+.note-card-body + .note-card-body { margin-top: 0.7rem; border-top: 1px solid #EDE7D8; padding-top: 0.7rem; }
+.note-card-text {
+  font-size: 0.76rem; line-height: 1.55; color: #3B4A47;
+  font-family: "Inter", sans-serif; font-weight: 400;
+}
+.note-card .note-answer input {
+  background: #fff; border-color: #D8D2C2; color: var(--ink);
+  font-size: 0.76rem; padding: 0.45rem 0.6rem;
+}
+.note-card .note-answer input::placeholder { color: #8C9A96; }
+.note-card .note-btn { background: rgba(0, 0, 0, 0.04); color: #3B4A47; border-color: #D8D2C2; }
+.note-card .note-btn.fix { color: #0C5F6B; border-color: rgba(14, 118, 134, 0.5); background: rgba(14, 118, 134, 0.08); }
+.note-card .note-btn:hover:not(:disabled) { background: rgba(0, 0, 0, 0.07); }
+
 /* Actionable honesty notes */
 .note-row { padding: 0.55rem 0 0.65rem; border-bottom: 1px solid var(--surface-2); }
 .note-row:last-child { border-bottom: none; padding-bottom: 0.2rem; }
