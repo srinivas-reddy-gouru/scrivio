@@ -661,15 +661,22 @@ function CoachDock({ doc, onDoc }: {
     setBusy("edit");
     try {
       const before = doc.tailored?.changes.length ?? 0;
+      const beforeWarnings = doc.tailored?.warnings.length ?? 0;
       const fresh = await api.requestEdit(doc.resume_id, q, transcript);
       onDoc(fresh);
-      const changed = (fresh.tailored?.changes.length ?? 0);
-      const newWarnings = fresh.tailored?.warnings.slice(-2) ?? [];
+      // Say exactly what was edited: the change entries this request added.
+      const added = (fresh.tailored?.changes ?? []).slice(before);
+      const addedWarnings = (fresh.tailored?.warnings ?? []).slice(beforeWarnings);
+      const lines = added.slice(0, 4).map((c) => `• ${c.where}: ${c.what}`);
+      if (added.length > 4) lines.push(`…and ${added.length - 4} more (full list in "What changed, and why").`);
       push({
         role: "assistant",
-        content: `Done, the paper is updated (${Math.max(changed - before, 0) || changed} change${changed === 1 ? "" : "s"} logged). ` +
-          (newWarnings.length ? `Notes: ${newWarnings.join(" ")} ` : "") +
-          "Undo is at the top if it went too far.",
+        content: added.length === 0
+          ? "I did not change anything. " +
+            (addedWarnings[0] || "The paper already matched the instruction, or it asked for something the honesty rules refuse.")
+          : `Done. What changed:\n${lines.join("\n")}` +
+            (addedWarnings.length ? `\n\nNote: ${addedWarnings.join(" ")}` : "") +
+            "\n\nThe changed lines are marked teal on the paper. Undo is at the top if it went too far.",
       });
     } catch (e) {
       push({ role: "assistant", content: (e as Error).message });
@@ -688,18 +695,22 @@ function CoachDock({ doc, onDoc }: {
           <p style={{ fontSize: "0.72rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
             Ask about metrics or phrasing, or describe an edit and let the coach make it. It will not invent facts for you.
           </p>
-          {log.length > 0 && (
-            <div className="coach-log" ref={logRef}>
-              {log.map((m, i) => (
-                <div key={i} className={"coach-msg " + m.role}>{m.content}</div>
-              ))}
-              {busy && (
-                <div className="coach-msg assistant thinking">
-                  {busy === "ask" ? "Thinking…" : "Editing the paper… (about half a minute)"}
-                </div>
-              )}
-            </div>
-          )}
+          <div className="coach-log" ref={logRef}>
+            {log.length === 0 && !busy && (
+              <p style={{ color: "var(--text-faint)", fontSize: "0.78rem", lineHeight: 1.6, margin: "auto 0" }}>
+                Try: "Which of my numbers would an interviewer challenge?" or
+                "Make the summary lead with event-driven systems." Answers land here.
+              </p>
+            )}
+            {log.map((m, i) => (
+              <div key={i} className={"coach-msg " + m.role}>{m.content}</div>
+            ))}
+            {busy && (
+              <div className="coach-msg assistant thinking">
+                {busy === "ask" ? "Thinking…" : "Editing the paper… (about half a minute)"}
+              </div>
+            )}
+          </div>
           <textarea
             className="coach-input"
             value={input}
