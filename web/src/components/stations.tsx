@@ -554,6 +554,14 @@ export function TailorStation({ doc, onDoc, onSend }: {
     finally { setUndoing(false); }
   };
 
+  // Not every honesty note is an edit waiting to happen. Guards state
+  // what must NOT be added; metric notes wait for the user's number in
+  // the amber chip. Only the rest can honestly offer "Fix this one".
+  const noteKind = (w: string): "guard" | "metric" | "fixable" =>
+    w.startsWith("Cannot honestly claim") || w.startsWith("Reverted ") ? "guard"
+    : /\[METRIC\] placeholder at/.test(w) ? "metric"
+    : "fixable";
+
   // What did that pass accomplish? Diff the doc before/after so the
   // panel can say "3 notes resolved, 5 edits on the paper" instead of
   // silently re-rendering a near-identical list.
@@ -750,32 +758,47 @@ export function TailorStation({ doc, onDoc, onSend }: {
                   {fixingNote === -2 ? "Fixing…" : `Fix selected (${selectedNotes.size})`}
                 </button>
               </div>
-              {t.warnings.map((w, i) => (
-                <div className="note-row" key={i}>
-                  <label className="note-pick">
-                    <input type="checkbox" checked={selectedNotes.has(i)}
-                      disabled={fixingNote !== null}
-                      onChange={(e) => setSelectedNotes((s) => {
-                        const next = new Set(s);
-                        if (e.target.checked) next.add(i); else next.delete(i);
-                        return next;
-                      })} />
-                    <p>{w}</p>
-                  </label>
-                  <div className="note-actions">
-                    <button className="note-btn fix" disabled={fixingNote !== null}
-                      onClick={() => fixNote(i, w)}>
-                      {fixingNote === i ? "Fixing…" : "Fix this one"}
-                    </button>
-                    <button className="note-btn" disabled={fixingNote !== null}
-                      onClick={() => window.dispatchEvent(new CustomEvent("coach-prefill", {
-                        detail: `About this honesty note: "${w}" What should I do here?`,
-                      }))}>
-                      Ask the coach
-                    </button>
+              {t.warnings.map((w, i) => {
+                const kind = noteKind(w);
+                return (
+                  <div className="note-row" key={i}>
+                    {kind === "fixable" ? (
+                      <label className="note-pick">
+                        <input type="checkbox" checked={selectedNotes.has(i)}
+                          disabled={fixingNote !== null}
+                          onChange={(e) => setSelectedNotes((s) => {
+                            const next = new Set(s);
+                            if (e.target.checked) next.add(i); else next.delete(i);
+                            return next;
+                          })} />
+                        <p>{w}</p>
+                      </label>
+                    ) : (
+                      <p>{w}</p>
+                    )}
+                    <div className="note-actions">
+                      {kind === "fixable" && (
+                        <button className="note-btn fix" disabled={fixingNote !== null}
+                          onClick={() => fixNote(i, w)}>
+                          {fixingNote === i ? "Fixing…" : "Fix this one"}
+                        </button>
+                      )}
+                      {kind === "guard" && (
+                        <span className="note-tag">standing guard · nothing to fix</span>
+                      )}
+                      {kind === "metric" && (
+                        <span className="note-tag">your number goes in the amber chip on the paper</span>
+                      )}
+                      <button className="note-btn" disabled={fixingNote !== null}
+                        onClick={() => window.dispatchEvent(new CustomEvent("coach-prefill", {
+                          detail: `About this honesty note: "${w}" What should I do here?`,
+                        }))}>
+                        Ask the coach
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

@@ -470,3 +470,28 @@ def test_status_text_in_warnings_is_moved_to_note(monkeypatch):
     out = r.json()
     assert out["tailored"]["warnings"] == []
     assert out["tailored"]["note"].startswith("NO CHANGES")
+
+
+def test_change_log_is_cumulative_across_edit_passes():
+    """A pass appends its change entries; it never replaces the log.
+    The 'what changed' history survives every subsequent fix pass."""
+    client = TestClient(server.app)
+    doc = _create(client, jd_text=JD)
+    rid = doc["resume_id"]
+    doc = _tailor(client, rid)
+    n_tailor = len(doc["tailored"]["changes"])
+    assert n_tailor > 0
+
+    r = client.post(f"/resumes/{rid}/request-edit",
+                    json={"instruction": "Lead the summary with Kafka."})
+    assert r.status_code == 200, r.text
+    n_after = len(r.json()["tailored"]["changes"])
+    assert n_after >= n_tailor  # history kept, pass entries appended
+
+    # Manual edits are logged too, so they get teal marks and history.
+    r2 = client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "basics.summary", "value": "My own words."}]})
+    changes = r2.json()["tailored"]["changes"]
+    assert len(changes) == n_after + 1
+    assert changes[-1]["where"] == "basics.summary"
+    assert "Edited by you" in changes[-1]["what"]

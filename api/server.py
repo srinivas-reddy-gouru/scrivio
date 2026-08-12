@@ -40,6 +40,7 @@ from pipeline.schemas.models import (
     JobAnalysis,
     JobProfile,
     ProgressEvent,
+    ResumeChange,
     ResumeDoc,
     StructuredResume,
     TailoredResume,
@@ -2263,6 +2264,14 @@ async def edit_tailored_endpoint(
         raise HTTPException(status_code=422, detail=str(exc))
     if applied:
         _push_tailored_history(doc, snapshot)
+        doc.tailored.changes.extend(
+            ResumeChange(
+                kind="rephrased", where=e.path,
+                what=("Edited by you, directly on the paper."
+                      if e.value.strip() else "Removed by you."),
+            )
+            for e in body.edits
+        )
         _refresh_tailored_report(doc)
         _save_resume_doc(doc)
     return doc
@@ -2369,6 +2378,9 @@ async def request_tailored_edit(
         edited.warnings = [w for w in edited.warnings if w not in status_like]
         if not edited.note:
             edited.note = " ".join(status_like)
+    # The change log is the document's full history: a pass appends its
+    # entries, it never replaces what earlier passes recorded.
+    edited.changes = snapshot.changes + edited.changes
     _push_tailored_history(doc, snapshot)
     doc.tailored = edited
     _refresh_tailored_report(doc)
