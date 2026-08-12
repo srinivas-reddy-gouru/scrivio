@@ -95,11 +95,44 @@ export interface PaperNote { index: number; text: string; path: string; }
 
 const NOTE_PATH_RE = /(basics\.(?:summary|label)|work\[\d+\]\.summary|work\[\d+\]\.highlights\[\d+\]|projects\[\d+\]\.description|projects\[\d+\]\.highlights\[\d+\])/;
 
+/** Field paths are addresses for the code, noise for the reader: the note
+ * is already pinned to the line it names. Strip the path, the machine
+ * prefix, and the echo of the sentence the reader can see anyway. */
+export function displayNote(text: string): string {
+  let out = text
+    // machine prefix the tailor now emits: [work[0].highlights[1]]
+    .replace(/^\s*\[(?:basics|work|projects)[^\]]*\]\s*/, "")
+    // "[METRIC] in work[1].highlights[0]:" reads as jargon; name the problem
+    .replace(/^\[METRIC\][^:]*:\s*/i, "Missing number: ")
+    // any remaining address, with the connector word that introduced it
+    .replace(/(?:,|\s)*\b(?:at|in|on|for|vs\.?)?\s*(?:basics\.\w+|work\[\d+\](?:\.(?:summary|highlights\[\d+\]))?|projects\[\d+\](?:\.(?:description|highlights\[\d+\]))?|highlights\[\d+\])/g, " ")
+    // parenthesised addresses and the echo of the sentence being read
+    .replace(/\(\s*(?:highlights\[\d+\]|work\[\d+\][^)]*)\s*\)/g, "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([:,.])/g, "$1")
+    .trim();
+  // "Ambiguous metric ("the whole bullet"): why" — the reader sees the bullet.
+  out = out.replace(/^([A-Z][A-Za-z ]{2,30}?)\s*\(\s*["'“][^"'”]{12,}["'”]\s*\)\s*:\s*/, "$1: ");
+  out = out.replace(/^[\s,:;-]+/, "");
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+/** The leading clause of a note is its kind ("Ambiguous metric",
+ * "Weak metric"): worth showing as a chip, not repeated in the body. */
+export function noteHeadline(text: string): { title: string; body: string } {
+  const clean = displayNote(text);
+  const m = /^([A-Z][A-Za-z ]{2,30}?):\s/.exec(clean);
+  if (!m) return { title: "Needs your input", body: clean };
+  return { title: m[1].trim(), body: clean.slice(m[0].length).trim() };
+}
+
 export function noteIndex(warnings: string[]) {
   const byPath = new Map<string, PaperNote[]>();
   const unplaced: PaperNote[] = [];
   warnings.forEach((text, index) => {
-    const m = NOTE_PATH_RE.exec(text);
+    const prefix = /^\s*\[((?:basics|work|projects)[^\]]*)\]/.exec(text);
+    const m = prefix ?? NOTE_PATH_RE.exec(text);
     if (!m) { unplaced.push({ index, text, path: "" }); return; }
     const path = m[1];
     byPath.set(path, [...(byPath.get(path) ?? []), { index, text, path }]);

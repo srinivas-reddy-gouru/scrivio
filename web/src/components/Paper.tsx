@@ -4,7 +4,7 @@
  * renders [METRIC] placeholders as editable chips in place. */
 import { Fragment, useRef } from "react";
 import type { AtsReport, ResumeChange, StructuredResume } from "../types";
-import { changeIndex, markForHighlight, METRIC_TOKEN } from "../marks";
+import { changeIndex, displayNote, markForHighlight, METRIC_TOKEN } from "../marks";
 import type { PaperNote } from "../marks";
 
 interface PaperProps {
@@ -112,7 +112,7 @@ export function Paper({
     if (!hits?.length) return null;
     return {
       className: "marked mark-amber note-flag" + (activeNote === path ? " open" : ""),
-      "data-note": hits[0].text,
+      "data-note": displayNote(hits[0].text),
       role: "button" as const,
       tabIndex: 0,
       title: "Answer this honesty note",

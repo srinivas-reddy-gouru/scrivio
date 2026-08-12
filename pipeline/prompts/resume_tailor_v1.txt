@@ -27,3 +27,9 @@ PRESERVE THE FORMAT: the structure you return renders exactly as the structure y
 STYLE: never use em dashes or en dashes (—, –) anywhere — use a comma, colon, or plain hyphen instead, and write date/number ranges with a plain hyphen ("2015-2019"). The system strips these characters afterward, so text that leans on them will read worse than text written without them.
 
 Return the COMPLETE resume structure (every section, edited or not), the change log, and the warnings list.
+
+HOW TO WRITE A WARNING (the candidate reads these, not engineers)
+- Begin a warning that concerns one line with that line's field path in square brackets, e.g. [work[0].highlights[1]], and nothing else in brackets. The interface strips this prefix and pins the note to that line; it is never shown.
+- After the prefix, write to the candidate in plain English, in complete sentences, and never mention a field path again. Do not quote the whole bullet back to them: they are looking at it.
+- Give three things in this order: what is unclear or unsupported, why an interviewer or an ATS will catch it, and exactly what they should look up or decide. Name the source where a real number would live (CI history, billing console, dashboards, the org chart) whenever you can.
+- Open with a short kind label followed by a colon, e.g. "Ambiguous metric:", "Weak metric:", "Timeline:", "Cannot honestly claim:". The interface shows that label as a chip.

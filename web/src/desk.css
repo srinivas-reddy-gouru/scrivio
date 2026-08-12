@@ -1110,3 +1110,65 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
   position: absolute; width: 1px; height: 1px; margin: -1px;
   clip-path: inset(50%); overflow: hidden; white-space: nowrap;
 }
+
+
+/* ── Tailor station: paper first, everything else folded beneath ── */
+.score-band {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  max-width: 820px; margin: 0 auto 1rem; padding: 0.8rem 1.1rem;
+  background: var(--rail-bg); border: 1px solid rgba(32, 184, 205, 0.3);
+  border-radius: 14px;
+}
+.score-band .verdict { font-size: 0.9rem; }
+.score-band .btn { margin-left: auto; }
+.pass-chip {
+  display: flex; flex-direction: column; gap: 0.1rem;
+  padding: 0.4rem 0.75rem; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--stroke);
+}
+.pass-chip b { font-size: 0.8rem; color: var(--text-dim); }
+.pass-chip span { font-size: 0.66rem; color: var(--text-faint); }
+.pass-chip.up { border-color: rgba(52, 211, 153, 0.5); }
+.pass-chip.up b { color: var(--green); }
+.pass-chip.down { border-color: rgba(224, 106, 85, 0.5); }
+.pass-chip.down b { color: var(--redpen); }
+.pass-note {
+  max-width: 820px; margin: 0 auto 1rem; padding: 0.7rem 0.9rem;
+  font-size: 0.76rem; line-height: 1.6; color: var(--text-dim);
+  background: var(--surface); border-left: 2px solid var(--teal); border-radius: 0 8px 8px 0;
+}
+.paper-stage { max-width: 820px; margin: 0 auto; }
+.under-paper { margin: 1.2rem 0 5rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.fold {
+  background: var(--rail-bg); border: 1px solid var(--stroke); border-radius: 12px;
+  padding: 0.7rem 1rem;
+}
+.fold > summary {
+  cursor: pointer; font-size: 0.78rem; font-weight: 600; color: var(--text-dim);
+  list-style: none; display: flex; align-items: center; gap: 0.5rem;
+}
+.fold > summary::before { content: "▸"; color: var(--text-faint); transition: transform 0.15s; }
+.fold[open] > summary::before { transform: rotate(90deg); }
+.fold > summary:hover { color: var(--text); }
+.fold > p { font-size: 0.74rem; color: var(--text-faint); line-height: 1.55; margin: 0.5rem 0; }
+.fold .btn { margin-top: 0.4rem; }
+
+/* The finishing action, parked bottom centre */
+.float-cta {
+  position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%);
+  z-index: 50; display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+  background: var(--chrome); backdrop-filter: blur(10px);
+  border: 1px solid rgba(32, 184, 205, 0.35); border-radius: 999px;
+  padding: 0.45rem 0.6rem; max-width: calc(100vw - 2rem);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.float-cta .gate-note { margin: 0 0.4rem 0.15rem; text-align: center; font-size: 0.66rem; }
+.float-save { bottom: 5.2rem; }
+
+/* Note card: kind chip, then the explanation in plain words */
+.note-kind {
+  display: inline-block; font-size: 0.6rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  color: #7A5510; background: rgba(154, 107, 16, 0.14);
+  border-radius: 999px; padding: 0.18rem 0.5rem; margin-bottom: 0.4rem;
+}

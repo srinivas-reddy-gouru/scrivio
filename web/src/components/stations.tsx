@@ -3,14 +3,21 @@
  * the stamp slaps. Everything stills under prefers-reduced-motion. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
+import { createPortal } from "react-dom";
 import { api, fmtElapsed, useDocWatch } from "../api";
 import { announce } from "./Shell";
-import { countMetrics, noteIndex } from "../marks";
+import { countMetrics, displayNote, noteHeadline, noteIndex } from "../marks";
 import type { PaperNote } from "../marks";
 import type { ChatTurn, JobProfileSummary, ResumeDoc, ResumeSummaryItem } from "../types";
 import { Paper } from "./Paper";
 
 /* ── Shared bits ── */
+
+/** Floating layers go to <body>: an ancestor with a transform (our own
+ * entrance animations) turns position:fixed into position:absolute, and
+ * the bar lands thousands of pixels down the page. */
+const Floating = ({ children }: { children: React.ReactNode }) =>
+  createPortal(children, document.body);
 
 const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -517,7 +524,7 @@ export function TailorStation({ doc, onDoc, onSend }: {
   const [fixingNote, setFixingNote] = useState<number | null>(null);
   const [answers, setAnswers] = useState<Map<number, string>>(new Map());
   const [activeNote, setActiveNote] = useState<string | null>(null);
-  const [lastPass, setLastPass] = useState<{ resolved: number; edits: number; note: string } | null>(null);
+  const [lastPass, setLastPass] = useState<{ resolved: number; edits: number; scoreDelta: number; note: string } | null>(null);
   const [error, setError] = useState("");
   const t = doc.tailored!;
   const answered = [...answers.values()].filter((v) => v.trim()).length;
@@ -592,10 +599,11 @@ export function TailorStation({ doc, onDoc, onSend }: {
       (doc.tailored?.warnings.length ?? 0) - (fresh.tailored?.warnings.length ?? 0));
     const edits = Math.max(0,
       (fresh.tailored?.changes.length ?? 0) - (doc.tailored?.changes.length ?? 0));
-    setLastPass({ resolved, edits, note: fresh.tailored?.note || "" });
+    const scoreDelta = (fresh.tailored_report?.score ?? 0) - (doc.tailored_report?.score ?? 0);
+    setLastPass({ resolved, edits, scoreDelta, note: fresh.tailored?.note || "" });
     announce(edits > 0
-      ? `Fix pass done: ${edits} edits made, ${resolved} notes resolved.`
-      : "Fix pass done: nothing changed.");
+      ? `Answer applied: ${edits} lines rewritten, ${resolved} notes cleared, score ${scoreDelta >= 0 ? "up" : "down"} ${Math.abs(scoreDelta)}.`
+      : "Nothing changed this pass.");
   };
 
   useEffect(() => {
@@ -664,9 +672,12 @@ export function TailorStation({ doc, onDoc, onSend }: {
 
   const answerCard = (path: string, hits: PaperNote[]) => (
     <div className="note-card" onClick={(e) => e.stopPropagation()}>
-      {hits.map((n) => (
+      {hits.map((n) => {
+        const { title, body } = noteHeadline(n.text);
+        return (
         <div key={n.index} className="note-card-body">
-          <p className="note-card-text">{n.text}</p>
+          <span className="note-kind">{title}</span>
+          <p className="note-card-text">{body}</p>
           <div className="note-answer">
             <input type="text" value={answers.get(n.index) ?? ""}
               autoFocus
@@ -690,7 +701,8 @@ export function TailorStation({ doc, onDoc, onSend }: {
             <button className="note-btn" onClick={() => setActiveNote(null)}>Close</button>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 
@@ -723,7 +735,57 @@ export function TailorStation({ doc, onDoc, onSend }: {
           Employers, titles, and dates stay locked, that is the honesty contract.
         </p>
       )}
-      <div className="desk-grid">
+      {/* Score first: every fix is judged by whether it moves this. */}
+      <div className="score-band">
+        <div className="delta">
+          <span className="pill from">{doc.report?.score ?? "-"}</span>
+          <span className="arrow">→</span>
+          <span className="pill to">{doc.tailored_report?.score ?? "-"}</span>
+        </div>
+        <div>
+          <div className="verdict" style={{ color: scoreTone(doc.tailored_report?.score ?? 0) }}>
+            {scoreVerdict(doc.tailored_report?.score ?? 0)}
+          </div>
+          <div className="fill-count">
+            {remaining === 0 ? "All numbers filled ✓"
+              : `${remaining} number${remaining > 1 ? "s" : ""} to fill on the paper`}
+          </div>
+        </div>
+        {lastPass && (
+          <div className={"pass-chip" + (lastPass.scoreDelta > 0 ? " up" : lastPass.scoreDelta < 0 ? " down" : "")}>
+            <b>
+              {lastPass.scoreDelta > 0 ? `+${lastPass.scoreDelta} points` :
+               lastPass.scoreDelta < 0 ? `${lastPass.scoreDelta} points` : "Score unchanged"}
+            </b>
+            <span>
+              {lastPass.edits > 0
+                ? `Last answer: ${lastPass.edits} line${lastPass.edits > 1 ? "s" : ""} rewritten, ${lastPass.resolved} note${lastPass.resolved === 1 ? "" : "s"} cleared`
+                : "Last answer changed nothing"}
+            </span>
+          </div>
+        )}
+        {answered > 1 && (
+          <button className="btn btn-quiet" style={{ marginLeft: "auto" }}
+            disabled={fixingNote !== null} onClick={applyAnswers}
+            title="Apply every answer you have typed in one pass">
+            {fixingNote === -1 ? "Applying…" : `Apply all ${answered}`}
+          </button>
+        )}
+        {answerable > 0 && (
+          <button className="btn" onClick={nextNote} disabled={fixingNote !== null}
+            style={answered > 1 ? undefined : { marginLeft: "auto" }}
+            title="Jump to the next amber line that needs your input">
+            {activeNote ? "Next note →" : `Answer ${answerable} note${answerable > 1 ? "s" : ""} →`}
+          </button>
+        )}
+      </div>
+
+      {lastPass?.note && (
+        <p className="pass-note">{lastPass.note}</p>
+      )}
+      {error && <div className="errbox" style={{ margin: "0 auto 0.8rem", maxWidth: 820 }}>{error}</div>}
+
+      <div className="paper-stage">
         {/* key remount replays the paper-settle animation on flip */}
         {peek && doc.structured ? (
           <Paper key="original" resume={doc.structured} mode="report" report={doc.report} />
@@ -745,97 +807,32 @@ export function TailorStation({ doc, onDoc, onSend }: {
             answerSlot={answerCard}
           />
         )}
-        <aside className="rail">
-          <div className="panel score-panel" style={{ justifyContent: "space-between" }}>
-            <div className="delta">
-              <span className="pill from">{doc.report?.score ?? "-"}</span>
-              <span className="arrow">→</span>
-              <span className="pill to">{doc.tailored_report?.score ?? "-"}</span>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div className="verdict" style={{ color: scoreTone(doc.tailored_report?.score ?? 0) }}>
-                {scoreVerdict(doc.tailored_report?.score ?? 0)}
-              </div>
-              <div className="fill-count">
-                {remaining === 0 ? "All numbers filled ✓"
-                  : `${remaining} number${remaining > 1 ? "s" : ""} to fill on the paper`}
-              </div>
-            </div>
-          </div>
 
+        {/* Everything that is not the paper lives under it, folded away. */}
+        <div className="under-paper">
           {remaining > 0 && (
-            <div className="panel" style={{ borderColor: "rgba(229,176,76,0.4)" }}>
-              <p className="eyebrow" style={{ color: "var(--amber)" }}>Finish it on the paper</p>
-              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
-                The amber chips are your numbers to type, right where they will print.
+            <details className="fold" open>
+              <summary>{remaining} number{remaining > 1 ? "s" : ""} still to type on the paper</summary>
+              <p>
+                The amber chips are your numbers, right where they will print.
                 Scrivio never invents metrics; blanks ship as [METRIC] until you fill them.
               </p>
-              <button className="btn" style={{ width: "100%", marginTop: "0.7rem" }} onClick={save}
-                disabled={saving || typed === 0}>
+              <button className="btn" onClick={save} disabled={saving || typed === 0}>
                 {saving ? "Saving…" : `Save ${typed || ""} number${typed === 1 ? "" : "s"}`}
               </button>
-            </div>
-          )}
-
-          {lastPass && (
-            <div className="panel" style={{
-              borderColor: lastPass.edits > 0 ? "rgba(52,211,153,0.5)" : "var(--stroke)",
-            }}>
-              <p className="eyebrow" style={{ color: lastPass.edits > 0 ? "var(--green)" : undefined }}>
-                Last fix pass
-              </p>
-              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
-                {lastPass.edits > 0
-                  ? `${lastPass.edits} edit${lastPass.edits > 1 ? "s" : ""} made` +
-                    (lastPass.resolved > 0
-                      ? `, ${lastPass.resolved} note${lastPass.resolved > 1 ? "s" : ""} resolved`
-                      : "") +
-                    ". The fixes are the teal lines on the paper; hover each to read what changed. Undo is at the top."
-                  : "Nothing changed this pass."}
-              </p>
-              {lastPass.note && (
-                <p style={{ fontSize: "0.74rem", color: "var(--text)", lineHeight: 1.55, marginTop: "0.45rem" }}>
-                  {lastPass.note}
-                </p>
-              )}
-            </div>
-          )}
-
-          {answerable > 0 && (
-            <div className="panel" style={{ borderColor: "rgba(229,176,76,0.4)" }}>
-              <p className="eyebrow" style={{ color: "var(--amber)" }}>
-                {answerable} note{answerable > 1 ? "s" : ""} on the paper
-              </p>
-              <p style={{ fontSize: "0.74rem", color: "var(--text-dim)", lineHeight: 1.55 }}>
-                The amber lines are the claims Scrivio will not write for you.
-                Click one to see what it needs and type the real figure; the
-                line turns teal once it is answered.
-              </p>
-              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem" }}>
-                <button className="btn" style={{ flex: 1 }} onClick={nextNote}
-                  disabled={fixingNote !== null}>
-                  {activeNote ? "Next note →" : "Show me the first →"}
-                </button>
-                {answered > 1 && (
-                  <button className="btn btn-quiet" style={{ flex: 1 }}
-                    disabled={fixingNote !== null} onClick={applyAnswers}>
-                    {fixingNote === -1 ? "Applying…" : `Apply all ${answered}`}
-                  </button>
-                )}
-              </div>
-            </div>
+            </details>
           )}
 
           {listed.length > 0 && (
-            <div className="panel">
-              <p className="eyebrow">Standing guards · {listed.length}</p>
-              <p style={{ fontSize: "0.7rem", color: "var(--text-faint)", lineHeight: 1.5 }}>
-                Not tasks. These record what stays off the resume because
-                nothing in your history supports it.
+            <details className="fold">
+              <summary>Standing guards ({listed.length}) · claims kept off this resume</summary>
+              <p>
+                Not tasks. Each one records something the job asks for that
+                nothing in your history supports, so it stays off the page.
               </p>
               {listed.map((n) => (
                 <div className="note-row" key={n.index}>
-                  <p>{n.text}</p>
+                  <p>{displayNote(n.text)}</p>
                   <div className="note-actions">
                     <button className="note-btn" disabled={fixingNote !== null}
                       onClick={() => askCoachAbout(n.text)}>
@@ -844,39 +841,31 @@ export function TailorStation({ doc, onDoc, onSend }: {
                   </div>
                 </div>
               ))}
-            </div>
+            </details>
           )}
 
-          <div className="panel">
-            <p className="eyebrow">What changed, and why</p>
-            <p style={{ fontSize: "0.7rem", color: "var(--text-faint)", lineHeight: 1.5 }}>
-              Also on the paper: hover any teal-marked line to see its note.
-            </p>
+          <details className="fold">
+            <summary>Change history ({t.changes.length}) · every edit and why</summary>
+            <p>Hover any teal line on the paper to read its note in place.</p>
             {t.changes.map((c, i) => (
-              <div className="change-note" key={i} style={{ "--i": i } as React.CSSProperties}>
-                <span className="where">{c.where}</span> {c.what}
-              </div>
+              <div className="change-note" key={i}>{c.what}</div>
             ))}
-          </div>
-
-          {error && <div className="errbox">{error}</div>}
-
-          <div className="panel cta-panel">
-            <button className="btn" style={{ width: "100%" }} onClick={onSend}
-              disabled={blockers.length > 0}
-              title={gateTip || "Package the finished resume"}>
-              Looks right, package it
-            </button>
-            {blockers.length > 0 && (
-              <p className="gate-note">{blockers[0]}.</p>
-            )}
-          </div>
-        </aside>
+          </details>
+        </div>
       </div>
+
+      {/* The one finishing action, always within reach. */}
+      <Floating><div className="float-cta">
+        <button className="btn" onClick={onSend} disabled={blockers.length > 0}
+          title={gateTip || "Package the finished resume"}>
+          Looks right, package it
+        </button>
+        {blockers.length > 0 && <p className="gate-note">{blockers[0]}.</p>}
+      </div></Floating>
 
       {/* Staged work follows you: the save bar floats over any scroll position. */}
       {(pendingEdits.size > 0 || typed > 0) && (
-        <div className="float-save" role="status">
+        <Floating><div className="float-save" role="status">
           <span className="msg">
             {pendingEdits.size > 0
               ? <><b>{pendingEdits.size} edit{pendingEdits.size > 1 ? "s" : ""}</b> staged on the paper</>
@@ -896,7 +885,7 @@ export function TailorStation({ doc, onDoc, onSend }: {
               {saving ? "Saving…" : "Save numbers"}
             </button>
           )}
-        </div>
+        </div></Floating>
       )}
 
       <CoachDock doc={doc} onDoc={onDoc} />
@@ -993,7 +982,7 @@ function CoachDock({ doc, onDoc }: {
   };
 
   return (
-    <>
+    <Floating>
       {open && (
         <div className="coach-dock" role="dialog" aria-label="The coach">
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
@@ -1050,7 +1039,7 @@ function CoachDock({ doc, onDoc }: {
         {unread && <span className="dot" aria-label="New reply" />}
         ◉ Coach{busy ? "…" : ""}
       </button>
-    </>
+    </Floating>
   );
 }
 
