@@ -197,8 +197,8 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
               <p className="eyebrow" style={{ marginBottom: 0 }}>Step 1 · Your resume</p>
               {resumeText.trim() && !file && (
                 <button className="expand-btn" onClick={() => setExpanded("resume")}
-                  aria-label="Edit your resume text full-screen">
-                  ⤢ Full screen
+                  aria-label="Edit your resume text full-screen" title="Edit full-screen">
+                  ⤢
                 </button>
               )}
             </div>
@@ -249,8 +249,8 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
               <p className="eyebrow" style={{ marginBottom: 0 }}>Step 2 · The job description (optional)</p>
               {jdText.trim() && (
                 <button className="expand-btn" onClick={() => setExpanded("jd")}
-                  aria-label="Edit the job description full-screen">
-                  ⤢ Full screen
+                  aria-label="Edit the job description full-screen" title="Edit full-screen">
+                  ⤢
                 </button>
               )}
             </div>
