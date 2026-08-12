@@ -447,3 +447,26 @@ def test_request_edit_from_conversation_with_empty_instruction():
     })
     assert r.status_code == 200, r.text
     assert len(r.json()["tailored_history"]) == 1
+
+
+def test_status_text_in_warnings_is_moved_to_note(monkeypatch):
+    """A "no changes this pass" explanation must never persist as an
+    honesty note; the endpoint moves it to the transient note field."""
+    from pipeline.schemas.models import TailoredResume as TR
+
+    client = TestClient(server.app)
+    doc = _create(client, jd_text=JD)
+    rid = doc["resume_id"]
+    doc = _tailor(client, rid)
+
+    async def fake_edit(**kwargs):
+        current = TR.model_validate(doc["tailored"])
+        current.warnings = ["NO CHANGES MADE THIS PASS: everything needs your facts."]
+        return current
+
+    monkeypatch.setattr(server, "edit_resume_by_instruction", fake_edit)
+    r = client.post(f"/resumes/{rid}/request-edit", json={"instruction": "fix all notes"})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["tailored"]["warnings"] == []
+    assert out["tailored"]["note"].startswith("NO CHANGES")

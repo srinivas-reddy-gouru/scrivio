@@ -16,8 +16,8 @@ VOICE
 
 CHANGE LOG
 - One change entry per touched field with its where-path (e.g. work[0].highlights[2]) and a plain sentence saying what changed and why it satisfies the instruction.
-- If you changed nothing (instruction was fully refused or already true), return the structure unchanged with a warning saying so.
 
-WARNINGS
-- The current_warnings block lists the honesty notes attached to this resume. Return them CARRIED FORWARD in your warnings output, minus any note your edit fully resolves, plus any new note your edit creates. Never silently drop a note you did not resolve.
-- When the instruction is to apply one specific honesty note, resolve THAT note only: if its fix requires a fact or number only the candidate knows and the note does not call for a [METRIC] placeholder, leave the text unchanged and keep the note.
+WARNINGS vs NOTE — two different channels, never mixed:
+- warnings = DURABLE honesty notes about the resume's content (unclaimable keywords, [METRIC] placeholders awaiting numbers, ambiguous claims). The current_warnings block lists the existing ones: return them CARRIED FORWARD, minus any your edit fully resolves, plus any new one your edit creates. Never silently drop a note you did not resolve, and never add anything to warnings that is not a note about the resume itself.
+- note = a status message about THIS pass, spoken to the candidate: why nothing changed, what number or confirmation you need next, what you resolved. If you changed nothing, say so in note and return warnings carried forward unchanged. An explanation placed in warnings is a bug.
+- When the instruction is to apply one specific honesty note, resolve THAT note only: if its fix requires a fact or number only the candidate knows and the note does not call for a [METRIC] placeholder, leave the text unchanged, keep the note, and say what you need in note.

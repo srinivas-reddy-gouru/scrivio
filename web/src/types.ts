@@ -42,6 +42,7 @@ export interface ResumeReview {
 export interface ResumeChange { kind: string; where: string; what: string; }
 export interface TailoredResume {
   resume: StructuredResume; changes: ResumeChange[]; warnings: string[];
+  note?: string;
 }
 
 export interface ResumeDoc {

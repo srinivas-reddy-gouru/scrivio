@@ -487,6 +487,7 @@ export function TailorStation({ doc, onDoc, onSend }: {
   const [undoing, setUndoing] = useState(false);
   const [fixingNote, setFixingNote] = useState<number | null>(null);
   const [selectedNotes, setSelectedNotes] = useState<Set<number>>(new Set());
+  const [lastPass, setLastPass] = useState<{ resolved: number; edits: number; note: string } | null>(null);
   const [error, setError] = useState("");
   const t = doc.tailored!;
   const remaining = countMetrics(t.resume);
@@ -530,10 +531,21 @@ export function TailorStation({ doc, onDoc, onSend }: {
     setUndoing(true); setError("");
     try {
       const fresh = await api.undoTailored(doc.resume_id);
-      setValues(new Map()); setPendingEdits(new Map()); setEditMode(false);
+      setValues(new Map()); setPendingEdits(new Map()); setEditMode(false); setLastPass(null);
       onDoc(fresh);
     } catch (e) { setError((e as Error).message); }
     finally { setUndoing(false); }
+  };
+
+  // What did that pass accomplish? Diff the doc before/after so the
+  // panel can say "3 notes resolved, 5 edits on the paper" instead of
+  // silently re-rendering a near-identical list.
+  const recordPass = (fresh: ResumeDoc) => {
+    const resolved = Math.max(0,
+      (doc.tailored?.warnings.length ?? 0) - (fresh.tailored?.warnings.length ?? 0));
+    const edits = Math.max(0,
+      (fresh.tailored?.changes.length ?? 0) - (doc.tailored?.changes.length ?? 0));
+    setLastPass({ resolved, edits, note: fresh.tailored?.note || "" });
   };
 
   const fixNote = async (i: number, note: string) => {
@@ -544,6 +556,7 @@ export function TailorStation({ doc, onDoc, onSend }: {
         "the note names. If the fix needs a fact or number only I know and the " +
         "note does not call for a [METRIC] placeholder, leave the text as it is " +
         "and keep the note.");
+      recordPass(fresh);
       onDoc(fresh);
     } catch (e) { setError((e as Error).message); }
     finally { setFixingNote(null); }
@@ -564,6 +577,7 @@ export function TailorStation({ doc, onDoc, onSend }: {
         "measurements, whether I actually used a technology) must leave the " +
         "text unchanged and stay in the warnings. Log one change per bullet " +
         "you touch.");
+      recordPass(fresh);
       onDoc(fresh);
     } catch (e) { setError((e as Error).message); }
     finally { setFixingNote(null); }
@@ -584,6 +598,7 @@ export function TailorStation({ doc, onDoc, onSend }: {
         "numbers only I know and the note does not call for a [METRIC] " +
         "placeholder, leave that text unchanged and keep the note.");
       setSelectedNotes(new Set());
+      recordPass(fresh);
       onDoc(fresh);
     } catch (e) { setError((e as Error).message); }
     finally { setFixingNote(null); }
@@ -666,6 +681,30 @@ export function TailorStation({ doc, onDoc, onSend }: {
                 disabled={saving || typed === 0}>
                 {saving ? "Saving…" : `Save ${typed || ""} number${typed === 1 ? "" : "s"}`}
               </button>
+            </div>
+          )}
+
+          {lastPass && (
+            <div className="panel" style={{
+              borderColor: lastPass.edits > 0 ? "rgba(52,211,153,0.5)" : "var(--stroke)",
+            }}>
+              <p className="eyebrow" style={{ color: lastPass.edits > 0 ? "var(--green)" : undefined }}>
+                Last fix pass
+              </p>
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
+                {lastPass.edits > 0
+                  ? `${lastPass.edits} edit${lastPass.edits > 1 ? "s" : ""} made` +
+                    (lastPass.resolved > 0
+                      ? `, ${lastPass.resolved} note${lastPass.resolved > 1 ? "s" : ""} resolved`
+                      : "") +
+                    ". The fixes are the teal lines on the paper; hover each to read what changed. Undo is at the top."
+                  : "Nothing changed this pass."}
+              </p>
+              {lastPass.note && (
+                <p style={{ fontSize: "0.74rem", color: "var(--text)", lineHeight: 1.55, marginTop: "0.45rem" }}>
+                  {lastPass.note}
+                </p>
+              )}
             </div>
           )}
 
@@ -841,12 +880,14 @@ function CoachDock({ doc, onDoc }: {
       const addedWarnings = (fresh.tailored?.warnings ?? []).slice(beforeWarnings);
       const lines = added.slice(0, 4).map((c) => `• ${c.where}: ${c.what}`);
       if (added.length > 4) lines.push(`…and ${added.length - 4} more (full list in "What changed, and why").`);
+      const passNote = fresh.tailored?.note || "";
       push({
         role: "assistant",
         content: added.length === 0
-          ? "I did not change anything. " +
-            (addedWarnings[0] || "The paper already matched the instruction, or it asked for something the honesty rules refuse.")
+          ? (passNote || addedWarnings[0] ||
+             "I did not change anything. The paper already matched the instruction, or it asked for something the honesty rules refuse.")
           : `Done. What changed:\n${lines.join("\n")}` +
+            (passNote ? `\n\n${passNote}` : "") +
             (addedWarnings.length ? `\n\nNote: ${addedWarnings.join(" ")}` : "") +
             "\n\nThe changed lines are marked teal on the paper. Undo is at the top if it went too far.",
       });

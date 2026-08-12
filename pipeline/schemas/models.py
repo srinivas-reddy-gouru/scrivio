@@ -721,6 +721,10 @@ class TailoredResume(BaseModel):
         default_factory=list,
         description="Honesty notes: keywords that could NOT be claimed truthfully, and every [METRIC] placeholder needing a real number from the candidate.",
     )
+    note: str = Field(
+        default="",
+        description="Status message to the candidate about THIS pass (e.g. why nothing changed, or what to supply next). Transient; never a durable note about the resume content — those belong in warnings.",
+    )
 
 
 class ResumeDoc(BaseModel):

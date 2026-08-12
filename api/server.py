@@ -2352,6 +2352,16 @@ async def request_tailored_edit(
             detail="The edit did not go through — check your provider in Settings "
                    "and try again.",
         )
+    # Belt for the prompt's warnings/note separation: a status message
+    # that slipped into warnings is not a durable honesty note — move it.
+    status_like = [
+        w for w in edited.warnings
+        if w.strip().upper().startswith("NO CHANGES") or "this pass" in w.lower()
+    ]
+    if status_like:
+        edited.warnings = [w for w in edited.warnings if w not in status_like]
+        if not edited.note:
+            edited.note = " ".join(status_like)
     _push_tailored_history(doc, snapshot)
     doc.tailored = edited
     _refresh_tailored_report(doc)
