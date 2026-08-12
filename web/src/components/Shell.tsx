@@ -43,6 +43,14 @@ export function Shell({ room, go, children }: {
 }) {
   const [health, setHealth] = useState<{ label: string; up: boolean } | null>(null);
   const [palOpen, setPalOpen] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">(() =>
+    (localStorage.getItem("studio-theme") as "dark" | "light" | null)
+    ?? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("studio-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     api.settings()
@@ -73,6 +81,12 @@ export function Shell({ room, go, children }: {
           <div className="brand-name">
             <span className="brand-mark" aria-hidden="true" />
             Scrivio
+            <button className="theme-btn"
+              aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+              title={theme === "dark" ? "Light theme" : "Dark theme"}
+              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
+              {theme === "dark" ? "☀" : "☾"}
+            </button>
           </div>
           <div className="health">
             <i className={health?.up ? "" : "down"} /> {health?.label ?? "checking…"}
