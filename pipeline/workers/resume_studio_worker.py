@@ -339,6 +339,84 @@ async def edit_resume_by_instruction(
     return edited
 
 
+_NUMBER_RE = re.compile(r"\d[\d,.]*")
+
+
+def _numbers_in(text: str) -> set[str]:
+    return {m.rstrip(".,").replace(",", "") for m in _NUMBER_RE.findall(text)}
+
+
+def _prose_paths(resume: StructuredResume):
+    """(path, getter, setter) for every prose field an edit can touch —
+    the same address space the change log and manual edits use."""
+    fields = [
+        ("basics.label", lambda r=resume: r.basics.label,
+         lambda v, r=resume: setattr(r.basics, "label", v)),
+        ("basics.summary", lambda r=resume: r.basics.summary,
+         lambda v, r=resume: setattr(r.basics, "summary", v)),
+    ]
+    for i, w in enumerate(resume.work):
+        fields.append((f"work[{i}].summary", lambda w=w: w.summary,
+                       lambda v, w=w: setattr(w, "summary", v)))
+        for j in range(len(w.highlights)):
+            fields.append((
+                f"work[{i}].highlights[{j}]",
+                lambda w=w, j=j: w.highlights[j] if j < len(w.highlights) else "",
+                lambda v, w=w, j=j: w.highlights.__setitem__(j, v),
+            ))
+    for i, p in enumerate(resume.projects):
+        fields.append((f"projects[{i}].description", lambda p=p: p.description,
+                       lambda v, p=p: setattr(p, "description", v)))
+        for j in range(len(p.highlights)):
+            fields.append((
+                f"projects[{i}].highlights[{j}]",
+                lambda p=p, j=j: p.highlights[j] if j < len(p.highlights) else "",
+                lambda v, p=p, j=j: p.highlights.__setitem__(j, v),
+            ))
+    return fields
+
+
+def guard_edited_numbers_and_log(
+    before: TailoredResume, after: TailoredResume, user_text: str
+) -> TailoredResume:
+    """Two deterministic belts behind every LLM edit pass.
+
+    Numbers: a numeral in the edited text must already exist somewhere in
+    the pre-edit resume or in the user's own words (instruction + chat).
+    Anything else is an invented metric — the exact thing this studio
+    promises never to do — so the field reverts and gets a warning.
+
+    Change log: the model's self-reported changes are reconciled against
+    the real before/after diff; fields that changed without a log entry
+    get one, so the teal marks and tooltips always reflect reality."""
+    allowed = _numbers_in(before.resume.model_dump_json()) | _numbers_in(user_text)
+    before_map = {path: get() for path, get, _ in _prose_paths(before.resume)}
+    logged = {c.where for c in after.changes}
+    synthesized: list[ResumeChange] = []
+    for path, get, set_ in _prose_paths(after.resume):
+        new_text = get()
+        old_text = before_map.get(path)
+        if old_text is None or new_text == old_text:
+            continue
+        invented = _numbers_in(new_text) - _numbers_in(old_text) - allowed
+        if invented:
+            set_(old_text)
+            after.warnings.append(
+                f"Reverted {path}: the edit introduced the number(s) "
+                f"{', '.join(sorted(invented))} which came neither from your "
+                "resume nor from you. Scrivio never invents metrics; supply "
+                "the real figure and it will be applied."
+            )
+            continue
+        if path not in logged:
+            synthesized.append(ResumeChange(
+                kind="rephrased", where=path,
+                what="Updated in this pass (entry added from the actual diff).",
+            ))
+    after.changes.extend(synthesized)
+    return after
+
+
 # ── Honesty post-guard ──────────────────────────────────────────────────────
 
 def enforce_honesty(

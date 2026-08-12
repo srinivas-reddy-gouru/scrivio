@@ -63,6 +63,7 @@ from pipeline.workers.resume_studio_worker import (
     build_resume_advice_context,
     edit_resume_by_instruction,
     extract_resume,
+    guard_edited_numbers_and_log,
     fill_metric_placeholders,
     from_jsonresume,
     render_docx,
@@ -2352,6 +2353,12 @@ async def request_tailored_edit(
             detail="The edit did not go through — check your provider in Settings "
                    "and try again.",
         )
+    # Belts behind the model: invented numbers revert, and the change log
+    # is reconciled against the real diff so the UI never under-reports.
+    user_text = body.instruction + " " + " ".join(
+        m.get("content", "") for m in history
+    )
+    edited = guard_edited_numbers_and_log(snapshot, edited, user_text)
     # Belt for the prompt's warnings/note separation: a status message
     # that slipped into warnings is not a durable honesty note — move it.
     status_like = [

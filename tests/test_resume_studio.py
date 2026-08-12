@@ -437,3 +437,53 @@ def test_ats_paragraph_length_measured_from_structure():
     bullets = next(c for c in report.checks if c.id == "bullets")
     assert not bullets.passed
     assert "1 paragraph(s) over 60 words" in bullets.detail
+
+
+def test_number_guard_reverts_invented_metrics_but_keeps_supplied_ones():
+    """An edit pass may only use numbers from the prior text or the
+    user's own words; anything else reverts with a warning."""
+    from pipeline.workers.resume_studio_worker import guard_edited_numbers_and_log
+    from pipeline.schemas.models import ResumeChange
+
+    before = TailoredResume(
+        resume=StructuredResume.model_validate({
+            "basics": {"name": "J"},
+            "work": [{"name": "Acme", "position": "Eng", "highlights": [
+                "Cut deploy time by [METRIC]",
+                "Reduced costs by [METRIC]",
+            ]}],
+        }),
+        changes=[], warnings=[],
+    )
+    after = before.model_copy(deep=True)
+    after.resume.work[0].highlights[0] = "Cut deploy time by 40%"   # user said 40
+    after.resume.work[0].highlights[1] = "Reduced costs by 30%"     # invented
+    after.changes = [ResumeChange(kind="rephrased", where="work[0].highlights[0]",
+                                  what="Filled with your number.")]
+
+    out = guard_edited_numbers_and_log(before, after, "use 40% for the deploy bullet")
+    assert out.resume.work[0].highlights[0] == "Cut deploy time by 40%"
+    assert out.resume.work[0].highlights[1] == "Reduced costs by [METRIC]"
+    assert any("Reverted work[0].highlights[1]" in w and "30" in w for w in out.warnings)
+
+
+def test_number_guard_synthesizes_missing_change_entries():
+    """Fields the model changed but did not log get diff-derived entries,
+    so the paper's teal marks always match reality."""
+    from pipeline.workers.resume_studio_worker import guard_edited_numbers_and_log
+
+    before = TailoredResume(
+        resume=StructuredResume.model_validate({
+            "basics": {"name": "J", "summary": "Backend engineer."},
+            "work": [{"name": "Acme", "position": "Eng",
+                      "highlights": ["Built Kafka pipelines."]}],
+        }),
+        changes=[], warnings=[],
+    )
+    after = before.model_copy(deep=True)
+    after.resume.basics.summary = "Event-driven backend engineer."
+    after.changes = []  # model forgot to log it
+
+    out = guard_edited_numbers_and_log(before, after, "")
+    assert [c.where for c in out.changes] == ["basics.summary"]
+    assert out.resume.basics.summary == "Event-driven backend engineer."
