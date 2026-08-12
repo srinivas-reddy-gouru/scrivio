@@ -193,8 +193,16 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
           >
-            <p className="eyebrow">Step 1 · Your resume</p>
-            <p className="hint" style={{ marginTop: "0.1rem" }}>
+            <div className="tray-head">
+              <p className="eyebrow" style={{ marginBottom: 0 }}>Step 1 · Your resume</p>
+              {resumeText.trim() && !file && (
+                <button className="expand-btn" onClick={() => setExpanded("resume")}
+                  aria-label="Edit your resume text full-screen">
+                  ⤢ Full screen
+                </button>
+              )}
+            </div>
+            <p className="hint" style={{ marginTop: "0.3rem" }}>
               Paste the full text below (you can keep editing it there), or drop a PDF/DOCX file anywhere in this box.
             </p>
             {file ? (
@@ -227,14 +235,6 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
                     onClick={(e) => { e.preventDefault(); fileInput.current?.click(); }}>
                     browse files
                   </a>
-                  {resumeText.trim() && (
-                    <> ·{" "}
-                      <a href="#" style={{ textDecoration: "underline" }}
-                        onClick={(e) => { e.preventDefault(); setExpanded("resume"); }}>
-                        ⤢ edit full-screen
-                      </a>
-                    </>
-                  )}
                 </p>
                 <input
                   ref={fileInput} type="file" hidden
@@ -245,7 +245,15 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
             )}
           </div>
           <div className="tray">
-            <p className="eyebrow">Step 2 · The job description (optional)</p>
+            <div className="tray-head">
+              <p className="eyebrow" style={{ marginBottom: 0 }}>Step 2 · The job description (optional)</p>
+              {jdText.trim() && (
+                <button className="expand-btn" onClick={() => setExpanded("jd")}
+                  aria-label="Edit the job description full-screen">
+                  ⤢ Full screen
+                </button>
+              )}
+            </div>
             <p className="hint" style={{ marginTop: "0.1rem" }}>
               Add the posting one of three ways: pick a saved job target, paste the posting's URL, or paste its text. With a JD you get a keyword match score and can tailor; without one you still get the full ATS report.
             </p>
@@ -271,14 +279,6 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
               spellCheck={false}
               title={jdText.trim() ? "Click to edit full-screen" : undefined}
             />
-            {jdText.trim() && (
-              <p className="hint">
-                <a href="#" style={{ textDecoration: "underline" }}
-                  onClick={(e) => { e.preventDefault(); setExpanded("jd"); }}>
-                  ⤢ edit full-screen
-                </a>
-              </p>
-            )}
           </div>
         </div>
         {error && <div className="errbox" style={{ marginTop: "1rem" }}>{error}</div>}

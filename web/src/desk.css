@@ -399,28 +399,46 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 .prose .mermaid { background: #fff; padding: 1.5rem; border-radius: 0.875rem; border: 1px solid #e6e2da; margin: 1.75rem 0; text-align: center; }
 .prose .mermaid svg { max-width: 100%; height: auto; }
 
-/* Full-page text editor overlay */
+/* Full-page text editor overlay: paper surface, ink text — the one
+   place you stare at text for minutes, so contrast is the design. */
 .fulledit-overlay {
   position: fixed; inset: 0; z-index: 80;
-  background: rgba(6, 10, 10, 0.8); backdrop-filter: blur(6px);
+  background: rgba(6, 10, 10, 0.82); backdrop-filter: blur(6px);
   display: grid; place-items: center; padding: 1.2rem;
 }
 .fulledit-card {
   width: min(920px, 100%); height: 100%;
   display: flex; flex-direction: column;
-  background: #0E1716; border: 1px solid rgba(32, 184, 205, 0.35);
-  border-radius: 16px; padding: 1rem 1.2rem 1.1rem;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+  background: var(--paper); color: var(--ink);
+  border-radius: 12px; padding: 1rem 1.2rem 1.1rem;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65);
   animation: rise 0.25s cubic-bezier(0.2, 0.8, 0.25, 1);
 }
 .fulledit-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.7rem; }
+.fulledit-head .eyebrow { color: #1a5450; }
 .fulledit-card textarea {
   flex: 1; width: 100%; resize: none;
-  background: rgba(0, 0, 0, 0.3); color: var(--text);
-  border: 1px solid var(--stroke); border-radius: 10px;
-  font-family: "JetBrains Mono", monospace; font-size: 0.8rem; line-height: 1.6;
+  background: #FFFDF8; color: var(--ink);
+  border: 1px solid #D8D2C2; border-radius: 10px;
+  font-family: "JetBrains Mono", monospace; font-size: 0.84rem; line-height: 1.65;
   padding: 0.9rem 1rem;
 }
+.fulledit-card textarea:focus { outline: 2px solid var(--teal); outline-offset: 1px; }
+.fulledit-card .hint { color: var(--ink-dim); }
+.fulledit-card .btn-quiet { background: rgba(0, 0, 0, 0.05); color: var(--ink-dim); border-color: #C9C2B2; }
+.fulledit-card .btn-quiet:hover:not(:disabled) { color: var(--ink); }
+
+/* Visible expand affordance on the paste trays */
+.tray-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
+.expand-btn {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  border: 1px solid rgba(32, 184, 205, 0.55); border-radius: 8px;
+  background: rgba(32, 184, 205, 0.1); color: var(--teal);
+  font-family: inherit; font-size: 0.72rem; font-weight: 700;
+  padding: 0.35rem 0.7rem; cursor: pointer; white-space: nowrap;
+  transition: background 0.15s;
+}
+.expand-btn:hover { background: rgba(32, 184, 205, 0.2); }
 
 /* The composer: classic article compose parity */
 .compose-hero { text-align: center; margin: 11vh auto 2.2rem; max-width: 620px; }
