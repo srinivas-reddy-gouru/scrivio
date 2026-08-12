@@ -18,7 +18,7 @@ except ModuleNotFoundError:
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -2394,6 +2394,12 @@ async def _no_html_cache(request, call_next):
 _DESK_DIR = Path(__file__).resolve().parent.parent / "web" / "dist"
 _UI_DIR = Path(__file__).resolve().parent.parent / "ui"
 if _UI_DIR.exists():
+    # Static mounts do not redirect the bare path to the slash form,
+    # so /classic without the trailing slash needs an explicit hop.
+    @app.get("/classic", include_in_schema=False)
+    async def _classic_redirect() -> RedirectResponse:
+        return RedirectResponse("/classic/")
+
     app.mount("/classic", StaticFiles(directory=str(_UI_DIR), html=True), name="classic")
 if _DESK_DIR.exists():
     app.mount("/studio", StaticFiles(directory=str(_DESK_DIR), html=True), name="studio")
