@@ -16,8 +16,10 @@ from __future__ import annotations
 import io
 import re
 from collections import Counter
+from collections.abc import Sequence
 
 from pipeline.model_config import get_model
+from pipeline.workers.citation_utils import scrub_em_dashes
 from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
     AtsCheck,
@@ -37,6 +39,8 @@ from pipeline.schemas.models import (
 _EXTRACTOR_PROMPT = load_prompt("resume_extractor_v1.txt")
 _REVIEWER_PROMPT = load_prompt("resume_reviewer_v1.txt")
 _TAILOR_PROMPT = load_prompt("resume_tailor_v1.txt")
+_ADVISOR_PROMPT = load_prompt("resume_advisor_v1.txt")
+_EDITOR_PROMPT = load_prompt("resume_editor_v1.txt")
 
 _EXTRACTION_TOOL: dict = {
     "name": "submit_resume_extraction",
@@ -194,6 +198,132 @@ async def _condense_summary(
             "scan check. Trim it to the strongest JD-relevant claims."
         )
     return tailored
+
+
+# ── User-authored edits, coach, and instructed edits ────────────────────────
+
+_HL_PATH_RE = re.compile(r"^(work|projects)\[(\d+)\]\.highlights\[(\d+)\]$")
+_SUMMARY_PATH_RE = re.compile(r"^work\[(\d+)\]\.summary$")
+_DESC_PATH_RE = re.compile(r"^projects\[(\d+)\]\.description$")
+
+
+def apply_tailored_edits(
+    resume: StructuredResume, edits: Sequence[tuple[str, str]]
+) -> int:
+    """Apply the user's own text edits, addressed by the same where-paths
+    the change log uses. Only prose fields are editable — employers,
+    titles, dates, and institutions stay byte-identical to the original
+    by construction. An empty value deletes a bullet and clears a
+    scalar. Returns how many edits landed; unknown paths raise."""
+    applied = 0
+    for path, value in edits:
+        v = value.strip()
+        if path == "basics.label":
+            resume.basics.label = v; applied += 1; continue
+        if path == "basics.summary":
+            resume.basics.summary = v; applied += 1; continue
+        m = _SUMMARY_PATH_RE.match(path)
+        if m:
+            i = int(m.group(1))
+            if i < len(resume.work):
+                resume.work[i].summary = v; applied += 1
+            continue
+        m = _DESC_PATH_RE.match(path)
+        if m:
+            i = int(m.group(1))
+            if i < len(resume.projects):
+                resume.projects[i].description = v; applied += 1
+            continue
+        m = _HL_PATH_RE.match(path)
+        if m:
+            kind, i, j = m.group(1), int(m.group(2)), int(m.group(3))
+            items = resume.work if kind == "work" else resume.projects
+            if i < len(items) and j < len(items[i].highlights):
+                items[i].highlights[j] = v; applied += 1
+            continue
+        raise ValueError(f"Path not editable: {path}")
+    # Emptied bullets vanish — after all index-addressed writes, so the
+    # paths the client sent stay valid throughout the batch.
+    for w in resume.work:
+        w.highlights = [h for h in w.highlights if h.strip()]
+    for p in resume.projects:
+        p.highlights = [h for h in p.highlights if h.strip()]
+    scrub_structure_dashes(resume)
+    return applied
+
+
+def build_resume_advice_context(doc) -> str:
+    """Compact context block for the coach: the JD, the current resume
+    text, and exactly which numbers are still placeholders."""
+    resume = doc.tailored.resume if doc.tailored else doc.structured
+    parts = []
+    if doc.jd_text:
+        parts.append(f"job_description (excerpt):\n{doc.jd_text[:2000]}")
+    if resume is not None:
+        parts.append(f"current_resume:\n{render_markdown(resume)[:3500]}")
+        holes = list_metric_placeholders(resume)
+        if holes:
+            parts.append("unfilled_metric_placeholders:\n" + "\n".join(
+                f"- …{h['before'][-50:]} [METRIC] {h['after']}…" for h in holes))
+    if doc.tailored and doc.tailored.warnings:
+        parts.append("honesty_warnings:\n" + "\n".join(
+            f"- {w}" for w in doc.tailored.warnings[:6]))
+    return "\n\n".join(parts) or "(no resume on file)"
+
+
+async def advise_resume(
+    *, question: str, history: Sequence[dict], context: str,
+    client, preset: str = "balanced",
+) -> str:
+    """One coaching answer. Read-only: this call never edits the resume,
+    so the user can ask freely before committing to anything."""
+    messages = [
+        {"role": m["role"], "content": m["content"]}
+        for m in history if m.get("role") in ("user", "assistant")
+    ][-8:]
+    messages.append({
+        "role": "user",
+        "content": f"context:\n{context}\n\nquestion:\n{question}",
+    })
+    response = await client.messages.create(
+        model=get_model("resume_review", preset),
+        max_tokens=700,
+        system=_ADVISOR_PROMPT,
+        messages=messages,
+    )
+    text = "".join(
+        b.text for b in response.content if getattr(b, "type", "") == "text"
+    ).strip()
+    return scrub_em_dashes(text) if text else (
+        "I could not produce an answer just now. Try rephrasing the question."
+    )
+
+
+async def edit_resume_by_instruction(
+    *, original: StructuredResume, tailored: TailoredResume,
+    jd_text: str, instruction: str, client, preset: str = "balanced",
+) -> TailoredResume:
+    """Apply ONE user instruction to the tailored resume via the LLM,
+    behind the same honesty guard as tailoring: the model proposes, the
+    deterministic post-guard disposes."""
+    user_content = (
+        f"current_tailored_resume:\n{tailored.resume.model_dump_json(indent=1)}\n\n"
+        f"job_description (context only):\n{jd_text[:2000]}\n\n"
+        f"user_instruction:\n{instruction}"
+    )
+    response = await client.messages.create(
+        model=get_model("resume_tailor", preset),
+        max_tokens=8192,
+        system=_EDITOR_PROMPT,
+        tools=[_TAILOR_TOOL],
+        tool_choice={"type": "tool", "name": "submit_tailored_resume"},
+        messages=[{"role": "user", "content": user_content}],
+    )
+    tool_use = next(b for b in response.content if b.type == "tool_use")
+    edited = TailoredResume.model_validate(tool_use.input)
+    edited = enforce_honesty(original, edited)
+    scrub_structure_dashes(edited.resume)
+    return edited
 
 
 # ── Honesty post-guard ──────────────────────────────────────────────────────

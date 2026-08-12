@@ -1281,6 +1281,13 @@ class MockAnthropicMessages:
             # final-pass copyeditor AND level-adapter", so "copyeditor"
             # routes it here.
             content = _mock_humanized_markdown(user_content)
+        elif "resume metrics coach" in system:
+            content = (
+                "For the deploy-time bullet, use a percentage from your CI "
+                "history: compare average pipeline duration before and after "
+                "the change. If you cannot find the real figure, write the "
+                "bullet without a number instead of guessing one."
+            )
         elif "interviewer's debrief" in system:
             content = (
                 "You showed a solid grasp of the fundamentals and your "

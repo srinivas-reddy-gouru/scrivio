@@ -14,6 +14,31 @@ interface PaperProps {
   litFinding?: string | null;
   metricValues?: Map<number, string>;
   onMetric?: (index: number, value: string) => void;
+  /** Edit mode: prose fields become directly editable; blur reports the
+   * new text by where-path. Metric chips render as plain text so the
+   * whole sentence (placeholder included) is the user's to change. */
+  onEdit?: (path: string, value: string) => void;
+}
+
+function EditableText({ path, text, onEdit, as: Tag = "p", className = "" }: {
+  path: string; text: string; onEdit: (path: string, value: string) => void;
+  as?: "p" | "li" | "div"; className?: string;
+}) {
+  return (
+    <Tag
+      className={(className + " editable-field").trim()}
+      contentEditable
+      suppressContentEditableWarning
+      role="textbox"
+      aria-label={`Edit ${path}`}
+      onBlur={(e: React.FocusEvent<HTMLElement>) => {
+        const v = (e.currentTarget.textContent || "").replace(/\s+/g, " ").trim();
+        if (v !== text.trim()) onEdit(path, v);
+      }}
+    >
+      {text}
+    </Tag>
+  );
 }
 
 /** Renders text, replacing each [METRIC] with an editable chip. The
@@ -65,7 +90,7 @@ function MetricText({ text, counter, values, onMetric }: {
 }
 
 export function Paper({
-  resume, mode, report, changes = [], litFinding, metricValues, onMetric,
+  resume, mode, report, changes = [], litFinding, metricValues, onMetric, onEdit,
 }: PaperProps) {
   const counter = useRef({ n: 0 });
   counter.current.n = 0; // occurrence numbering restarts every render
@@ -94,9 +119,13 @@ export function Paper({
       {b.summary && (
         <>
           <h2>Summary</h2>
-          <p className={mode === "tailored" && idx.byField.has("basics.summary") ? "marked mark-teal" : ""}>
-            {metric(b.summary)}
-          </p>
+          {onEdit ? (
+            <EditableText path="basics.summary" text={b.summary} onEdit={onEdit} />
+          ) : (
+            <p className={mode === "tailored" && idx.byField.has("basics.summary") ? "marked mark-teal" : ""}>
+              {metric(b.summary)}
+            </p>
+          )}
         </>
       )}
 
@@ -109,9 +138,17 @@ export function Paper({
               <div className="dates" data-finding="dates">
                 {[w.startDate, w.endDate].filter(Boolean).join(" - ")}
               </div>
-              {w.summary && <p>{metric(w.summary)}</p>}
+              {w.summary && (onEdit
+                ? <EditableText path={`work[${wi}].summary`} text={w.summary} onEdit={onEdit} />
+                : <p>{metric(w.summary)}</p>)}
               <ul>
                 {w.highlights.map((h, hi) => {
+                  if (onEdit) {
+                    return (
+                      <EditableText key={hi} as="li"
+                        path={`work[${wi}].highlights[${hi}]`} text={h} onEdit={onEdit} />
+                    );
+                  }
                   let cls = ""; let underline: string | undefined;
                   if (mode === "report") {
                     const mark = markForHighlight(h, report);
@@ -149,9 +186,16 @@ export function Paper({
           {resume.projects.map((p, pi) => (
             <Fragment key={pi}>
               <h3>{p.name || "Project"}</h3>
-              {p.description && <p>{metric(p.description)}</p>}
+              {p.description && (onEdit
+                ? <EditableText path={`projects[${pi}].description`} text={p.description} onEdit={onEdit} />
+                : <p>{metric(p.description)}</p>)}
               <ul>
-                {p.highlights.map((h, hi) => <li key={hi}>{metric(h)}</li>)}
+                {p.highlights.map((h, hi) => onEdit ? (
+                  <EditableText key={hi} as="li"
+                    path={`projects[${pi}].highlights[${hi}]`} text={h} onEdit={onEdit} />
+                ) : (
+                  <li key={hi}>{metric(h)}</li>
+                ))}
               </ul>
             </Fragment>
           ))}

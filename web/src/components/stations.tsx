@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
 import { api, fmtElapsed, useDocWatch } from "../api";
 import { countMetrics } from "../marks";
-import type { JobProfileSummary, ResumeDoc, ResumeSummaryItem } from "../types";
+import type { ChatTurn, JobProfileSummary, ResumeDoc, ResumeSummaryItem } from "../types";
 import { Paper } from "./Paper";
 
 /* ── Shared bits ── */
@@ -158,7 +158,10 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
           >
-            <p className="eyebrow">Your resume</p>
+            <p className="eyebrow">Step 1 · Your resume</p>
+            <p className="hint" style={{ marginTop: "0.1rem" }}>
+              Paste the full text below (you can keep editing it there), or drop a PDF/DOCX file anywhere in this box.
+            </p>
             {file ? (
               <>
                 <div className="mini-paper">
@@ -197,9 +200,13 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
             )}
           </div>
           <div className="tray">
-            <p className="eyebrow">The job it must win</p>
-            <select value={profileId} onChange={(e) => setProfileId(e.target.value)}>
-              <option value="">No saved job target</option>
+            <p className="eyebrow">Step 2 · The job description (optional)</p>
+            <p className="hint" style={{ marginTop: "0.1rem" }}>
+              Add the posting one of three ways: pick a saved job target, paste the posting's URL, or paste its text. With a JD you get a keyword match score and can tailor; without one you still get the full ATS report.
+            </p>
+            <select value={profileId} onChange={(e) => setProfileId(e.target.value)}
+              aria-label="Saved job target">
+              <option value="">Saved job target: none</option>
               {profiles.map((p) => (
                 <option key={p.profile_id} value={p.profile_id}>
                   {p.role_title}{p.company ? ` @ ${p.company}` : ""}
@@ -208,15 +215,15 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
             </select>
             <input
               type="text" value={jdUrl} onChange={(e) => setJdUrl(e.target.value)}
-              placeholder="https://… (fetches the posting)"
+              placeholder="Posting URL: https://… (Scrivio fetches it)"
             />
             <textarea
+              className="jd-box"
               value={jdText}
               onChange={(e) => setJdText(e.target.value)}
-              placeholder="…or paste the job description (optional)"
+              placeholder="Or paste the job description text here…"
               spellCheck={false}
             />
-            <p className="hint">A JD unlocks keyword match and tailoring.</p>
           </div>
         </div>
         {error && <div className="errbox" style={{ marginTop: "1rem" }}>{error}</div>}
@@ -410,10 +417,24 @@ export function TailorStation({ doc, onDoc, onSend }: {
   const [values, setValues] = useState<Map<number, string>>(new Map());
   const [saving, setSaving] = useState(false);
   const [peek, setPeek] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [pendingEdits, setPendingEdits] = useState<Map<string, string>>(new Map());
+  const [savingEdits, setSavingEdits] = useState(false);
+  const [undoing, setUndoing] = useState(false);
   const [error, setError] = useState("");
   const t = doc.tailored!;
   const remaining = countMetrics(t.resume);
   const typed = [...values.values()].filter((v) => v.trim()).length;
+
+  // The package gate: nothing leaves the desk with unfinished numbers
+  // or unsaved work on the paper.
+  const blockers: string[] = [];
+  if (remaining > 0) blockers.push(
+    `${remaining} [METRIC] placeholder${remaining > 1 ? "s" : ""} still on the paper: type your real numbers into the amber chips, then press Save`);
+  else if (typed > 0) blockers.push("You typed numbers but have not saved them yet");
+  if (pendingEdits.size > 0) blockers.push(
+    `${pendingEdits.size} text edit${pendingEdits.size > 1 ? "s" : ""} not saved yet`);
+  const gateTip = blockers.join(". ");
 
   const save = async () => {
     setSaving(true); setError("");
@@ -427,20 +448,68 @@ export function TailorStation({ doc, onDoc, onSend }: {
     finally { setSaving(false); }
   };
 
+  const saveEdits = async () => {
+    setSavingEdits(true); setError("");
+    try {
+      const edits = [...pendingEdits.entries()].map(([path, value]) => ({ path, value }));
+      const fresh = await api.editTailored(doc.resume_id, edits);
+      setPendingEdits(new Map());
+      setEditMode(false);
+      onDoc(fresh);
+    } catch (e) { setError((e as Error).message); }
+    finally { setSavingEdits(false); }
+  };
+
+  const undo = async () => {
+    setUndoing(true); setError("");
+    try {
+      const fresh = await api.undoTailored(doc.resume_id);
+      setValues(new Map()); setPendingEdits(new Map()); setEditMode(false);
+      onDoc(fresh);
+    } catch (e) { setError((e as Error).message); }
+    finally { setUndoing(false); }
+  };
+
   return (
     <div>
       <div className="peek-row">
-        <button className={"peek-btn" + (peek ? "" : " on")} onClick={() => setPeek(false)}>
+        <button className={"peek-btn" + (!peek && !editMode ? " on" : "")}
+          onClick={() => { setPeek(false); setEditMode(false); }}>
           Tailored
         </button>
-        <button className={"peek-btn" + (peek ? " on" : "")} onClick={() => setPeek(true)}>
+        <button className={"peek-btn" + (peek ? " on" : "")}
+          onClick={() => { setPeek(true); setEditMode(false); }}>
           Peek at the original
         </button>
+        <button className={"peek-btn" + (editMode ? " on" : "")}
+          title="Click any sentence on the paper and type; blur to stage the edit"
+          onClick={() => { setPeek(false); setEditMode(true); }}>
+          ✎ Edit the text
+        </button>
+        {(doc.tailored_history?.length ?? 0) > 0 && (
+          <button className="peek-btn" onClick={undo} disabled={undoing}
+            title={`Step back to the version before the last change (${doc.tailored_history?.length} step${(doc.tailored_history?.length ?? 0) > 1 ? "s" : ""} available)`}>
+            {undoing ? "Undoing…" : "↶ Undo"}
+          </button>
+        )}
       </div>
+      {editMode && (
+        <p className="edit-hint">
+          Editing directly: click a sentence, change it, click away. Bullets emptied out are deleted.
+          Employers, titles, and dates stay locked, that is the honesty contract.
+        </p>
+      )}
       <div className="desk-grid">
         {/* key remount replays the paper-settle animation on flip */}
         {peek && doc.structured ? (
           <Paper key="original" resume={doc.structured} mode="report" report={doc.report} />
+        ) : editMode ? (
+          <Paper
+            key="editable"
+            resume={t.resume} mode="tailored" report={doc.tailored_report}
+            changes={t.changes}
+            onEdit={(path, value) => setPendingEdits((m) => new Map(m).set(path, value))}
+          />
         ) : (
           <Paper
             key="tailored"
@@ -450,6 +519,18 @@ export function TailorStation({ doc, onDoc, onSend }: {
           />
         )}
         <aside className="rail">
+          {pendingEdits.size > 0 && (
+            <div className="panel" style={{ borderColor: "rgba(32,184,205,0.45)" }}>
+              <p className="eyebrow" style={{ color: "var(--teal)" }}>Your edits</p>
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
+                {pendingEdits.size} field{pendingEdits.size > 1 ? "s" : ""} changed on the paper. Save to make it real; the previous version stays one Undo away.
+              </p>
+              <button className="btn" style={{ width: "100%", marginTop: "0.7rem" }}
+                onClick={saveEdits} disabled={savingEdits}>
+                {savingEdits ? "Saving…" : `Save ${pendingEdits.size} edit${pendingEdits.size > 1 ? "s" : ""}`}
+              </button>
+            </div>
+          )}
           <div className="panel score-panel" style={{ justifyContent: "space-between" }}>
             <div className="delta">
               <span className="pill from">{doc.report?.score ?? "-"}</span>
@@ -501,14 +582,114 @@ export function TailorStation({ doc, onDoc, onSend }: {
             </div>
           )}
 
+          <CoachPanel doc={doc} onDoc={onDoc} />
+
           {error && <div className="errbox">{error}</div>}
 
           <div className="panel cta-panel">
-            <button className="btn" style={{ width: "100%" }} onClick={onSend}>
+            <button className="btn" style={{ width: "100%" }} onClick={onSend}
+              disabled={blockers.length > 0}
+              title={gateTip || "Package the finished resume"}>
               Looks right, package it
             </button>
+            {blockers.length > 0 && (
+              <p className="gate-note">{blockers[0]}.</p>
+            )}
           </div>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+/* ── The coach: ask questions, or ask for an edit ── */
+
+function CoachPanel({ doc, onDoc }: {
+  doc: ResumeDoc;
+  onDoc: (d: ResumeDoc) => void;
+}) {
+  const [log, setLog] = useState<ChatTurn[]>([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState<"" | "ask" | "edit">("");
+  const logRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
+  }, [log, busy]);
+
+  const push = (turn: ChatTurn) => setLog((l) => [...l, turn]);
+
+  const ask = async () => {
+    const q = input.trim();
+    if (!q || busy) return;
+    setInput(""); push({ role: "user", content: q }); setBusy("ask");
+    try {
+      const { answer } = await api.adviseResume(doc.resume_id, q, log.slice(-8));
+      push({ role: "assistant", content: answer });
+    } catch (e) {
+      push({ role: "assistant", content: (e as Error).message });
+    } finally { setBusy(""); }
+  };
+
+  const requestEdit = async () => {
+    const q = input.trim();
+    if (!q || busy) return;
+    setInput(""); push({ role: "user", content: `Edit: ${q}` }); setBusy("edit");
+    try {
+      const before = doc.tailored?.changes.length ?? 0;
+      const fresh = await api.requestEdit(doc.resume_id, q);
+      onDoc(fresh);
+      const changed = (fresh.tailored?.changes.length ?? 0);
+      const newWarnings = fresh.tailored?.warnings.slice(-2) ?? [];
+      push({
+        role: "assistant",
+        content: `Done, the paper is updated (${Math.max(changed - before, 0) || changed} change${changed === 1 ? "" : "s"} logged). ` +
+          (newWarnings.length ? `Notes: ${newWarnings.join(" ")} ` : "") +
+          "Undo is at the top if it went too far.",
+      });
+    } catch (e) {
+      push({ role: "assistant", content: (e as Error).message });
+    } finally { setBusy(""); }
+  };
+
+  return (
+    <div className="panel">
+      <p className="eyebrow">The coach</p>
+      <p style={{ fontSize: "0.72rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
+        Ask about metrics or phrasing, or describe an edit and let the coach make it. It will not invent facts for you.
+      </p>
+      {log.length > 0 && (
+        <div className="coach-log" ref={logRef}>
+          {log.map((m, i) => (
+            <div key={i} className={"coach-msg " + m.role}>{m.content}</div>
+          ))}
+          {busy && (
+            <div className="coach-msg assistant thinking">
+              {busy === "ask" ? "Thinking…" : "Editing the paper… (about half a minute)"}
+            </div>
+          )}
+        </div>
+      )}
+      <textarea
+        className="coach-input"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        placeholder={'e.g. "What metric fits the deploy bullet?" or "Make the summary lead with Kafka"'}
+        rows={2}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); }
+        }}
+      />
+      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+        <button className="btn btn-quiet" style={{ flex: 1 }} onClick={ask}
+          disabled={!input.trim() || !!busy}>
+          Ask
+        </button>
+        <button className="btn" style={{ flex: 1 }} onClick={requestEdit}
+          disabled={!input.trim() || !!busy}
+          title="The coach edits the tailored resume as instructed; honesty guard applies and Undo is one click">
+          Make this edit
+        </button>
       </div>
     </div>
   );

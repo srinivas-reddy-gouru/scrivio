@@ -58,8 +58,11 @@ export interface ResumeDoc {
   review: ResumeReview | null;
   tailored: TailoredResume | null;
   tailored_report: AtsReport | null;
+  tailored_history: TailoredResume[];
   created_at: string;
 }
+
+export interface ChatTurn { role: "user" | "assistant"; content: string; }
 
 export interface ResumeSummaryItem {
   resume_id: string; name: string; jd_label: string;

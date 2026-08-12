@@ -744,6 +744,10 @@ class ResumeDoc(BaseModel):
     review: ResumeReview | None = None
     tailored: TailoredResume | None = None
     tailored_report: AtsReport | None = None  # before/after comparison
+    # Undo stack: the tailored version as it was before each mutation
+    # (metric fill, manual edit, instructed edit, re-tailor). Capped at
+    # 10; old docs deserialize with an empty stack.
+    tailored_history: list[TailoredResume] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

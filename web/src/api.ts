@@ -32,6 +32,26 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ values }),
     }).then((r) => json<ResumeDoc>(r)),
+  editTailored: (id: string, edits: Array<{ path: string; value: string }>) =>
+    fetch(`/resumes/${id}/edit-tailored`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ edits }),
+    }).then((r) => json<ResumeDoc>(r)),
+  adviseResume: (id: string, question: string, history: Array<{ role: string; content: string }>) =>
+    fetch(`/resumes/${id}/advise`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, history }),
+    }).then((r) => json<{ answer: string }>(r)),
+  requestEdit: (id: string, instruction: string) =>
+    fetch(`/resumes/${id}/request-edit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ instruction }),
+    }).then((r) => json<ResumeDoc>(r)),
+  undoTailored: (id: string) =>
+    fetch(`/resumes/${id}/undo-tailored`, { method: "POST" }).then((r) => json<ResumeDoc>(r)),
   deleteResume: (id: string) => fetch(`/resumes/${id}`, { method: "DELETE" }),
   listJobProfiles: () =>
     fetch("/job-profiles").then((r) => json<JobProfileSummary[]>(r)),

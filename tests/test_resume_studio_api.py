@@ -333,3 +333,97 @@ def test_fill_metrics_finishes_the_tailored_resume():
     md = client.get(f"/resumes/{rid}/download?fmt=md&version=tailored")
     assert "[METRIC]" not in md.text
     assert "by 35%" in md.text
+
+
+# ── Edit, coach, instructed edit, undo ───────────────────────────────
+
+def test_manual_edit_updates_text_reruns_checks_and_banks_undo():
+    client = TestClient(server.app)
+    doc = _create(client, jd_text=JD)
+    rid = doc["resume_id"]
+    assert client.post(f"/resumes/{rid}/edit-tailored",
+                       json={"edits": [{"path": "basics.summary", "value": "x"}]},
+                       ).status_code == 422  # not tailored yet
+    doc = _tailor(client, rid)
+    before_summary = doc["tailored"]["resume"]["basics"]["summary"]
+    r = client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "basics.summary", "value": "Hands-on backend engineer for event-driven payment systems."},
+    ]})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["tailored"]["resume"]["basics"]["summary"].startswith("Hands-on backend")
+    assert out["tailored_report"] is not None
+    assert len(out["tailored_history"]) == 1
+    assert out["tailored_history"][0]["resume"]["basics"]["summary"] == before_summary
+    # Unknown paths are rejected, not silently dropped.
+    bad = client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "work[0].name", "value": "FakeCorp"},
+    ]})
+    assert bad.status_code == 422
+    assert "not editable" in bad.json()["detail"]
+
+
+def test_manual_edit_empty_value_deletes_a_bullet():
+    client = TestClient(server.app)
+    doc = _create(client, jd_text=JD)
+    rid = doc["resume_id"]
+    doc = _tailor(client, rid)
+    n_before = len(doc["tailored"]["resume"]["work"][0]["highlights"])
+    r = client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "work[0].highlights[0]", "value": ""},
+    ]})
+    assert r.status_code == 200, r.text
+    assert len(r.json()["tailored"]["resume"]["work"][0]["highlights"]) == n_before - 1
+
+
+def test_advise_answers_without_mutating_the_doc():
+    client = TestClient(server.app)
+    doc = _create(client, jd_text=JD)
+    rid = doc["resume_id"]
+    _tailor(client, rid)
+    r = client.post(f"/resumes/{rid}/advise", json={
+        "question": "What number should go in the deploy-time bullet?",
+        "history": [{"role": "user", "content": "hi"},
+                    {"role": "assistant", "content": "hello"}],
+    })
+    assert r.status_code == 200, r.text
+    assert "pipeline duration" in r.json()["answer"]
+    # Read-only: no undo entry, doc untouched.
+    assert client.get(f"/resumes/{rid}").json()["tailored_history"] == []
+    assert client.post(f"/resumes/{rid}/advise",
+                       json={"question": "  "}).status_code == 422
+
+
+def test_request_edit_applies_instruction_behind_honesty_guard():
+    client = TestClient(server.app)
+    doc = _create(client, jd_text=JD)
+    rid = doc["resume_id"]
+    doc = _tailor(client, rid)
+    r = client.post(f"/resumes/{rid}/request-edit",
+                    json={"instruction": "Lead the summary with Kafka experience."})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    # Honesty spine holds through instructed edits: employers unchanged.
+    orig_names = [w["name"] for w in doc["structured"]["work"]]
+    assert [w["name"] for w in out["tailored"]["resume"]["work"]] == orig_names
+    assert len(out["tailored_history"]) == 1
+    assert client.post(f"/resumes/{rid}/request-edit",
+                       json={"instruction": ""}).status_code == 422
+
+
+def test_undo_walks_back_through_the_history_stack():
+    client = TestClient(server.app)
+    doc = _create(client, jd_text=JD)
+    rid = doc["resume_id"]
+    doc = _tailor(client, rid)
+    original_summary = doc["tailored"]["resume"]["basics"]["summary"]
+    client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "basics.summary", "value": "First edit."}]})
+    client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "basics.summary", "value": "Second edit."}]})
+    r = client.post(f"/resumes/{rid}/undo-tailored")
+    assert r.status_code == 200, r.text
+    assert r.json()["tailored"]["resume"]["basics"]["summary"] == "First edit."
+    r = client.post(f"/resumes/{rid}/undo-tailored")
+    assert r.json()["tailored"]["resume"]["basics"]["summary"] == original_summary
+    assert client.post(f"/resumes/{rid}/undo-tailored").status_code == 422  # stack empty

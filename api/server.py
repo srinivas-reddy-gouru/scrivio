@@ -42,6 +42,7 @@ from pipeline.schemas.models import (
     ProgressEvent,
     ResumeDoc,
     StructuredResume,
+    TailoredResume,
 )
 from pipeline.workers.answer_evaluator_worker import (
     evaluate_answer,
@@ -57,6 +58,10 @@ from pipeline.workers.job_interviewer_worker import (
 )
 from pipeline.workers.resume_parser import ResumeParseError, parse_resume
 from pipeline.workers.resume_studio_worker import (
+    advise_resume,
+    apply_tailored_edits,
+    build_resume_advice_context,
+    edit_resume_by_instruction,
     extract_resume,
     fill_metric_placeholders,
     from_jsonresume,
@@ -2132,6 +2137,7 @@ async def _finish_resume_tailor(resume_id: str) -> None:
         return
     client, preset = _client_for_session({}, "resume")
     try:
+        previous = doc.tailored.model_copy(deep=True) if doc.tailored else None
         doc.tailored = await tailor_resume(
             structured=doc.structured,
             jd_text=doc.jd_text,
@@ -2140,6 +2146,8 @@ async def _finish_resume_tailor(resume_id: str) -> None:
             client=client,
             preset=preset,
         )
+        if previous is not None:
+            _push_tailored_history(doc, previous)
         # Before/after on identical footing: re-run the same deterministic
         # checks on the tailored structure's canonical rendering.
         doc.tailored_report = run_ats_checks(
@@ -2196,8 +2204,10 @@ async def fill_resume_metrics(resume_id: str, body: MetricFillRequest) -> Resume
         raise HTTPException(status_code=422, detail="No tailored version to fill yet.")
     if doc.tailor_status == "tailoring":
         raise HTTPException(status_code=409, detail="Tailoring is still running.")
+    snapshot = doc.tailored.model_copy(deep=True)
     filled = fill_metric_placeholders(doc.tailored.resume, body.values)
     if filled:
+        _push_tailored_history(doc, snapshot)
         # The numbers change quantification/keyword math — keep the
         # before/after comparison honest.
         doc.tailored_report = run_ats_checks(
@@ -2205,6 +2215,144 @@ async def fill_resume_metrics(resume_id: str, body: MetricFillRequest) -> Resume
             doc.tailored.resume,
         )
         _save_resume_doc(doc)
+    return doc
+
+
+def _push_tailored_history(doc: ResumeDoc, snapshot: TailoredResume) -> None:
+    """Every mutation of the tailored version banks the prior state for
+    undo. Capped so the doc file cannot grow without bound."""
+    doc.tailored_history.append(snapshot)
+    del doc.tailored_history[:-10]
+
+
+def _refresh_tailored_report(doc: ResumeDoc) -> None:
+    doc.tailored_report = run_ats_checks(
+        render_markdown(doc.tailored.resume), doc.jd_text or None,
+        doc.tailored.resume,
+    )
+
+
+class TailoredEditItem(BaseModel):
+    path: str
+    value: str
+
+
+class TailoredEditRequest(BaseModel):
+    edits: list[TailoredEditItem]
+
+
+@app.post("/resumes/{resume_id}/edit-tailored", response_model=ResumeDoc)
+async def edit_tailored_endpoint(
+    resume_id: str, body: TailoredEditRequest
+) -> ResumeDoc:
+    """The user's own text edits to the tailored resume, by where-path."""
+    doc = _load_resume_doc(resume_id)
+    if doc.tailored is None:
+        raise HTTPException(status_code=422, detail="No tailored version to edit yet.")
+    if doc.tailor_status == "tailoring":
+        raise HTTPException(status_code=409, detail="Tailoring is still running.")
+    if not body.edits:
+        raise HTTPException(status_code=422, detail="No edits given.")
+    snapshot = doc.tailored.model_copy(deep=True)
+    try:
+        applied = apply_tailored_edits(
+            doc.tailored.resume, [(e.path, e.value) for e in body.edits]
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if applied:
+        _push_tailored_history(doc, snapshot)
+        _refresh_tailored_report(doc)
+        _save_resume_doc(doc)
+    return doc
+
+
+class ResumeAdviceRequest(BaseModel):
+    question: str
+    # Prior turns of this chat, [{role: user|assistant, content: str}];
+    # the client keeps the transcript, the server stays stateless.
+    history: list[dict] = []
+
+
+@app.post("/resumes/{resume_id}/advise")
+async def advise_resume_endpoint(
+    resume_id: str, body: ResumeAdviceRequest
+) -> dict:
+    """Read-only coaching chat: metrics, phrasing, what recruiters read.
+    Never mutates the resume — edits go through /request-edit."""
+    doc = _load_resume_doc(resume_id)
+    question = body.question.strip()
+    if not question:
+        raise HTTPException(status_code=422, detail="Ask a question first.")
+    client, preset = _client_for_session({}, "resume")
+    try:
+        answer = await advise_resume(
+            question=question, history=body.history[-8:],
+            context=build_resume_advice_context(doc),
+            client=client, preset=preset,
+        )
+    except Exception:
+        logging.exception("Resume advice failed")
+        raise HTTPException(
+            status_code=502,
+            detail="The coach is unavailable — check your provider in Settings.",
+        )
+    return {"answer": answer}
+
+
+class ResumeInstructionRequest(BaseModel):
+    instruction: str
+
+
+@app.post("/resumes/{resume_id}/request-edit", response_model=ResumeDoc)
+async def request_tailored_edit(
+    resume_id: str, body: ResumeInstructionRequest
+) -> ResumeDoc:
+    """Apply one natural-language instruction to the tailored resume via
+    the LLM, behind the same honesty guard as tailoring. The prior
+    version lands on the undo stack."""
+    doc = _load_resume_doc(resume_id)
+    if doc.tailored is None or doc.structured is None:
+        raise HTTPException(status_code=422, detail="No tailored version to edit yet.")
+    if doc.tailor_status == "tailoring":
+        raise HTTPException(status_code=409, detail="Tailoring is still running.")
+    instruction = body.instruction.strip()
+    if not instruction:
+        raise HTTPException(status_code=422, detail="Describe the edit you want.")
+    client, preset = _client_for_session({}, "resume")
+    snapshot = doc.tailored.model_copy(deep=True)
+    try:
+        edited = await edit_resume_by_instruction(
+            original=doc.structured, tailored=doc.tailored,
+            jd_text=doc.jd_text, instruction=instruction,
+            client=client, preset=preset,
+        )
+    except Exception:
+        logging.exception("Instructed resume edit failed")
+        raise HTTPException(
+            status_code=502,
+            detail="The edit did not go through — check your provider in Settings "
+                   "and try again.",
+        )
+    _push_tailored_history(doc, snapshot)
+    doc.tailored = edited
+    _refresh_tailored_report(doc)
+    _save_resume_doc(doc)
+    return doc
+
+
+@app.post("/resumes/{resume_id}/undo-tailored", response_model=ResumeDoc)
+async def undo_tailored_endpoint(resume_id: str) -> ResumeDoc:
+    """Step the tailored resume back to the version before the last
+    mutation (metric fill, manual edit, instructed edit, or re-tailor)."""
+    doc = _load_resume_doc(resume_id)
+    if doc.tailor_status == "tailoring":
+        raise HTTPException(status_code=409, detail="Tailoring is still running.")
+    if not doc.tailored_history:
+        raise HTTPException(status_code=422, detail="Nothing to undo.")
+    doc.tailored = doc.tailored_history.pop()
+    _refresh_tailored_report(doc)
+    _save_resume_doc(doc)
     return doc
 
 
