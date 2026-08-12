@@ -302,13 +302,23 @@ async def advise_resume(
 async def edit_resume_by_instruction(
     *, original: StructuredResume, tailored: TailoredResume,
     jd_text: str, instruction: str, client, preset: str = "balanced",
+    conversation: Sequence[dict] = (),
 ) -> TailoredResume:
     """Apply ONE user instruction to the tailored resume via the LLM,
     behind the same honesty guard as tailoring: the model proposes, the
-    deterministic post-guard disposes."""
+    deterministic post-guard disposes. When a coach conversation is
+    passed, it is context for what "the recommended edits" means."""
+    convo_block = ""
+    if conversation:
+        turns = "\n".join(
+            f"{m.get('role')}: {m.get('content', '')[:600]}"
+            for m in conversation if m.get("role") in ("user", "assistant")
+        )
+        convo_block = f"coaching_conversation (what was recommended):\n{turns}\n\n"
     user_content = (
         f"current_tailored_resume:\n{tailored.resume.model_dump_json(indent=1)}\n\n"
         f"job_description (context only):\n{jd_text[:2000]}\n\n"
+        f"{convo_block}"
         f"user_instruction:\n{instruction}"
     )
     response = await client.messages.create(

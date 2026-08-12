@@ -427,3 +427,23 @@ def test_undo_walks_back_through_the_history_stack():
     r = client.post(f"/resumes/{rid}/undo-tailored")
     assert r.json()["tailored"]["resume"]["basics"]["summary"] == original_summary
     assert client.post(f"/resumes/{rid}/undo-tailored").status_code == 422  # stack empty
+
+
+def test_request_edit_from_conversation_with_empty_instruction():
+    """An empty instruction with coach history applies what was
+    recommended; empty instruction with no history is still rejected."""
+    client = TestClient(server.app)
+    doc = _create(client, jd_text=JD)
+    rid = doc["resume_id"]
+    _tailor(client, rid)
+    assert client.post(f"/resumes/{rid}/request-edit",
+                       json={"instruction": ""}).status_code == 422
+    r = client.post(f"/resumes/{rid}/request-edit", json={
+        "instruction": "",
+        "history": [
+            {"role": "user", "content": "What metric fits the deploy bullet?"},
+            {"role": "assistant", "content": "Use before/after pipeline minutes."},
+        ],
+    })
+    assert r.status_code == 200, r.text
+    assert len(r.json()["tailored_history"]) == 1

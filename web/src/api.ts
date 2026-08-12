@@ -44,11 +44,11 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, history }),
     }).then((r) => json<{ answer: string }>(r)),
-  requestEdit: (id: string, instruction: string) =>
+  requestEdit: (id: string, instruction: string, history: Array<{ role: string; content: string }> = []) =>
     fetch(`/resumes/${id}/request-edit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instruction }),
+      body: JSON.stringify({ instruction, history }),
     }).then((r) => json<ResumeDoc>(r)),
   undoTailored: (id: string) =>
     fetch(`/resumes/${id}/undo-tailored`, { method: "POST" }).then((r) => json<ResumeDoc>(r)),

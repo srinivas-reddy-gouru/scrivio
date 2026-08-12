@@ -654,11 +654,14 @@ function CoachDock({ doc, onDoc }: {
 
   const requestEdit = async () => {
     const q = input.trim();
-    if (!q || busy) return;
-    setInput(""); push({ role: "user", content: `Edit: ${q}` }); setBusy("edit");
+    if (busy || (!q && log.length === 0)) return;
+    const transcript = log.slice(-8);
+    setInput("");
+    push({ role: "user", content: q ? `Edit: ${q}` : "Edit: apply what you recommended above" });
+    setBusy("edit");
     try {
       const before = doc.tailored?.changes.length ?? 0;
-      const fresh = await api.requestEdit(doc.resume_id, q);
+      const fresh = await api.requestEdit(doc.resume_id, q, transcript);
       onDoc(fresh);
       const changed = (fresh.tailored?.changes.length ?? 0);
       const newWarnings = fresh.tailored?.warnings.slice(-2) ?? [];
@@ -713,9 +716,11 @@ function CoachDock({ doc, onDoc }: {
               Ask
             </button>
             <button className="btn" style={{ flex: 1 }} onClick={requestEdit}
-              disabled={!input.trim() || !!busy}
-              title="The coach edits the tailored resume as instructed; honesty guard applies and Undo is one click">
-              Make this edit
+              disabled={!!busy || (!input.trim() && log.length === 0)}
+              title={input.trim()
+                ? "The coach edits the tailored resume as instructed; honesty guard applies and Undo is one click"
+                : "Empty box: applies what the coach recommended in this conversation"}>
+              {input.trim() || log.length === 0 ? "Make this edit" : "Apply the advice"}
             </button>
           </div>
         </div>

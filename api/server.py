@@ -2301,7 +2301,10 @@ async def advise_resume_endpoint(
 
 
 class ResumeInstructionRequest(BaseModel):
-    instruction: str
+    instruction: str = ""
+    # Coach chat turns; with an empty instruction the edit applies what
+    # the coach recommended in this conversation.
+    history: list[dict] = []
 
 
 @app.post("/resumes/{resume_id}/request-edit", response_model=ResumeDoc)
@@ -2317,15 +2320,30 @@ async def request_tailored_edit(
     if doc.tailor_status == "tailoring":
         raise HTTPException(status_code=409, detail="Tailoring is still running.")
     instruction = body.instruction.strip()
-    if not instruction:
+    history = [
+        m for m in body.history[-8:]
+        if m.get("role") in ("user", "assistant") and m.get("content")
+    ]
+    if not instruction and not history:
         raise HTTPException(status_code=422, detail="Describe the edit you want.")
+    if not instruction:
+        instruction = (
+            "The coaching conversation above recommends specific bullet "
+            "rewrites. Apply exactly those: rewrite each bullet the coach "
+            "recommended changing, in the recommended form. Where the "
+            "rewritten bullet needs a number only the candidate knows, write "
+            "[METRIC] in its place and add a warning naming exactly what to "
+            "look up and where (e.g. before/after deploy minutes from "
+            "pipeline history). Do not touch any field the coach did not "
+            "name."
+        )
     client, preset = _client_for_session({}, "resume")
     snapshot = doc.tailored.model_copy(deep=True)
     try:
         edited = await edit_resume_by_instruction(
             original=doc.structured, tailored=doc.tailored,
             jd_text=doc.jd_text, instruction=instruction,
-            client=client, preset=preset,
+            client=client, preset=preset, conversation=history,
         )
     except Exception:
         logging.exception("Instructed resume edit failed")
