@@ -315,8 +315,11 @@ async def edit_resume_by_instruction(
             for m in conversation if m.get("role") in ("user", "assistant")
         )
         convo_block = f"coaching_conversation (what was recommended):\n{turns}\n\n"
+    warnings_block = "\n".join(f"- {w}" for w in tailored.warnings) or "(none)"
     user_content = (
         f"current_tailored_resume:\n{tailored.resume.model_dump_json(indent=1)}\n\n"
+        f"current_warnings (carry forward the ones your edit does not resolve):\n"
+        f"{warnings_block}\n\n"
         f"job_description (context only):\n{jd_text[:2000]}\n\n"
         f"{convo_block}"
         f"user_instruction:\n{instruction}"

@@ -399,6 +399,39 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 .prose .mermaid { background: #fff; padding: 1.5rem; border-radius: 0.875rem; border: 1px solid #e6e2da; margin: 1.75rem 0; text-align: center; }
 .prose .mermaid svg { max-width: 100%; height: auto; }
 
+/* Change tooltips: hover a teal-marked line to read what changed and why */
+.note-tip { position: relative; }
+.note-tip:hover::after, .note-tip:focus-within::after {
+  content: attr(data-note);
+  position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 30;
+  width: max-content; max-width: min(420px, 80vw);
+  background: #142623; color: #DFE8E3;
+  font-size: 0.72rem; line-height: 1.5; font-weight: 400; font-style: normal;
+  padding: 0.55rem 0.75rem; border-radius: 8px;
+  border: 1px solid rgba(32, 184, 205, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  pointer-events: none; white-space: normal;
+}
+.note-tip:hover::before {
+  content: ""; position: absolute; left: 1rem; bottom: calc(100% + 1px); z-index: 31;
+  border: 5px solid transparent; border-top-color: #142623;
+}
+
+/* Actionable honesty notes */
+.note-row { padding: 0.55rem 0 0.65rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.note-row:last-child { border-bottom: none; padding-bottom: 0.2rem; }
+.note-row p { font-size: 0.74rem; color: var(--text-dim); line-height: 1.5; }
+.note-actions { display: flex; gap: 0.45rem; margin-top: 0.45rem; }
+.note-btn {
+  border: 1px solid var(--stroke); border-radius: 7px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); color: var(--text);
+  font-family: inherit; font-size: 0.68rem; font-weight: 700;
+  padding: 0.3rem 0.65rem; transition: border-color 0.15s, color 0.15s;
+}
+.note-btn.fix { color: var(--teal); border-color: rgba(32, 184, 205, 0.45); }
+.note-btn.fix:hover:not(:disabled) { background: rgba(32, 184, 205, 0.12); }
+.note-btn:disabled { opacity: 0.5; cursor: wait; }
+
 /* Full-page text editor overlay: paper surface, ink text — the one
    place you stare at text for minutes, so contrast is the design. */
 .fulledit-overlay {

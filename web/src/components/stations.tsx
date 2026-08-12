@@ -485,6 +485,7 @@ export function TailorStation({ doc, onDoc, onSend }: {
   const [pendingEdits, setPendingEdits] = useState<Map<string, string>>(new Map());
   const [savingEdits, setSavingEdits] = useState(false);
   const [undoing, setUndoing] = useState(false);
+  const [fixingNote, setFixingNote] = useState<number | null>(null);
   const [error, setError] = useState("");
   const t = doc.tailored!;
   const remaining = countMetrics(t.resume);
@@ -532,6 +533,19 @@ export function TailorStation({ doc, onDoc, onSend }: {
       onDoc(fresh);
     } catch (e) { setError((e as Error).message); }
     finally { setUndoing(false); }
+  };
+
+  const fixNote = async (i: number, note: string) => {
+    setFixingNote(i); setError("");
+    try {
+      const fresh = await api.requestEdit(doc.resume_id,
+        `Apply the fix this honesty note suggests: "${note}". Change only what ` +
+        "the note names. If the fix needs a fact or number only I know and the " +
+        "note does not call for a [METRIC] placeholder, leave the text as it is " +
+        "and keep the note.");
+      onDoc(fresh);
+    } catch (e) { setError((e as Error).message); }
+    finally { setFixingNote(null); }
   };
 
   return (
@@ -614,25 +628,45 @@ export function TailorStation({ doc, onDoc, onSend }: {
             </div>
           )}
 
+          {t.warnings.length > 0 && (
+            <div className="panel" style={{ borderColor: "rgba(229,176,76,0.4)" }}>
+              <p className="eyebrow" style={{ color: "var(--amber)" }}>
+                Honesty notes · {t.warnings.length} need you
+              </p>
+              <p style={{ fontSize: "0.7rem", color: "var(--text-faint)", lineHeight: 1.5 }}>
+                Fix hands the note to the editor (about half a minute, undoable). Ask opens the coach with the note loaded.
+              </p>
+              {t.warnings.map((w, i) => (
+                <div className="note-row" key={i}>
+                  <p>{w}</p>
+                  <div className="note-actions">
+                    <button className="note-btn fix" disabled={fixingNote !== null}
+                      onClick={() => fixNote(i, w)}>
+                      {fixingNote === i ? "Fixing…" : "Fix it for me"}
+                    </button>
+                    <button className="note-btn" disabled={fixingNote !== null}
+                      onClick={() => window.dispatchEvent(new CustomEvent("coach-prefill", {
+                        detail: `About this honesty note: "${w}" What should I do here?`,
+                      }))}>
+                      Ask the coach
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="panel">
             <p className="eyebrow">What changed, and why</p>
+            <p style={{ fontSize: "0.7rem", color: "var(--text-faint)", lineHeight: 1.5 }}>
+              Also on the paper: hover any teal-marked line to see its note.
+            </p>
             {t.changes.map((c, i) => (
               <div className="change-note" key={i} style={{ "--i": i } as React.CSSProperties}>
                 <span className="where">{c.where}</span> {c.what}
               </div>
             ))}
           </div>
-
-          {t.warnings.length > 0 && (
-            <div className="panel" style={{ borderColor: "rgba(229,176,76,0.4)" }}>
-              <p className="eyebrow" style={{ color: "var(--amber)" }}>Honesty notes</p>
-              {t.warnings.map((w, i) => (
-                <p key={i} style={{ fontSize: "0.74rem", color: "var(--text-dim)", lineHeight: 1.5, padding: "0.2rem 0" }}>
-                  • {w}
-                </p>
-              ))}
-            </div>
-          )}
 
           {error && <div className="errbox">{error}</div>}
 
@@ -698,6 +732,16 @@ function CoachDock({ doc, onDoc }: {
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [log, busy, open]);
+
+  // "Ask the coach" on an honesty note opens the dock with the note loaded.
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      setInput((e as CustomEvent<string>).detail);
+      setOpen(true); setUnread(false);
+    };
+    window.addEventListener("coach-prefill", onPrefill);
+    return () => window.removeEventListener("coach-prefill", onPrefill);
+  }, []);
 
   const push = (turn: ChatTurn) => {
     setLog((l) => [...l, turn]);

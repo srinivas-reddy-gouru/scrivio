@@ -108,7 +108,10 @@ export function Paper({
     <div className="paper">
       <h1>{b.name || "Your name"}</h1>
       {b.label && (
-        <div className={"headline" + (mode === "tailored" && idx.byField.has("basics.label") ? " marked mark-teal" : "")}>
+        <div
+          className={"headline" + (mode === "tailored" && idx.byField.has("basics.label") ? " marked mark-teal note-tip" : "")}
+          data-note={mode === "tailored" ? idx.byField.get("basics.label")?.what : undefined}
+        >
           {b.label}
         </div>
       )}
@@ -122,7 +125,10 @@ export function Paper({
           {onEdit ? (
             <EditableText path="basics.summary" text={b.summary} onEdit={onEdit} />
           ) : (
-            <p className={mode === "tailored" && idx.byField.has("basics.summary") ? "marked mark-teal" : ""}>
+            <p
+              className={mode === "tailored" && idx.byField.has("basics.summary") ? "marked mark-teal note-tip" : ""}
+              data-note={mode === "tailored" ? idx.byField.get("basics.summary")?.what : undefined}
+            >
               {metric(b.summary)}
             </p>
           )}
@@ -162,10 +168,10 @@ export function Paper({
                   const findingId = mode === "report" && cls.includes("mark-red")
                     ? "weak-language"
                     : cls.includes("mark-amber") ? "quantification" : undefined;
+                  const note = mode === "tailored" ? idx.byHighlight.get(`${wi}:${hi}`)?.what : undefined;
                   return (
-                    <li key={hi} className={cls} data-finding={findingId} title={
-                      mode === "tailored" ? idx.byHighlight.get(`${wi}:${hi}`)?.what : undefined
-                    }>
+                    <li key={hi} className={cls + (note ? " note-tip" : "")}
+                      data-finding={findingId} data-note={note}>
                       {underline ? (
                         <UnderlinedText text={h} phrase={underline} />
                       ) : (
