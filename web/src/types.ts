@@ -101,6 +101,7 @@ export interface InterviewStats {
 
 export interface SettingsInfo {
   resolved_provider: string; provider_auto: boolean; active_cli: string;
+  has_search: boolean;
 }
 
 /* ── Job Room ── */

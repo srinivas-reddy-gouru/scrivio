@@ -519,18 +519,6 @@ export function TailorStation({ doc, onDoc, onSend }: {
           />
         )}
         <aside className="rail">
-          {pendingEdits.size > 0 && (
-            <div className="panel" style={{ borderColor: "rgba(32,184,205,0.45)" }}>
-              <p className="eyebrow" style={{ color: "var(--teal)" }}>Your edits</p>
-              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
-                {pendingEdits.size} field{pendingEdits.size > 1 ? "s" : ""} changed on the paper. Save to make it real; the previous version stays one Undo away.
-              </p>
-              <button className="btn" style={{ width: "100%", marginTop: "0.7rem" }}
-                onClick={saveEdits} disabled={savingEdits}>
-                {savingEdits ? "Saving…" : `Save ${pendingEdits.size} edit${pendingEdits.size > 1 ? "s" : ""}`}
-              </button>
-            </div>
-          )}
           <div className="panel score-panel" style={{ justifyContent: "space-between" }}>
             <div className="delta">
               <span className="pill from">{doc.report?.score ?? "-"}</span>
@@ -582,8 +570,6 @@ export function TailorStation({ doc, onDoc, onSend }: {
             </div>
           )}
 
-          <CoachPanel doc={doc} onDoc={onDoc} />
-
           {error && <div className="errbox">{error}</div>}
 
           <div className="panel cta-panel">
@@ -598,26 +584,61 @@ export function TailorStation({ doc, onDoc, onSend }: {
           </div>
         </aside>
       </div>
+
+      {/* Staged work follows you: the save bar floats over any scroll position. */}
+      {(pendingEdits.size > 0 || typed > 0) && (
+        <div className="float-save" role="status">
+          <span className="msg">
+            {pendingEdits.size > 0
+              ? <><b>{pendingEdits.size} edit{pendingEdits.size > 1 ? "s" : ""}</b> staged on the paper</>
+              : <><b>{typed} number{typed > 1 ? "s" : ""}</b> typed, not saved</>}
+          </span>
+          {pendingEdits.size > 0 ? (
+            <>
+              <button className="btn" onClick={saveEdits} disabled={savingEdits}>
+                {savingEdits ? "Saving…" : "Save edits"}
+              </button>
+              <button className="btn btn-quiet" onClick={() => { setPendingEdits(new Map()); setEditMode(false); }}>
+                Discard
+              </button>
+            </>
+          ) : (
+            <button className="btn" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : "Save numbers"}
+            </button>
+          )}
+        </div>
+      )}
+
+      <CoachDock doc={doc} onDoc={onDoc} />
     </div>
   );
 }
 
-/* ── The coach: ask questions, or ask for an edit ── */
+/* ── The coach dock: ask questions, or ask for an edit — reachable
+ * from any scroll position, chat kept warm while closed ── */
 
-function CoachPanel({ doc, onDoc }: {
+function CoachDock({ doc, onDoc }: {
   doc: ResumeDoc;
   onDoc: (d: ResumeDoc) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [unread, setUnread] = useState(false);
   const [log, setLog] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState<"" | "ask" | "edit">("");
   const logRef = useRef<HTMLDivElement>(null);
+  const openRef = useRef(open);
+  openRef.current = open;
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
-  }, [log, busy]);
+  }, [log, busy, open]);
 
-  const push = (turn: ChatTurn) => setLog((l) => [...l, turn]);
+  const push = (turn: ChatTurn) => {
+    setLog((l) => [...l, turn]);
+    if (turn.role === "assistant" && !openRef.current) setUnread(true);
+  };
 
   const ask = async () => {
     const q = input.trim();
@@ -653,45 +674,58 @@ function CoachPanel({ doc, onDoc }: {
   };
 
   return (
-    <div className="panel">
-      <p className="eyebrow">The coach</p>
-      <p style={{ fontSize: "0.72rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
-        Ask about metrics or phrasing, or describe an edit and let the coach make it. It will not invent facts for you.
-      </p>
-      {log.length > 0 && (
-        <div className="coach-log" ref={logRef}>
-          {log.map((m, i) => (
-            <div key={i} className={"coach-msg " + m.role}>{m.content}</div>
-          ))}
-          {busy && (
-            <div className="coach-msg assistant thinking">
-              {busy === "ask" ? "Thinking…" : "Editing the paper… (about half a minute)"}
+    <>
+      {open && (
+        <div className="coach-dock" role="dialog" aria-label="The coach">
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+            <p className="eyebrow" style={{ marginBottom: "0.3rem" }}>The coach</p>
+            <button className="btn btn-quiet" style={{ padding: "0.2rem 0.6rem" }}
+              aria-label="Close the coach" onClick={() => setOpen(false)}>✕</button>
+          </div>
+          <p style={{ fontSize: "0.72rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
+            Ask about metrics or phrasing, or describe an edit and let the coach make it. It will not invent facts for you.
+          </p>
+          {log.length > 0 && (
+            <div className="coach-log" ref={logRef}>
+              {log.map((m, i) => (
+                <div key={i} className={"coach-msg " + m.role}>{m.content}</div>
+              ))}
+              {busy && (
+                <div className="coach-msg assistant thinking">
+                  {busy === "ask" ? "Thinking…" : "Editing the paper… (about half a minute)"}
+                </div>
+              )}
             </div>
           )}
+          <textarea
+            className="coach-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={'e.g. "What metric fits the deploy bullet?" or "Make the summary lead with Kafka"'}
+            rows={2}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); }
+            }}
+          />
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+            <button className="btn btn-quiet" style={{ flex: 1 }} onClick={ask}
+              disabled={!input.trim() || !!busy}>
+              Ask
+            </button>
+            <button className="btn" style={{ flex: 1 }} onClick={requestEdit}
+              disabled={!input.trim() || !!busy}
+              title="The coach edits the tailored resume as instructed; honesty guard applies and Undo is one click">
+              Make this edit
+            </button>
+          </div>
         </div>
       )}
-      <textarea
-        className="coach-input"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder={'e.g. "What metric fits the deploy bullet?" or "Make the summary lead with Kafka"'}
-        rows={2}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); }
-        }}
-      />
-      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-        <button className="btn btn-quiet" style={{ flex: 1 }} onClick={ask}
-          disabled={!input.trim() || !!busy}>
-          Ask
-        </button>
-        <button className="btn" style={{ flex: 1 }} onClick={requestEdit}
-          disabled={!input.trim() || !!busy}
-          title="The coach edits the tailored resume as instructed; honesty guard applies and Undo is one click">
-          Make this edit
-        </button>
-      </div>
-    </div>
+      <button className="coach-fab" onClick={() => { setOpen((o) => !o); setUnread(false); }}
+        aria-expanded={open} aria-label="Open the coach">
+        {unread && <span className="dot" aria-label="New reply" />}
+        ◉ Coach{busy ? "…" : ""}
+      </button>
+    </>
   );
 }
 

@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import { api, articleApi, fmtElapsed, interviewApi, openSession } from "../api";
-import type { ArticleSummary, ClarificationQuestion, ProgressEvent } from "../types";
+import type { ArticleSummary, ClarificationQuestion, ProgressEvent, SettingsInfo } from "../types";
 
 const STAGES: Array<[string, string, string]> = [
   ["brief", "The brief", "editorial angle and scope"],
@@ -120,36 +120,73 @@ function Compose({ brief, setBrief, error, onGo, onOpen }: {
   onGo: () => void; onOpen: (id: string) => void;
 }) {
   const [library, setLibrary] = useState<ArticleSummary[]>([]);
-  useEffect(() => { api.listArticles().then(setLibrary).catch(() => {}); }, []);
+  const [settings, setSettings] = useState<SettingsInfo | null>(null);
+  useEffect(() => {
+    api.listArticles().then(setLibrary).catch(() => {});
+    api.settings().then(setSettings).catch(() => {});
+  }, []);
+
+  const providerLabel = settings
+    ? (settings.resolved_provider === "claude-cli"
+      ? `subscription (${settings.active_cli || "claude"})`
+      : `${settings.resolved_provider} api`)
+    : "checking…";
 
   return (
     <div className="room-wrap">
-      <h1 className="room-title bar-tick-left">Articles</h1>
-      <p className="room-sub">Every claim is searched, verified, or dropped before the ink dries. Watch it happen.</p>
-      <div className="panel compose-card room-col">
-        <p className="eyebrow">The assignment slip</p>
-        <textarea value={brief.topic} placeholder="What should the studio explain? e.g. How does Kafka handle backpressure?"
-          onChange={(e) => setBrief({ ...brief, topic: e.target.value })} />
-        <div className="seg" style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", margin: "0.8rem 0" }}>
-          {["basic", "intermediate", "advanced"].map((l) => (
-            <button key={l} className={"seg-pill" + (brief.level === l ? " on" : "")}
-              onClick={() => setBrief({ ...brief, level: l })}>{l}</button>
-          ))}
-          {(["fast", "balanced", "best"] as const).map((p) => (
-            <button key={p} className={"seg-pill" + (brief.preset === p ? " on" : "")}
-              onClick={() => setBrief({ ...brief, preset: p })}>{p}</button>
-          ))}
-          <button className={"seg-pill" + (brief.web_search ? " on" : "")}
-            onClick={() => setBrief({ ...brief, web_search: !brief.web_search })}>
-            web evidence {brief.web_search ? "on" : "off"}
-          </button>
-          <button className={"seg-pill" + (brief.include_diagrams ? " on" : "")}
+      <div className="compose-hero">
+        <h1>What should we <span className="grad-text">write</span> today?</h1>
+        <div className="bar" />
+        <p>Research-backed technical articles: sourced, verified, drafted and polished by a multi-agent pipeline.</p>
+      </div>
+      <div className="composer-card">
+        <textarea value={brief.topic}
+          placeholder={'Describe a topic or ask a question… e.g. "How does Kafka handle backpressure?"'}
+          onChange={(e) => setBrief({ ...brief, topic: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && brief.topic.trim()) onGo();
+          }}
+        />
+        {error && <div className="errbox" style={{ margin: "0 1.1rem 0.8rem" }}>{error}</div>}
+        <div className="composer-row">
+          <label className="pill-select" title="Reading level">
+            <span aria-hidden="true">⌂</span>
+            <select value={brief.level} onChange={(e) => setBrief({ ...brief, level: e.target.value })}>
+              {["basic", "intermediate", "advanced"].map((l) => (
+                <option key={l} value={l}>{l[0].toUpperCase() + l.slice(1)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="pill-select" title="Speed and model quality">
+            <span aria-hidden="true">☆</span>
+            <select value={brief.preset}
+              onChange={(e) => setBrief({ ...brief, preset: e.target.value as typeof brief.preset })}>
+              {["fast", "balanced", "best"].map((p) => (
+                <option key={p} value={p}>{p[0].toUpperCase() + p.slice(1)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="pill-select" title="Search the live web for evidence">
+            <span aria-hidden="true">🔍</span>
+            <select value={brief.web_search ? "on" : "off"}
+              onChange={(e) => setBrief({ ...brief, web_search: e.target.value === "on" })}>
+              <option value="on">Live web</option>
+              <option value="off">No web</option>
+            </select>
+          </label>
+          <button className={"pill-toggle" + (brief.include_diagrams ? " on" : "")}
+            title="Include mermaid diagrams"
             onClick={() => setBrief({ ...brief, include_diagrams: !brief.include_diagrams })}>
-            diagrams {brief.include_diagrams ? "on" : "off"}
+            ▦ Diagrams
+          </button>
+          <button className="gen-btn" onClick={onGo} disabled={!brief.topic.trim()}>
+            ⚡ Generate
           </button>
         </div>
-        {error && <div className="errbox" style={{ marginBottom: "0.8rem" }}>{error}</div>}
-        <button className="btn" onClick={onGo} disabled={!brief.topic.trim()}>Start the press</button>
+      </div>
+      <div className="status-chips">
+        <span className="status-chip"><i /> {providerLabel}</span>
+        {settings?.has_search && <span className="status-chip"><i /> Web search ready</span>}
       </div>
 
       {library.length > 0 && (
