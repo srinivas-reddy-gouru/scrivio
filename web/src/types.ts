@@ -167,11 +167,20 @@ export interface InterviewSummaryFull {
   calibration_gap: number | null; debrief: string;
   scorecard: JobScorecard | null;
 }
+export interface CodingProblemPublic {
+  title: string; statement: string; language: string; signature: string;
+  stated_constraints: string[];
+  unstated_constraints: string[] | null;
+  optimal_complexity: string | null;
+  model_solution: string | null;
+}
+
 export interface InterviewSessionPublic {
   session_id: string; article_id: string | null; topic: string; level: string;
   mode: string; job_profile_id: string | null; duration_minutes: number;
   created_at: string; updated_at: string; complete: boolean;
   questions: InterviewQuestionPublic[];
+  coding_problem?: CodingProblemPublic | null;
   summary: InterviewSummaryFull | null;
 }
 export interface InterviewAnswerResponse {

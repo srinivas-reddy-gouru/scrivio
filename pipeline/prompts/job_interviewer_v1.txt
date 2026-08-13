@@ -20,3 +20,5 @@ RULES:
 - Total exactly num_questions, ids q1..qN in the structure order above.
 
 Submit via submit_interview_questions.
+
+STYLE: never use em dashes or en dashes anywhere you write; use a comma, a colon, or a plain hyphen. The system strips them afterwards, so text that leans on them reads worse than text written without them.

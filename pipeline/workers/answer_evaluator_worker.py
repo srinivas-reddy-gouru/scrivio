@@ -14,6 +14,7 @@ ever-growing chat session whose history would drift the grading bar.
 from __future__ import annotations
 
 from pipeline.model_config import get_model
+from pipeline.workers.citation_utils import scrub_dashes_in_model
 from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import AnswerEvaluation, InterviewQuestion
 from pipeline.workers.interviewer_worker import _truncate_article
@@ -121,6 +122,7 @@ async def evaluate_answer(
     session_memory: str | None = None,
     followup_question: str | None = None,
     followup_answer: str | None = None,
+    code_checks: str | None = None,
 ) -> AnswerEvaluation:
     # Job mode grounds grading in the JD/resume context instead of an
     # article excerpt.
@@ -143,6 +145,14 @@ async def evaluate_answer(
     ]
     if session_memory:
         parts.append(f"interview_so_far:\n{session_memory}")
+    if code_checks:
+        # Facts obtained by parsing the submission, never by running it.
+        # They are stated before the answer so a confident explanation
+        # cannot talk the grader out of a syntax error.
+        parts.append(
+            "static_code_checks (deterministic, trust these over the "
+            f"candidate's description of their own code):\n{code_checks}"
+        )
     parts.append(f"candidate_answer: {user_answer}")
     if followup_answer is not None:
         parts.append(f"followup_question: {followup_question or ''}")
@@ -158,7 +168,8 @@ async def evaluate_answer(
         messages=[{"role": "user", "content": user_content}],
     )
     tool_use = next(b for b in response.content if b.type == "tool_use")
-    evaluation = AnswerEvaluation.model_validate(tool_use.input)
+    evaluation = scrub_dashes_in_model(
+        AnswerEvaluation.model_validate(tool_use.input))
 
     # Belt-and-braces: there is only ever ONE follow-up per question. Even if
     # the model ignores the combined-mode instruction, the server never loops.

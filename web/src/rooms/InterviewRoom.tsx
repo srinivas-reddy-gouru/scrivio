@@ -138,10 +138,15 @@ function Setup({ onStart, onReview }: {
   }, []);
 
   const start = async () => {
+    if (mode === "coding" && !topic.trim()) {
+      setError("A coding round needs a topic, for example 'arrays and intervals' or 'graphs'.");
+      return;
+    }
     setBusy(true); setError("");
     try {
       const s = await interviewApi.create({
         topic: topic.trim() || undefined, level, mode, num_questions: count,
+        ...(mode === "coding" ? { language: "python" } : {}),
       });
       onStart(s);
     } catch (e) { setError((e as Error).message); setBusy(false); }
@@ -151,6 +156,7 @@ function Setup({ onStart, onReview }: {
     ["practice", "Practice · coach at the table"],
     ["simulation", "Simulation · cards stay down"],
     ["drill", "Drill · 60s a question"],
+    ["coding", "Coding · one problem, four phases"],
   ];
 
   if (busy) {
@@ -255,6 +261,12 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
   const [error, setError] = useState("");
   const [drillLeft, setDrillLeft] = useState(60);
   const isDrill = session.mode === "drill";
+  const coding = session.mode === "coding" ? session.coding_problem ?? null : null;
+  const PHASES = ["Clarify", "Approach", "Code", "Defend"];
+  const phaseIndex = session.questions.findIndex((q) => q.id === session.questions[qIndex]?.id);
+  // The code phase gets a real editor: monospace, tabs that indent, and the
+  // signature pinned above it so it is never guessed from memory.
+  const isCodePhase = !!coding && phaseIndex === 2;
   const quiet = session.mode !== "practice"; // simulation + drill: no per-answer reveal
 
   const dict = useDictation((finals, interim) => setAnswer(finals + interim));
@@ -323,6 +335,32 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
           <span className="t">{drillLeft}</span>
         </div>
       )}
+      {coding && (
+        <div className="code-problem">
+          <div className="cp-head">
+            <span className="eyebrow eyebrow-accent">{coding.title}</span>
+            <span className="phase-rail" aria-label="Round phases">
+              {PHASES.map((p, i) => (
+                <span key={p} className={"phase" + (i === phaseIndex ? " on" : i < phaseIndex ? " done" : "")}>
+                  {p}
+                </span>
+              ))}
+            </span>
+          </div>
+          <p className="cp-statement">{coding.statement}</p>
+          <code className="cp-signature">{coding.signature}</code>
+          {coding.stated_constraints.length > 0 && (
+            <ul className="cp-constraints">
+              {coding.stated_constraints.map((c) => <li key={c}>{c}</li>)}
+            </ul>
+          )}
+          <p className="cp-note">
+            Some constraints are deliberately unstated. Asking about the ones
+            that would change your implementation is what the clarify phase
+            scores.
+          </p>
+        </div>
+      )}
       <div className="qcard">
         <span className="tag">
           Question {qIndex + 1} of {session.questions.length} · {session.mode}
@@ -334,11 +372,27 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
       {!flipped && (
         <>
           <textarea
-            className="notepad" value={answer} rows={4}
+            className={"notepad" + (isCodePhase ? " code-pad" : "")}
+            value={answer} rows={isCodePhase ? 16 : 4}
+            spellCheck={!isCodePhase}
+            aria-label={isCodePhase ? "Your code" : "Your answer"}
             onChange={(e) => setAnswer(e.target.value)}
-            placeholder={dict.supported
-              ? "Tap the mic and speak, or type your answer here…"
-              : "Type your answer here…"}
+            onKeyDown={isCodePhase ? (e) => {
+              // Tab indents rather than leaving the editor: nobody writes
+              // Python with the browser's focus order.
+              if (e.key === "Tab") {
+                e.preventDefault();
+                const el = e.currentTarget;
+                const at = el.selectionStart;
+                setAnswer(answer.slice(0, at) + "    " + answer.slice(el.selectionEnd));
+                requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = at + 4; });
+              }
+            } : undefined}
+            placeholder={isCodePhase
+              ? `${coding?.signature ?? ""}\n    # your implementation`
+              : dict.supported
+                ? "Tap the mic and speak, or type your answer here…"
+                : "Type your answer here…"}
           />
           {session.mode === "practice" && !followup && (
             <div className="predict-row">

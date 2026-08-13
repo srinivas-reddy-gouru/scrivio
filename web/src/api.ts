@@ -139,6 +139,7 @@ export const interviewApi = {
   create: (body: {
     topic?: string; article_id?: string; level?: string; num_questions?: number;
     mode?: string; job_profile_id?: string; duration_minutes?: number;
+    language?: string;
   }) =>
     fetch("/interviews", {
       method: "POST", headers: { "Content-Type": "application/json" },

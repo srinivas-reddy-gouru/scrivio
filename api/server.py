@@ -40,6 +40,7 @@ from pipeline.schemas.models import (
     JobAnalysis,
     JobProfile,
     ProgressEvent,
+    CodingProblem,
     ResumeChange,
     ResumeDoc,
     StructuredResume,
@@ -74,6 +75,12 @@ from pipeline.workers.resume_studio_worker import (
     run_ats_checks,
     tailor_resume,
     to_jsonresume,
+)
+from pipeline.workers.coding_round_worker import (
+    PHASE_ORDER,
+    checks_block,
+    generate_coding_round,
+    static_code_checks,
 )
 from pipeline.workers.interviewer_worker import (
     find_real_question_patterns,
@@ -1017,6 +1024,24 @@ class InterviewQuestionPublic(BaseModel):
     predicted_score: int | None = None
 
 
+class CodingProblemPublic(BaseModel):
+    """What the candidate is allowed to see while the round is open.
+
+    The statement and signature are the work; the unstated constraints,
+    the optimal complexity and the reference solution ARE the answers to
+    the clarify, approach and code phases, so they stay sealed until the
+    round ends, exactly like a spoken round's rubric."""
+    title: str
+    statement: str
+    language: str
+    signature: str
+    stated_constraints: list[str]
+    # Revealed only when the round is complete.
+    unstated_constraints: list[str] | None = None
+    optimal_complexity: str | None = None
+    model_solution: str | None = None
+
+
 class InterviewSessionPublic(BaseModel):
     session_id: str
     article_id: str | None
@@ -1024,11 +1049,14 @@ class InterviewSessionPublic(BaseModel):
     level: str
     mode: str = "practice"
     job_profile_id: str | None = None
+    # mode="coding" only: the language the candidate writes in.
+    language: str = "python"
     duration_minutes: int = 45
     created_at: str
     updated_at: str
     complete: bool
     questions: list[InterviewQuestionPublic]
+    coding_problem: CodingProblemPublic | None = None
     summary: InterviewSummary | None
 
 
@@ -1039,6 +1067,8 @@ class InterviewSessionSummaryItem(BaseModel):
     level: str
     mode: str = "practice"
     job_profile_id: str | None = None
+    # mode="coding" only: the language the candidate writes in.
+    language: str = "python"
     created_at: str
     complete: bool
     answered: int
@@ -1113,6 +1143,7 @@ def _public_session(session: InterviewSession) -> InterviewSessionPublic:
             _public_question(q, session.mode, complete)
             for q in session.questions
         ],
+        coding_problem=_public_coding_problem(session.coding_problem, complete),
         summary=session.summary,
     )
 
@@ -1136,6 +1167,8 @@ class InterviewCreateRequest(BaseModel):
     # Job mode only:
     job_profile_id: str | None = None
     duration_minutes: int = Field(default=45, ge=15, le=60)
+    # Coding mode only: the language the candidate writes in.
+    language: str = "python"
 
 
 class InterviewAnswerRequest(BaseModel):
@@ -1189,6 +1222,38 @@ async def create_interview(body: InterviewCreateRequest) -> InterviewSessionPubl
             questions=[
                 InterviewQuestionState(question=q) for q in question_set.questions
             ],
+        )
+        _save_session(session)
+        return _public_session(session)
+
+    if body.mode == "coding":
+        if not body.topic:
+            raise HTTPException(
+                status_code=422, detail="topic is required for mode='coding'"
+            )
+        client, preset = _client_for_session({}, body.topic)
+        job_context = ""
+        if body.job_profile_id:
+            profile, analysis = _load_job_profile(body.job_profile_id)
+            job_context = (
+                f"{profile.role_title} at {profile.company or 'the company'}. "
+                + " ".join(c.name for c in analysis.competencies[:6])
+            )
+        round_ = await generate_coding_round(
+            topic=body.topic, level=body.level or "intermediate",
+            language=body.language, client=client, preset=preset,
+            job_context=job_context,
+        )
+        session = InterviewSession(
+            session_id=(
+                datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
+            ),
+            topic=body.topic,
+            level=body.level or "intermediate",
+            mode="coding",
+            job_profile_id=body.job_profile_id,
+            coding_problem=round_.problem,
+            questions=[InterviewQuestionState(question=q) for q in round_.phases],
         )
         _save_session(session)
         return _public_session(session)
@@ -1586,6 +1651,8 @@ async def submit_interview_answer(
                     job_context = _job_context_for(job_profile, state.question)
                 except HTTPException:
                     job_context = None  # profile deleted: grade ungrounded
+            elif session.mode == "coding":
+                job_context = _coding_reference(session)
 
             # Interviewer memory: a digest of prior answers so grading has
             # session continuity (consistency checks, "as you said earlier"
@@ -1597,6 +1664,18 @@ async def submit_interview_answer(
                     interview_memory_digest(session, state.question.id) or None
                 )
 
+            # The code phase is graded against facts, not against the
+            # candidate's account of their own code: parse it, and hand the
+            # findings to the grader. Nothing is executed.
+            code_checks = None
+            if session.mode == "coding" and session.coding_problem:
+                phase = _coding_phase_of(session, state.question.id)
+                if phase == "code" and answer.strip():
+                    code_checks = checks_block(static_code_checks(
+                        answer, session.coding_problem.signature,
+                        session.coding_problem.language,
+                    ))
+
             if state.status == "pending":
                 evaluation = await evaluate_answer(
                     question=state.question,
@@ -1607,6 +1686,7 @@ async def submit_interview_answer(
                     article_markdown=article_markdown,
                     job_context=job_context,
                     session_memory=session_memory,
+                    code_checks=code_checks,
                 )
                 # Follow-ups exist in practice AND job modes (real
                 # interviewers probe); simulations never break their flow
@@ -2218,6 +2298,47 @@ async def fill_resume_metrics(resume_id: str, body: MetricFillRequest) -> Resume
         )
         _save_resume_doc(doc)
     return doc
+
+
+def _public_coding_problem(
+    problem: "CodingProblem | None", session_complete: bool
+) -> CodingProblemPublic | None:
+    if problem is None:
+        return None
+    return CodingProblemPublic(
+        title=problem.title,
+        statement=problem.statement,
+        language=problem.language,
+        signature=problem.signature,
+        stated_constraints=problem.stated_constraints,
+        unstated_constraints=problem.unstated_constraints if session_complete else None,
+        optimal_complexity=problem.optimal_complexity if session_complete else None,
+        model_solution=problem.model_solution if session_complete else None,
+    )
+
+
+def _coding_phase_of(session: InterviewSession, question_id: str) -> str:
+    """Phase name by position: the round's questions ARE its phases."""
+    for i, state in enumerate(session.questions):
+        if state.question.id == question_id:
+            return PHASE_ORDER[i] if i < len(PHASE_ORDER) else "defend"
+    return ""
+
+
+def _coding_reference(session: InterviewSession) -> str:
+    """The sealed problem, given to the grader as its reference material
+    the same way an article excerpt grounds a topic session."""
+    p = session.coding_problem
+    if p is None:
+        return ""
+    return (
+        f"coding problem: {p.title}\n{p.statement}\n"
+        f"signature: {p.signature}\n"
+        f"constraints a strong candidate should surface: "
+        f"{'; '.join(p.unstated_constraints)}\n"
+        f"optimal complexity: {p.optimal_complexity}\n"
+        f"reference solution:\n{p.model_solution}"
+    )
 
 
 def _push_tailored_history(doc: ResumeDoc, snapshot: TailoredResume) -> None:

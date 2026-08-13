@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 
 from pipeline.model_config import get_model
+from pipeline.workers.citation_utils import scrub_dashes_in_model
 from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import InterviewQuestionSet
 from pipeline.workers.search_worker import multi_search
@@ -135,7 +136,8 @@ async def generate_interview_questions(
         messages=[{"role": "user", "content": user_content}],
     )
     tool_use = next(b for b in response.content if b.type == "tool_use")
-    question_set = InterviewQuestionSet.model_validate(tool_use.input)
+    question_set = scrub_dashes_in_model(
+        InterviewQuestionSet.model_validate(tool_use.input))
 
     # Defensive post-validation: clamp to the requested count and re-id in
     # order so downstream code can rely on q1..qN regardless of model drift.

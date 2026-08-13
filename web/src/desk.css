@@ -1250,3 +1250,31 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
   .rr-tag { width: auto; }
   .rr-when { display: none; }
 }
+
+
+/* ── Coding round: the problem stays on screen the whole way through ── */
+.code-problem {
+  max-width: 760px; margin: 0 auto 1rem; padding: 1rem 1.2rem;
+  background: var(--rail-bg); border: 1px solid var(--stroke); border-radius: 14px;
+}
+.cp-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.phase-rail { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.phase-rail .phase {
+  font-size: 0.64rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-faint);
+  border: 1px solid var(--stroke); border-radius: 999px; padding: 0.2rem 0.55rem;
+}
+.phase-rail .phase.on { color: #06282c; background: var(--grad); border-color: transparent; }
+.phase-rail .phase.done { color: var(--green); border-color: rgba(52, 211, 153, 0.45); }
+.cp-statement { font-size: 0.86rem; line-height: 1.6; color: var(--text); margin: 0.6rem 0; }
+.cp-signature {
+  display: block; font-family: "JetBrains Mono", monospace; font-size: 0.76rem;
+  background: var(--input-bg); border: 1px solid var(--stroke); border-radius: 8px;
+  padding: 0.5rem 0.7rem; color: var(--teal); overflow-x: auto;
+}
+.cp-constraints { margin: 0.6rem 0 0 1.1rem; font-size: 0.74rem; color: var(--text-dim); }
+.cp-note { font-size: 0.7rem; color: var(--text-faint); line-height: 1.5; margin-top: 0.6rem; }
+.notepad.code-pad {
+  font-family: "JetBrains Mono", monospace; font-size: 0.8rem; line-height: 1.6;
+  tab-size: 4; white-space: pre; overflow-x: auto;
+}

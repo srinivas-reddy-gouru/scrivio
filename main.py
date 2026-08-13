@@ -1428,11 +1428,74 @@ class MockAnthropicMessages:
             return self._mock_resume_extraction()
         if tool_name == "submit_resume_review":
             return self._mock_resume_review(user_content)
+        if tool_name == "submit_coding_round":
+            return self._mock_coding_round()
         if tool_name == "submit_tailored_resume":
             return self._mock_tailored_resume()
         # Unknown tool — return an empty dict; the caller's model_validate will
         # raise a clear Pydantic error rather than an obscure AttributeError.
         return {}
+
+    def _mock_coding_round(self) -> dict:
+        """One problem, four sealed phases, shaped like the real thing so
+        redaction and phase ordering are exercised in tests."""
+        def phase(i, qid, text, points):
+            return {
+                "id": qid, "question": text, "difficulty": "intermediate",
+                "section_anchor": "", "rubric_key_points": points,
+                "model_answer": (
+                    "A strong candidate covers the points above concretely, "
+                    "naming the mechanism rather than gesturing at it, and "
+                    "says what the choice costs."
+                ),
+            }
+        return {
+            "problem": {
+                "title": "Merge overlapping intervals",
+                "statement": (
+                    "Given a list of intervals, merge every pair that "
+                    "overlaps and return the result. For [[1,3],[2,6],[8,10]] "
+                    "you return [[1,6],[8,10]]."
+                ),
+                "language": "python",
+                "signature": "def merge(intervals: list[list[int]]) -> list[list[int]]:",
+                "stated_constraints": ["The list fits in memory."],
+                "unstated_constraints": [
+                    "Is the input sorted?",
+                    "Do touching intervals like [1,2] and [2,3] count as overlapping?",
+                    "What should an empty list return?",
+                ],
+                "optimal_complexity": "O(n log n) time from the sort, O(n) space for the output",
+                "model_solution": (
+                    "def merge(intervals):\n"
+                    "    out = []\n"
+                    "    for start, end in sorted(intervals):\n"
+                    "        if out and start <= out[-1][1]:\n"
+                    "            out[-1][1] = max(out[-1][1], end)\n"
+                    "        else:\n"
+                    "            out.append([start, end])\n"
+                    "    return out\n"
+                ),
+            },
+            "phases": [
+                phase(0, "q1", "Before you write anything, what do you need to know?",
+                      ["Asks whether the input is sorted",
+                       "Asks whether touching intervals merge",
+                       "Asks what an empty input returns"]),
+                phase(1, "q2", "What is your approach, and what does it cost?",
+                      ["Names sorting by start then a single sweep",
+                       "States O(n log n) time and says the sort causes it",
+                       "States O(n) space for the output"]),
+                phase(2, "q3", "Implement the signature.",
+                      ["Sorts before sweeping",
+                       "Extends the previous interval instead of appending",
+                       "Handles the empty input without special casing it"]),
+                phase(3, "q4", "The input no longer fits in memory. What changes?",
+                      ["Recognises the sort is the blocker",
+                       "Names an external merge sort or a streaming pass over sorted input",
+                       "Says what the new cost is"]),
+            ],
+        }
 
     def _mock_interview_questions(self, user_content: str) -> dict:
         """Two deterministic practice questions. Difficulty is read from the

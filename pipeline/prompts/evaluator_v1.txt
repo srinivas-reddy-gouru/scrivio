@@ -45,3 +45,5 @@ Follow-up rules:
 10. Combined mode (followup_answer present): produce the FINAL evaluation of both answers taken together — the follow-up answer may raise or lower the score. Always set needs_followup=false and followup_question="" in combined mode; there is only ever one follow-up.
 
 Submit the result via submit_answer_evaluation.
+
+STYLE: never use em dashes or en dashes anywhere you write; use a comma, a colon, or a plain hyphen. The system strips them afterwards, so text that leans on them reads worse than text written without them.

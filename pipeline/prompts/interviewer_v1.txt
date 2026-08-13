@@ -42,3 +42,5 @@ Rules:
 7. Questions must be self-contained: no "as discussed above", no references to "the article" inside the question text itself — the candidate should be able to answer from understanding alone.
 
 Submit the result via submit_interview_questions.
+
+STYLE: never use em dashes or en dashes anywhere you write; use a comma, a colon, or a plain hyphen. The system strips them afterwards, so text that leans on them reads worse than text written without them.

@@ -21,6 +21,25 @@ def _hermetic_llm_clients(monkeypatch):
         main, "_openai_client", lambda request: main.MockOpenAIClient(request)
     )
 
+    # api/server.py does `from main import _anthropic_client`, which binds
+    # its OWN reference at import time: patching main alone leaves the
+    # server calling the real provider. Every API test that forgot a local
+    # mock fixture has been making live billed calls through this hole, so
+    # the guard has to cover the server module too.
+    try:
+        from api import server
+    except Exception:  # server optional for pure-worker test runs
+        return
+    monkeypatch.setattr(
+        server, "_anthropic_client",
+        lambda request: main.MockAnthropicClient(request), raising=False,
+    )
+    if hasattr(server, "_openai_client"):
+        monkeypatch.setattr(
+            server, "_openai_client",
+            lambda request: main.MockOpenAIClient(request), raising=False,
+        )
+
 
 @pytest.fixture(autouse=True)
 def _hermetic_provider_environment(monkeypatch):

@@ -465,7 +465,81 @@ class AnswerEvaluation(BaseModel):
 # drill: rapid-fire short questions, 60s each, compact feedback.
 # job: resume+JD-targeted realistic screen — simulation semantics but
 #      follow-ups allowed (real interviewers probe); ends in a scorecard.
-InterviewMode = Literal["practice", "simulation", "drill", "job"]
+# coding: one problem worked through in phases (clarify, approach, code,
+#         defend) rather than a list of questions. Graded on whether the
+#         thinking was legible, which is what actually fails candidates,
+#         not only on whether the code is right.
+InterviewMode = Literal["practice", "simulation", "drill", "job", "coding"]
+
+CodingPhase = Literal["clarify", "approach", "code", "defend"]
+
+
+class CodeCheck(BaseModel):
+    """One deterministic finding about submitted code.
+
+    Computed by parsing, never by executing: an interview-prep tool must
+    not run a stranger's code, and the checks that matter most here (does
+    it parse, does it define the function it was asked for, is it a stub)
+    need no execution anyway. The grader receives these as facts so it
+    cannot be talked out of them."""
+    name: str
+    passed: bool
+    detail: str
+
+
+class CodingProblem(BaseModel):
+    # model_solution is ours, not Pydantic's.
+    model_config = ConfigDict(protected_namespaces=())
+
+    """Tool schema for submit_coding_problem. Everything below `signature`
+    is sealed until the round ends, the same contract the spoken rounds
+    use: the bar is written before the candidate starts."""
+    title: str = Field(description="Short problem name, e.g. 'Merge overlapping intervals'.")
+    statement: str = Field(
+        description=(
+            "The problem exactly as an interviewer would say it out loud: "
+            "concrete, 3-6 sentences, with an example input and output. "
+            "Deliberately leaves some constraints unstated so a strong "
+            "candidate has something real to ask about."
+        )
+    )
+    language: str = Field(default="python", description="Language the candidate writes in.")
+    signature: str = Field(
+        description="The exact function signature to implement, e.g. 'def merge(intervals: list[list[int]]) -> list[list[int]]:'."
+    )
+    stated_constraints: list[str] = Field(
+        default_factory=list,
+        description="Constraints given upfront, e.g. 'intervals fit in memory'.",
+    )
+    unstated_constraints: list[str] = Field(
+        min_length=1,
+        description=(
+            "SEALED. The things a strong candidate should ASK about before "
+            "coding: empty input, overlapping vs touching intervals, whether "
+            "input is sorted, duplicates, integer overflow. Scoring the "
+            "clarify phase reads this list."
+        ),
+    )
+    optimal_complexity: str = Field(
+        description="SEALED. e.g. 'O(n log n) time from the sort, O(n) space for the output'."
+    )
+    model_solution: str = Field(
+        description="SEALED. A clean reference implementation, revealed only at the end."
+    )
+
+
+class CodingRound(BaseModel):
+    """Tool schema for submit_coding_round: the problem plus one sealed
+    rubric per phase."""
+    problem: CodingProblem
+    phases: list["InterviewQuestion"] = Field(
+        min_length=3,
+        description=(
+            "One entry per phase in order (clarify, approach, code, defend). "
+            "Each carries its own rubric_key_points and model_answer, written "
+            "before the candidate starts."
+        ),
+    )
 
 
 class InterviewAnswerRecord(BaseModel):
@@ -768,6 +842,9 @@ class InterviewSession(BaseModel):
     level: str
     mode: InterviewMode = "practice"  # default keeps pre-mode session files valid
     job_profile_id: str | None = None  # set for mode="job"
+    # Set for mode="coding": the one problem every phase works on. Sealed
+    # fields are redacted from responses until the round ends.
+    coding_problem: CodingProblem | None = None
     duration_minutes: int = 45         # job mode: the soft time budget
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
