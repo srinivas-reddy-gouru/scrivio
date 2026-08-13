@@ -19,6 +19,7 @@ Type a topic, get a sourced technical article:
 - **Docs-first research** — resolves the official documentation domains for your topic (Kafka → kafka.apache.org) and ranks them above blogs and Q&A forums by trust tier
 - **Verify-before-draft** — every claim is checked against fetched evidence *before* a word of prose is written; unsupported claims are dropped, not published
 - **Editorial pipeline** — plan → draft with inline citations → editor review → targeted revision → level compilation (basic/intermediate/advanced) → voice polish → final critic gate
+- **Citation integrity** — versioned documentation is collapsed to one entry per page at its newest release, so a single doc cannot appear three times as three references, and a lone hit on an old release is re-fetched at the current one. User-hosted pages do not qualify as documentation, which keeps a personal blog from outranking the official reference
 - **Mermaid diagrams**, numbered citations with a Sources section, resumable runs served from a stage cache
 
 ### 🎤 Topic practice
@@ -50,7 +51,21 @@ Upload or paste your resume; get a report you can argue with, then a rewrite you
 
 - **Explainable ATS score, not a magic number** — a weighted checklist computed in plain Python (contact info placement, standard headers, quantified bullets, date consistency, single-column parse safety, stuffing detection…), each row showing exactly why it passed or failed. With a JD attached (paste, URL, or a saved job target from Job prep), a deterministic **keyword-match** percentage joins the score: 70% checks + 30% coverage
 - **Structured, not a text blob** — the resume is extracted once into the [JSON Resume](https://jsonresume.org) open standard (the architecture lesson borrowed from [Reactive Resume](https://github.com/AmruthPillai/Reactive-Resume)); every check, edit, and export operates on that structure. Import an existing `resume.json`, export to **PDF (what application portals want), Word (.docx), Markdown, or JSON Resume** — the JSON round-trips into Reactive Resume and the rest of that ecosystem
-- **Honest tailoring is the whole point** — the rewrite reorders, rephrases, and surfaces your *existing* experience in the JD's vocabulary, with a per-field change log (`work[0].highlights[2]: …why…`). It will not invent employers, titles, dates, degrees, or skills: missing metrics become `[METRIC]` placeholders for you to fill, unclaimable keywords are listed as *"cannot honestly claim"*, and a deterministic post-guard strips any invention a model might sneak through — employers, titles, and dates must pass byte-identical
+- **Honest tailoring is the whole point** — the rewrite reorders, rephrases, and surfaces your *existing* experience in the JD's vocabulary. It will not invent employers, titles, dates, degrees, or skills: missing metrics become `[METRIC]` placeholders for you to fill, unclaimable keywords are listed as *"cannot honestly claim"*, and deterministic post-guards strip any invention a model sneaks through. Employers, titles, and dates must pass byte-identical, and **any number that came from neither your resume nor you is reverted**, with a note naming the figure it refused
+- **The paper is the interface** — findings are drawn *on* the resume, not in a report beside it. Teal marks are edits (hover for what changed and why); amber marks are honesty notes anchored to the exact line they question. Click one and answer it in your own words, and the line turns teal. Every pass reports its own score delta, so a fix that does not move the score says so
+- **Nothing ships half-finished** — the packaging button stays disabled while `[METRIC]` placeholders or unsaved edits remain, and every change is one Undo away
+
+---
+
+## Screenshots
+
+The images above are captured from a running instance, so they stay honest
+about what the app currently looks like:
+
+```bash
+python -m uvicorn api.server:app --port 8899   # in another shell
+python scripts/capture_screenshots.py          # --light for light theme too
+```
 
 ---
 
@@ -168,3 +183,25 @@ npm run dev                              # or hot-reload on :5180, proxying the 
 ```
 
 `/studio` and `/desk` stay as aliases for old bookmarks. The retired single-file UI is parked at `/classic` for one release; without a `web/dist` build on disk the server falls back to serving it at `/`.
+
+---
+
+## License
+
+MIT. See [LICENSE](LICENSE). Use it, fork it, ship it commercially: keep the
+copyright notice and it is yours to build on.
+
+The honesty guarantees are the point of this project, so if you fork it,
+keep them working or drop the claim. A resume tool that invents a metric is
+worse than no tool.
+
+## Contributing
+
+Issues and pull requests are welcome. Two house rules the codebase holds to:
+
+- **Every honesty promise gets a deterministic guard, not a prompt.** Prompt
+  discipline has been measured failing here repeatedly (ignored word caps,
+  misfiled warnings, invented numbers). If a rule matters, enforce it in
+  Python and cover it with a test.
+- **Run the suite before opening a PR:** `python -m pytest -q` (429 tests,
+  no API keys or network needed; the mock provider covers every LLM path).
