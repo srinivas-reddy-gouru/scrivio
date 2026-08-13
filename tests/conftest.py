@@ -76,3 +76,24 @@ def _stub_official_source_resolution(monkeypatch):
         return static_official_sources(topic)
 
     monkeypatch.setattr(main, "resolve_official_sources", _static_only)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_output_root(tmp_path, monkeypatch):
+    """Never write test artifacts into the user's real ./output.
+
+    api/server.py resolves OUTPUT_ROOT at import from ARTICLE_OUTPUT_DIR,
+    so every API test that created a session, resume, or job profile was
+    persisting it beside the user's own work: mock interview sessions
+    turned up in their Interviews list, their stats, and the Home page's
+    recent work. Point the whole tree at a per-test temp directory."""
+    from pathlib import Path
+
+    monkeypatch.setenv("ARTICLE_OUTPUT_DIR", str(tmp_path))
+    try:
+        from api import server
+    except Exception:
+        return
+    # Every session, resume, and job-profile path is derived from this one
+    # name, so redirecting it moves the whole tree.
+    monkeypatch.setattr(server, "OUTPUT_ROOT", Path(tmp_path), raising=False)

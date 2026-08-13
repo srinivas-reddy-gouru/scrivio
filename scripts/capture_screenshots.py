@@ -63,6 +63,25 @@ def capture(theme: str) -> None:
         settle(page)
         shot(page, f"job-prep{suffix}")
 
+        # A coding round only exists once one has been run, and creating
+        # one costs a real interviewer call. Shoot the newest if present,
+        # and say plainly when there is none rather than leaving a stale
+        # image in docs/ pretending to be current.
+        page.goto(f"{BASE}/#/interview")
+        settle(page)
+        coding = page.evaluate("""async () => {
+            const all = await fetch('/interviews').then(r => r.json());
+            return (all.find(s => s.mode === 'coding') || {}).session_id || null;
+        }""")
+        if coding:
+            page.evaluate(
+                "id => { sessionStorage.setItem('studio-open-session', id);"
+                " window.dispatchEvent(new Event('studio-open-session')); }", coding)
+            settle(page, 2500)
+            shot(page, f"coding-round{suffix}")
+        else:
+            print("  skipped coding-round.png: no coding session on file")
+
         # The resume desk's flagship view is the tailored paper with its
         # honesty notes, which lives behind two clicks rather than a URL.
         page.goto(f"{BASE}/#/desk")
