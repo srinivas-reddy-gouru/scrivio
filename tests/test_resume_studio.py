@@ -487,3 +487,80 @@ def test_number_guard_synthesizes_missing_change_entries():
     out = guard_edited_numbers_and_log(before, after, "")
     assert [c.where for c in out.changes] == ["basics.summary"]
     assert out.resume.basics.summary == "Event-driven backend engineer."
+
+
+# ── Mirroring an addition into the original ──────────────────────────
+
+def test_an_added_bullet_mirrors_by_employer_not_by_index():
+    """Tailoring may reorder or drop jobs, so work[0] on the paper is not
+    work[0] in the original. Mirroring by index would file the new bullet
+    under somebody else's employer."""
+    from pipeline.schemas.models import ResumeWorkItem, StructuredResume
+    from pipeline.workers.resume_studio_worker import mirror_append
+
+    original = StructuredResume(work=[
+        ResumeWorkItem(name="Acme", position="Engineer", highlights=["a"]),
+        ResumeWorkItem(name="Globex", position="Engineer", highlights=["b"]),
+    ])
+    # The tailored copy leads with Globex, the JD-relevant one.
+    shown = StructuredResume(work=[
+        ResumeWorkItem(name="Globex", position="Engineer", highlights=["b"]),
+        ResumeWorkItem(name="Acme", position="Engineer", highlights=["a"]),
+    ])
+    shown.work[0].highlights.append("new line")
+
+    assert mirror_append(shown, original, "work[0].highlights[+]", "new line")
+
+    assert original.work[1].highlights == ["b", "new line"], "must follow Globex"
+    assert original.work[0].highlights == ["a"], "Acme must be untouched"
+
+
+def test_mirroring_declines_when_the_employer_is_not_in_the_other_copy():
+    from pipeline.schemas.models import ResumeWorkItem, StructuredResume
+    from pipeline.workers.resume_studio_worker import mirror_append
+
+    original = StructuredResume(work=[ResumeWorkItem(name="Acme", highlights=["a"])])
+    shown = StructuredResume(work=[ResumeWorkItem(name="Ghost Ltd", highlights=[])])
+    shown.work[0].highlights.append("x")
+
+    assert not mirror_append(shown, original, "work[0].highlights[+]", "x")
+    assert original.work[0].highlights == ["a"]
+
+
+def test_appending_an_empty_line_is_a_no_op_not_a_blank_bullet():
+    from pipeline.schemas.models import ResumeWorkItem, StructuredResume
+    from pipeline.workers.resume_studio_worker import apply_tailored_edits
+
+    resume = StructuredResume(work=[ResumeWorkItem(name="Acme", highlights=["a"])])
+
+    assert apply_tailored_edits(resume, [("work[0].highlights[+]", "   ")]) == 0
+    assert resume.work[0].highlights == ["a"]
+
+
+def test_a_section_emptied_of_every_item_disappears():
+    from pipeline.schemas.models import CustomSection, StructuredResume
+    from pipeline.workers.resume_studio_worker import apply_tailored_edits
+
+    resume = StructuredResume(custom=[CustomSection(name="", items=["only one"])])
+
+    apply_tailored_edits(resume, [("custom[0].items[0]", "")])
+
+    assert resume.custom == [], "a heading with nothing under it is not a section"
+
+
+def test_a_user_made_section_survives_a_tailor_run_that_omits_it():
+    """The tailor writes the whole document from the original, so a section
+    it forgets to emit would vanish without a word. The user made that
+    section; losing it silently is worse than any tailoring gain."""
+    from pipeline.schemas.models import CustomSection, StructuredResume, TailoredResume
+    from pipeline.workers.resume_studio_worker import enforce_honesty
+
+    original = StructuredResume(custom=[
+        CustomSection(name="Publications", items=["Event sourcing at scale, QCon 2025."])])
+    forgetful = TailoredResume(resume=StructuredResume(), changes=[], warnings=[])
+
+    guarded = enforce_honesty(original, forgetful)
+
+    assert [c.name for c in guarded.resume.custom] == ["Publications"]
+    assert guarded.resume.custom[0].items == ["Event sourcing at scale, QCon 2025."]
+    assert guarded.warnings == [], "restoring it is not a problem to report"

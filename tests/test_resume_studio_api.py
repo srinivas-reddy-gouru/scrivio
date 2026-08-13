@@ -495,3 +495,166 @@ def test_change_log_is_cumulative_across_edit_passes():
     assert len(changes) == n_after + 1
     assert changes[-1]["where"] == "basics.summary"
     assert "Edited by you" in changes[-1]["what"]
+
+
+# ── Adding to the resume ─────────────────────────────────────────────
+# The studio's whole spine is that a model may not put anything new on a
+# resume. The person whose resume it is has the opposite right, and these
+# tests pin the line between those two facts.
+
+
+def _add(client: TestClient, rid: str, **body) -> dict:
+    response = client.post(f"/resumes/{rid}/add", json=body)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_added_bullet_lands_on_the_paper_and_in_the_original():
+    """Writing only to the tailored copy would lose the bullet at the next
+    tailor run, which rewrites from the original structure."""
+    client = TestClient(server.app)
+    doc = _tailor(client, _create(client, jd_text=JD)["resume_id"])
+    before = len(doc["tailored"]["resume"]["work"][0]["highlights"])
+
+    out = _add(client, doc["resume_id"], kind="bullet", parent="work[0]",
+               text="Ran the incident review after every production outage.")
+
+    assert len(out["tailored"]["resume"]["work"][0]["highlights"]) == before + 1
+    assert any("incident review" in h for h in out["structured"]["work"][0]["highlights"]), \
+        "the addition must reach the original, not just the tailored copy"
+    assert out["tailored"]["changes"][-1]["what"] == "Added by you."
+
+
+def test_the_honesty_guard_keeps_a_job_the_user_added():
+    """The guard exists to stop the MODEL inventing an employer. A job the
+    user typed is not an invention, and deleting it would be the studio
+    calling its own user a liar."""
+    from pipeline.workers.resume_studio_worker import enforce_honesty
+    from pipeline.schemas.models import StructuredResume, TailoredResume
+
+    client = TestClient(server.app)
+    doc = _tailor(client, _create(client, jd_text=JD)["resume_id"])
+    out = _add(client, doc["resume_id"], kind="work", fields={
+        "name": "Initech", "position": "Software Engineer",
+        "startDate": "Jan 2014", "endDate": "Jul 2015",
+        "highlights": ["Maintained the nightly reconciliation batch."],
+    })
+
+    original = StructuredResume.model_validate(out["structured"])
+    tailored = TailoredResume.model_validate(out["tailored"])
+    guarded = enforce_honesty(original, tailored)
+
+    assert "Initech" in [w.name for w in guarded.resume.work]
+    assert not any("Initech" in w for w in guarded.warnings)
+
+
+def test_the_honesty_guard_still_strips_an_employer_the_model_invents():
+    from pipeline.workers.resume_studio_worker import enforce_honesty
+    from pipeline.schemas.models import StructuredResume, TailoredResume
+
+    client = TestClient(server.app)
+    doc = _tailor(client, _create(client, jd_text=JD)["resume_id"])
+    original = StructuredResume.model_validate(doc["structured"])
+    tailored = TailoredResume.model_validate(doc["tailored"])
+    tailored.resume.work.append(
+        tailored.resume.work[0].model_copy(deep=True, update={"name": "Umbrella Corp"}))
+
+    guarded = enforce_honesty(original, tailored)
+
+    assert "Umbrella Corp" not in [w.name for w in guarded.resume.work]
+    assert any("Umbrella Corp" in w for w in guarded.warnings)
+
+
+def test_a_user_made_section_reaches_every_download_format():
+    import docx
+    from pipeline.schemas.models import StructuredResume
+    from pipeline.workers.resume_studio_worker import (
+        render_docx, render_markdown, render_pdf, to_jsonresume, from_jsonresume,
+    )
+    client = TestClient(server.app)
+    doc = _tailor(client, _create(client, jd_text=JD)["resume_id"])
+    out = _add(client, doc["resume_id"], kind="custom", fields={
+        "name": "Publications", "items": ["Event sourcing at scale, QCon 2025."]})
+    out = _add(client, doc["resume_id"], kind="bullet", parent="custom[0]",
+               text="Idempotent consumers, ACM Queue 2024.")
+    resume = StructuredResume.model_validate(out["tailored"]["resume"])
+
+    assert resume.custom[0].items == [
+        "Event sourcing at scale, QCon 2025.", "Idempotent consumers, ACM Queue 2024."]
+    assert "## Publications" in render_markdown(resume)
+    assert any(p.text == "Publications"
+               for p in docx.Document(io.BytesIO(render_docx(resume))).paragraphs)
+    assert len(render_pdf(resume)) > 1000
+    # JSON Resume has no field for these, so they ride in a namespaced key
+    # that other importers ignore and this one round trips.
+    exported = to_jsonresume(resume)
+    assert exported["x-custom-sections"][0]["name"] == "Publications"
+    assert from_jsonresume(exported).custom[0].items == resume.custom[0].items
+
+
+def test_the_tailor_may_not_invent_a_whole_section():
+    from pipeline.workers.resume_studio_worker import enforce_honesty
+    from pipeline.schemas.models import CustomSection, StructuredResume, TailoredResume
+
+    client = TestClient(server.app)
+    doc = _tailor(client, _create(client, jd_text=JD)["resume_id"])
+    original = StructuredResume.model_validate(doc["structured"])
+    tailored = TailoredResume.model_validate(doc["tailored"])
+    tailored.resume.custom.append(
+        CustomSection(name="Patents", items=["US1234567, distributed ledgers."]))
+
+    guarded = enforce_honesty(original, tailored)
+
+    assert guarded.resume.custom == []
+    assert any("Patents" in w for w in guarded.warnings)
+
+
+def test_removing_an_entry_drops_it_from_both_copies():
+    client = TestClient(server.app)
+    doc = _tailor(client, _create(client, jd_text=JD)["resume_id"])
+    _add(client, doc["resume_id"], kind="custom", fields={
+        "name": "Volunteering", "items": ["Mentor at a local code club."]})
+
+    response = client.post(f"/resumes/{doc['resume_id']}/remove-entry",
+                           json={"path": "custom[0]"})
+
+    assert response.status_code == 200, response.text
+    out = response.json()
+    assert out["tailored"]["resume"]["custom"] == []
+    assert out["structured"]["custom"] == []
+
+
+def test_additions_are_undoable_like_any_other_change():
+    client = TestClient(server.app)
+    doc = _tailor(client, _create(client, jd_text=JD)["resume_id"])
+    before = len(doc["tailored"]["resume"]["work"][0]["highlights"])
+    _add(client, doc["resume_id"], kind="bullet", parent="work[0]", text="A line I regret.")
+
+    undone = client.post(f"/resumes/{doc['resume_id']}/undo-tailored").json()
+
+    assert len(undone["tailored"]["resume"]["work"][0]["highlights"]) == before
+
+
+def test_empty_and_unaddressable_additions_are_refused():
+    client = TestClient(server.app)
+    rid = _tailor(client, _create(client, jd_text=JD)["resume_id"])["resume_id"]
+    for body in (
+        {"kind": "bullet", "parent": "work[0]", "text": "   "},
+        {"kind": "bullet", "parent": "work[99]", "text": "nowhere to go"},
+        {"kind": "bullet", "parent": "basics", "text": "not a list"},
+        {"kind": "work", "fields": {}},
+    ):
+        assert client.post(f"/resumes/{rid}/add", json=body).status_code == 422, body
+
+
+def test_appends_are_refused_on_the_edit_endpoint():
+    """One road in for additions. edit-tailored writes only to the tailored
+    copy, so an append accepted there would vanish at the next tailor."""
+    client = TestClient(server.app)
+    rid = _tailor(client, _create(client, jd_text=JD)["resume_id"])["resume_id"]
+
+    response = client.post(f"/resumes/{rid}/edit-tailored", json={
+        "edits": [{"path": "work[0].highlights[+]", "value": "sneaking in"}]})
+
+    assert response.status_code == 422
+    assert "/add" in response.json()["detail"]

@@ -581,6 +581,25 @@ export function TailorStation({ doc, onDoc, onSend }: {
     finally { setSavingEdits(false); }
   };
 
+  /** Additions save immediately rather than joining the pending-edit
+   * batch. A new bullet has nothing to compare against, and holding it
+   * unsaved next to text that is already on the paper is how people lose
+   * work by clicking away. */
+  const add = async (payload: Record<string, unknown>) => {
+    setError("");
+    try {
+      onDoc(await api.addToResume(doc.resume_id, payload));
+    } catch (e) { setError((e as Error).message); }
+  };
+
+  const removeEntry = async (path: string, label: string) => {
+    if (!confirm(`Remove ${label} from the resume? This drops the whole entry.`)) return;
+    setError("");
+    try {
+      onDoc(await api.removeEntry(doc.resume_id, path));
+    } catch (e) { setError((e as Error).message); }
+  };
+
   const undo = async () => {
     setUndoing(true); setError("");
     try {
@@ -795,6 +814,8 @@ export function TailorStation({ doc, onDoc, onSend }: {
             resume={t.resume} mode="tailored" report={doc.tailored_report}
             changes={t.changes}
             onEdit={(path, value) => setPendingEdits((m) => new Map(m).set(path, value))}
+            onAdd={(payload) => void add(payload as unknown as Record<string, unknown>)}
+            onRemoveEntry={removeEntry}
           />
         ) : (
           <Paper

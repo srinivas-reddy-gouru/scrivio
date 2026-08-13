@@ -24,6 +24,7 @@ from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
     AtsCheck,
     AtsReport,
+    CustomSection,
     KeywordCoverage,
     ResumeBasics,
     ResumeChange,
@@ -202,9 +203,31 @@ async def _condense_summary(
 
 # ── User-authored edits, coach, and instructed edits ────────────────────────
 
-_HL_PATH_RE = re.compile(r"^(work|projects)\[(\d+)\]\.highlights\[(\d+)\]$")
+# "[+]" in the last index means append rather than replace, so adding a
+# bullet travels the same audited path as editing one: same endpoint,
+# same undo history, same entry in the change log.
+_HL_PATH_RE = re.compile(r"^(work|projects)\[(\d+)\]\.highlights\[(\d+|\+)\]$")
 _SUMMARY_PATH_RE = re.compile(r"^work\[(\d+)\]\.summary$")
 _DESC_PATH_RE = re.compile(r"^projects\[(\d+)\]\.description$")
+_CUSTOM_ITEM_RE = re.compile(r"^custom\[(\d+)\]\.items\[(\d+|\+)\]$")
+_CUSTOM_NAME_RE = re.compile(r"^custom\[(\d+)\]\.name$")
+_CERT_RE = re.compile(r"^certificates\[(\d+|\+)\]$")
+_SKILL_KW_RE = re.compile(r"^skills\[(\d+)\]\.keywords\[(\d+|\+)\]$")
+
+
+def _write_at(items: list[str], index: str, value: str) -> bool:
+    """Replace at index, or append when the index is '+'. Appending an
+    empty string is a no-op rather than a blank line on the paper."""
+    if index == "+":
+        if not value:
+            return False
+        items.append(value)
+        return True
+    i = int(index)
+    if i >= len(items):
+        return False
+    items[i] = value
+    return True
 
 
 def apply_tailored_edits(
@@ -214,7 +237,8 @@ def apply_tailored_edits(
     the change log uses. Only prose fields are editable — employers,
     titles, dates, and institutions stay byte-identical to the original
     by construction. An empty value deletes a bullet and clears a
-    scalar. Returns how many edits landed; unknown paths raise."""
+    scalar, and an index of '+' appends a new one. Returns how many edits
+    landed; unknown paths raise."""
     applied = 0
     for path, value in edits:
         v = value.strip()
@@ -222,6 +246,29 @@ def apply_tailored_edits(
             resume.basics.label = v; applied += 1; continue
         if path == "basics.summary":
             resume.basics.summary = v; applied += 1; continue
+        m = _CUSTOM_NAME_RE.match(path)
+        if m:
+            i = int(m.group(1))
+            if i < len(resume.custom):
+                resume.custom[i].name = v; applied += 1
+            continue
+        m = _CUSTOM_ITEM_RE.match(path)
+        if m:
+            i = int(m.group(1))
+            if i < len(resume.custom) and _write_at(resume.custom[i].items, m.group(2), v):
+                applied += 1
+            continue
+        m = _CERT_RE.match(path)
+        if m:
+            if _write_at(resume.certificates, m.group(1), v):
+                applied += 1
+            continue
+        m = _SKILL_KW_RE.match(path)
+        if m:
+            i = int(m.group(1))
+            if i < len(resume.skills) and _write_at(resume.skills[i].keywords, m.group(2), v):
+                applied += 1
+            continue
         m = _SUMMARY_PATH_RE.match(path)
         if m:
             i = int(m.group(1))
@@ -236,10 +283,10 @@ def apply_tailored_edits(
             continue
         m = _HL_PATH_RE.match(path)
         if m:
-            kind, i, j = m.group(1), int(m.group(2)), int(m.group(3))
+            kind, i = m.group(1), int(m.group(2))
             items = resume.work if kind == "work" else resume.projects
-            if i < len(items) and j < len(items[i].highlights):
-                items[i].highlights[j] = v; applied += 1
+            if i < len(items) and _write_at(items[i].highlights, m.group(3), v):
+                applied += 1
             continue
         raise ValueError(f"Path not editable: {path}")
     # Emptied bullets vanish — after all index-addressed writes, so the
@@ -248,8 +295,143 @@ def apply_tailored_edits(
         w.highlights = [h for h in w.highlights if h.strip()]
     for p in resume.projects:
         p.highlights = [h for h in p.highlights if h.strip()]
+    for c in resume.custom:
+        c.items = [i for i in c.items if i.strip()]
+    for sk in resume.skills:
+        sk.keywords = [k for k in sk.keywords if k.strip()]
+    resume.certificates = [c for c in resume.certificates if c.strip()]
+    # A section emptied of every item is gone, not a bare heading.
+    resume.custom = [c for c in resume.custom if c.name.strip() or c.items]
     scrub_structure_dashes(resume)
     return applied
+
+
+# ── Adding to the resume ────────────────────────────────────────────────────
+# Everything above this line assumes the resume is a fixed set of facts to
+# be rephrased. That is the right default for a MODEL, which must never
+# invent an employer. It is the wrong default for the PERSON, whose resume
+# is simply missing a job, a bullet, or a section the extractor never saw.
+#
+# So additions are the user's alone, and they are written into the ORIGINAL
+# structure as well as the tailored one. That is not a convenience: the
+# original is what enforce_honesty checks the tailored copy against, and
+# what the next tailor run rewrites from. An addition made only to the
+# tailored copy would be deleted as an invention the moment either ran.
+
+_ENTRY_PATH_RE = re.compile(r"^(work|projects|education|custom)\[(\d+)\]$")
+
+
+def add_resume_entry(resume: StructuredResume, kind: str, fields: dict) -> str:
+    """Append an entry to one of the list sections. Returns its where-path.
+
+    The caller is the user, so the fields are taken as given: this is the
+    one place in the studio where a new employer name is legitimate."""
+    text = lambda k: str(fields.get(k, "") or "").strip()
+    if kind == "work":
+        resume.work.append(ResumeWorkItem(
+            name=text("name"), position=text("position"),
+            startDate=text("startDate"), endDate=text("endDate"),
+            summary=text("summary"),
+            highlights=[h.strip() for h in fields.get("highlights", []) if h.strip()],
+        ))
+        return f"work[{len(resume.work) - 1}]"
+    if kind == "projects":
+        resume.projects.append(ResumeProject(
+            name=text("name"), description=text("description"), url=text("url"),
+            highlights=[h.strip() for h in fields.get("highlights", []) if h.strip()],
+        ))
+        return f"projects[{len(resume.projects) - 1}]"
+    if kind == "education":
+        resume.education.append(ResumeEducationItem(
+            institution=text("institution"), area=text("area"),
+            studyType=text("studyType"), startDate=text("startDate"),
+            endDate=text("endDate"), score=text("score"),
+        ))
+        return f"education[{len(resume.education) - 1}]"
+    if kind == "custom":
+        resume.custom.append(CustomSection(
+            name=text("name"),
+            items=[i.strip() for i in fields.get("items", []) if i.strip()],
+        ))
+        return f"custom[{len(resume.custom) - 1}]"
+    raise ValueError(f"Cannot add entries of kind: {kind}")
+
+
+def _entry_identity(resume: StructuredResume, path: str) -> tuple[str, str] | None:
+    """(kind, name) for an entry path, or None when it does not resolve."""
+    m = _ENTRY_PATH_RE.match(path)
+    if not m:
+        return None
+    kind, i = m.group(1), int(m.group(2))
+    items = getattr(resume, kind)
+    if i >= len(items):
+        return None
+    item = items[i]
+    name = item.institution if kind == "education" else item.name
+    return kind, name
+
+
+def remove_resume_entry(resume: StructuredResume, path: str) -> str:
+    """Drop a whole entry. Returns the name removed, for the change log."""
+    identity = _entry_identity(resume, path)
+    if identity is None:
+        raise ValueError(f"No entry at: {path}")
+    kind, name = identity
+    m = _ENTRY_PATH_RE.match(path)
+    getattr(resume, kind).pop(int(m.group(2)))  # type: ignore[union-attr]
+    return name
+
+
+def _match_index(resume: StructuredResume, kind: str, name: str) -> int | None:
+    """Find an entry by NAME, never by index. Tailoring may reorder or drop
+    entries, so the same index means different things in the two copies."""
+    items = getattr(resume, kind)
+    for i, item in enumerate(items):
+        their = item.institution if kind == "education" else item.name
+        if their == name:
+            return i
+    return None
+
+
+def mirror_append(source: StructuredResume, target: StructuredResume,
+                  path: str, value: str) -> bool:
+    """Replay an append made against `source` onto `target`, resolving the
+    parent by name. Returns whether it landed; a parent that only exists in
+    the tailored copy simply has nowhere to mirror to."""
+    for regex, kind in ((_HL_PATH_RE, None), (_CUSTOM_ITEM_RE, "custom"),
+                        (_SKILL_KW_RE, "skills")):
+        m = regex.match(path)
+        if not m:
+            continue
+        if regex is _HL_PATH_RE:
+            if m.group(3) != "+":
+                return False
+            kind, i = m.group(1), int(m.group(2))
+            parent = getattr(source, kind)[i]
+            j = _match_index(target, kind, parent.name)
+            if j is None:
+                return False
+            getattr(target, kind)[j].highlights.append(value)
+            return True
+        if m.group(2) != "+":
+            return False
+        i = int(m.group(1))
+        if kind == "custom":
+            j = _match_index(target, "custom", source.custom[i].name)
+            if j is None:
+                return False
+            target.custom[j].items.append(value)
+            return True
+        their = next((k for k, s in enumerate(target.skills)
+                      if s.name == source.skills[i].name), None)
+        if their is None:
+            return False
+        target.skills[their].keywords.append(value)
+        return True
+    if _CERT_RE.match(path) and path.endswith("[+]"):
+        target.certificates.append(value)
+        return True
+    return False
 
 
 def build_resume_advice_context(doc) -> str:
@@ -373,6 +555,15 @@ def _prose_paths(resume: StructuredResume):
                 lambda p=p, j=j: p.highlights[j] if j < len(p.highlights) else "",
                 lambda v, p=p, j=j: p.highlights.__setitem__(j, v),
             ))
+    # User-made sections are prose too, so the number guard covers an item
+    # in Publications exactly as it covers a bullet under a job.
+    for i, c in enumerate(resume.custom):
+        for j in range(len(c.items)):
+            fields.append((
+                f"custom[{i}].items[{j}]",
+                lambda c=c, j=j: c.items[j] if j < len(c.items) else "",
+                lambda v, c=c, j=j: c.items.__setitem__(j, v),
+            ))
     return fields
 
 
@@ -474,6 +665,32 @@ def enforce_honesty(
             "Removed certificates not on the original resume: "
             + ", ".join(invented_certs)
         )
+
+    # Custom sections exist so the USER can add what the standard has no
+    # field for. The tailor can see them and may rephrase their items, but
+    # a section the original does not have is the model inventing a whole
+    # category of experience, which is the worst version of the failure
+    # these guards exist to catch.
+    orig_sections = {c.name for c in original.custom}
+    kept_custom = []
+    for section in tailored.resume.custom:
+        if section.name not in orig_sections:
+            warnings.append(
+                f"Removed the '{section.name or 'untitled'}' section — it is not "
+                "on the original resume."
+            )
+            continue
+        kept_custom.append(section)
+    # And the reverse: a section the user made must survive a tailor run
+    # that simply forgot to emit it. The model rewrites the whole document
+    # from the original, so an omission is indistinguishable from a
+    # deletion, and silently losing the user's own Publications section is
+    # the worse of the two failures to allow.
+    kept_names = {c.name for c in kept_custom}
+    for section in original.custom:
+        if section.name not in kept_names:
+            kept_custom.append(section.model_copy(deep=True))
+    tailored.resume.custom = kept_custom
 
     tailored.warnings = warnings
     return tailored
@@ -640,6 +857,13 @@ def to_jsonresume(s: StructuredResume) -> dict:
     loc = data["basics"].pop("location", "")
     data["basics"]["location"] = {"address": loc} if loc else {}
     data["certificates"] = [{"name": c} for c in data["certificates"]]
+    # The standard has no field for user-made sections. Namespaced keys are
+    # how JSON Resume expects extensions, and importers ignore what they do
+    # not know, so a Publications section survives a round trip here without
+    # breaking anyone else's parser.
+    custom = data.pop("custom", [])
+    if custom:
+        data["x-custom-sections"] = custom
     data["$schema"] = (
         "https://raw.githubusercontent.com/jsonresume/resume-schema/master/schema.json"
     )
@@ -678,6 +902,11 @@ def from_jsonresume(data: dict) -> StructuredResume:
         skills=[ResumeSkill.model_validate(k) for k in data.get("skills") or []],
         projects=[ResumeProject.model_validate(p) for p in data.get("projects") or []],
         certificates=certs,
+        custom=[
+            CustomSection.model_validate(c)
+            for c in data.get("x-custom-sections") or []
+            if isinstance(c, dict)
+        ],
     ))
 
 
@@ -739,6 +968,11 @@ def render_markdown(s: StructuredResume) -> str:
     if s.certificates:
         lines += ["", "## Certifications", ""]
         lines += [f"- {c}" for c in s.certificates]
+    for c in s.custom:
+        if not (c.name or c.items):
+            continue
+        lines += ["", f"## {c.name or 'Additional'}", ""]
+        lines += [f"- {i}" for i in c.items]
     return "\n".join(lines).strip() + "\n"
 
 
@@ -798,6 +1032,12 @@ def render_docx(s: StructuredResume) -> bytes:
         doc.add_heading("Certifications", level=1)
         for c in s.certificates:
             doc.add_paragraph(c, style="List Bullet")
+    for custom in s.custom:
+        if not (custom.name or custom.items):
+            continue
+        doc.add_heading(custom.name or "Additional", level=1)
+        for item in custom.items:
+            doc.add_paragraph(item, style="List Bullet")
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
@@ -948,6 +1188,12 @@ def render_pdf(s: StructuredResume) -> bytes:
         section("Certifications")
         for c in s.certificates:
             bullet(c)
+    for custom in s.custom:
+        if not (custom.name or custom.items):
+            continue
+        section(custom.name or "Additional")
+        for item in custom.items:
+            bullet(item)
     return bytes(pdf.output())
 
 

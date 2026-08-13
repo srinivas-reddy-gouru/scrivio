@@ -38,6 +38,21 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ edits }),
     }).then((r) => json<ResumeDoc>(r)),
+  /** Additions go through their own road, not editTailored: the server
+   * writes them into the original structure as well, so the next tailor
+   * run does not treat the user's own job as an invention. */
+  addToResume: (id: string, payload: Record<string, unknown>) =>
+    fetch(`/resumes/${id}/add`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then((r) => json<ResumeDoc>(r)),
+  removeEntry: (id: string, path: string) =>
+    fetch(`/resumes/${id}/remove-entry`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    }).then((r) => json<ResumeDoc>(r)),
   adviseResume: (id: string, question: string, history: Array<{ role: string; content: string }>) =>
     fetch(`/resumes/${id}/advise`, {
       method: "POST",

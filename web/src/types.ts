@@ -16,6 +16,8 @@ export interface ResumeSkill { name: string; keywords: string[]; }
 export interface ResumeProject {
   name: string; description: string; url: string; highlights: string[];
 }
+export interface CustomSection { name: string; items: string[] }
+
 export interface StructuredResume {
   basics: ResumeBasics;
   work: ResumeWorkItem[];
@@ -23,6 +25,9 @@ export interface StructuredResume {
   skills: ResumeSkill[];
   projects: ResumeProject[];
   certificates: string[];
+  /** Sections the user made, which the JSON Resume standard has no field
+   * for. Optional here because documents saved before this existed. */
+  custom?: CustomSection[];
 }
 
 export interface AtsCheck {

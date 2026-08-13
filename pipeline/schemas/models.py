@@ -731,6 +731,15 @@ class ResumeProject(BaseModel):
     highlights: list[str] = Field(default_factory=list)
 
 
+class CustomSection(BaseModel):
+    """A section the JSON Resume standard has no field for: Publications,
+    Volunteering, Speaking, Patents. Only the user creates these. The
+    extractor is never asked for them, because a model inventing whole
+    sections is precisely what the honesty guards exist to prevent."""
+    name: str = ""
+    items: list[str] = []
+
+
 class StructuredResume(BaseModel):
     """Tool schema for submit_resume_extraction (JSON Resume shape)."""
     basics: ResumeBasics = Field(default_factory=ResumeBasics)
@@ -739,6 +748,7 @@ class StructuredResume(BaseModel):
     skills: list[ResumeSkill] = []
     projects: list[ResumeProject] = []
     certificates: list[str] = []
+    custom: list[CustomSection] = []
 
 
 class AtsCheck(BaseModel):

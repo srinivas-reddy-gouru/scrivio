@@ -8,6 +8,7 @@ import re
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 try:
     from dotenv import load_dotenv
@@ -60,9 +61,12 @@ from pipeline.workers.job_interviewer_worker import (
 )
 from pipeline.workers.resume_parser import ResumeParseError, parse_resume
 from pipeline.workers.resume_studio_worker import (
+    add_resume_entry,
     advise_resume,
     apply_tailored_edits,
     build_resume_advice_context,
+    mirror_append,
+    remove_resume_entry,
     edit_resume_by_instruction,
     extract_resume,
     guard_edited_numbers_and_log,
@@ -2376,6 +2380,14 @@ async def edit_tailored_endpoint(
         raise HTTPException(status_code=409, detail="Tailoring is still running.")
     if not body.edits:
         raise HTTPException(status_code=422, detail="No edits given.")
+    # Appends have to reach the original structure too, and only /add does
+    # that. One road in means an added bullet cannot quietly go missing at
+    # the next tailor run.
+    if any(e.path.endswith("[+]") for e in body.edits):
+        raise HTTPException(
+            status_code=422,
+            detail="Use POST /resumes/{id}/add to add a line, not edit-tailored.",
+        )
     snapshot = doc.tailored.model_copy(deep=True)
     try:
         applied = apply_tailored_edits(
@@ -2395,6 +2407,144 @@ async def edit_tailored_endpoint(
         )
         _refresh_tailored_report(doc)
         _save_resume_doc(doc)
+    return doc
+
+
+# ── Adding to the resume ─────────────────────────────────────────────
+# Everything else in this studio rewrites what is already on the resume.
+# This is the one road that puts something NEW on it, so it is the user's
+# alone: no model is consulted, and no honesty guard runs, because the
+# person typing is the authority on their own history.
+#
+# The critical detail is where an addition is written. The paper on screen
+# is the tailored copy, but the ORIGINAL structure is what enforce_honesty
+# checks against and what the next tailor run rewrites from. Write only to
+# the tailored copy and the addition is deleted, with a warning calling
+# the user's own job an invention. So every addition lands in both.
+
+class ResumeAddRequest(BaseModel):
+    kind: Literal["bullet", "work", "projects", "education", "custom",
+                  "certificate", "skill"]
+    # For "bullet": the entry it belongs to, e.g. "work[0]", "projects[1]",
+    # or "custom[0]". For "skill": "skills[0]". Indexes the paper on screen.
+    parent: str = ""
+    text: str = ""            # bullet, certificate, or skill keyword
+    fields: dict = {}         # entry fields for work/projects/education/custom
+
+
+def _resume_pair(doc: ResumeDoc) -> tuple[StructuredResume, StructuredResume | None]:
+    """(the resume the user is looking at, the other copy to mirror into)."""
+    if doc.tailored is not None:
+        return doc.tailored.resume, doc.structured
+    if doc.structured is None:
+        raise HTTPException(status_code=422, detail="This resume has not been read yet.")
+    return doc.structured, None
+
+
+def _bullet_path(parent: str) -> str:
+    if re.fullmatch(r"(work|projects)\[\d+\]", parent):
+        return f"{parent}.highlights[+]"
+    if re.fullmatch(r"custom\[\d+\]", parent):
+        return f"{parent}.items[+]"
+    raise HTTPException(
+        status_code=422,
+        detail=f"Cannot add a line to {parent!r}. Expected work[n], projects[n], or custom[n].",
+    )
+
+
+@app.post("/resumes/{resume_id}/add", response_model=ResumeDoc)
+async def add_to_resume(resume_id: str, body: ResumeAddRequest) -> ResumeDoc:
+    """Add a bullet, an entry, or a whole section. The user's own words."""
+    doc = _load_resume_doc(resume_id)
+    if doc.tailor_status == "tailoring":
+        raise HTTPException(status_code=409, detail="Tailoring is still running.")
+    shown, other = _resume_pair(doc)
+    snapshot = doc.tailored.model_copy(deep=True) if doc.tailored else None
+
+    if body.kind in ("bullet", "certificate", "skill"):
+        value = body.text.strip()
+        if not value:
+            raise HTTPException(status_code=422, detail="Nothing to add.")
+        if body.kind == "certificate":
+            path = "certificates[+]"
+        elif body.kind == "skill":
+            if not re.fullmatch(r"skills\[\d+\]", body.parent):
+                raise HTTPException(status_code=422, detail="Expected skills[n].")
+            path = f"{body.parent}.keywords[+]"
+        else:
+            path = _bullet_path(body.parent)
+        try:
+            applied = apply_tailored_edits(shown, [(path, value)])
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        if not applied:
+            raise HTTPException(status_code=422, detail=f"Nothing at {body.parent}.")
+        if other is not None:
+            mirror_append(shown, other, path, value)
+        where, what = path, "Added by you."
+    else:
+        fields = dict(body.fields)
+        if body.text.strip() and body.kind == "custom":
+            fields.setdefault("name", body.text.strip())
+        if not any(str(v).strip() for v in fields.values() if not isinstance(v, list)) \
+                and not any(fields.get(k) for k in ("highlights", "items")):
+            raise HTTPException(status_code=422, detail="The new entry is empty.")
+        try:
+            where = add_resume_entry(shown, body.kind, fields)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        if other is not None:
+            add_resume_entry(other, body.kind, fields)
+        what = "Added by you."
+
+    if snapshot is not None:
+        _push_tailored_history(doc, snapshot)
+        doc.tailored.changes.append(ResumeChange(kind="added-keyword", where=where, what=what))
+        _refresh_tailored_report(doc)
+    if doc.structured is not None:
+        doc.report = run_ats_checks(
+            render_markdown(doc.structured), doc.jd_text or None, doc.structured)
+    doc.updated_at = datetime.utcnow()
+    _save_resume_doc(doc)
+    return doc
+
+
+class ResumeRemoveRequest(BaseModel):
+    path: str   # "work[2]", "projects[0]", "education[1]", "custom[0]"
+
+
+@app.post("/resumes/{resume_id}/remove-entry", response_model=ResumeDoc)
+async def remove_from_resume(resume_id: str, body: ResumeRemoveRequest) -> ResumeDoc:
+    """Drop a whole entry from both copies. Anything addable is removable,
+    or a mistyped section would be permanent."""
+    doc = _load_resume_doc(resume_id)
+    if doc.tailor_status == "tailoring":
+        raise HTTPException(status_code=409, detail="Tailoring is still running.")
+    shown, other = _resume_pair(doc)
+    snapshot = doc.tailored.model_copy(deep=True) if doc.tailored else None
+    try:
+        name = remove_resume_entry(shown, body.path)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if other is not None:
+        kind = body.path.split("[")[0]
+        items = getattr(other, kind)
+        for i, item in enumerate(items):
+            their = item.institution if kind == "education" else item.name
+            if their == name:
+                items.pop(i)
+                break
+    if snapshot is not None:
+        _push_tailored_history(doc, snapshot)
+        doc.tailored.changes.append(ResumeChange(
+            kind="condensed", where=body.path,
+            what=f"Removed by you: {name or 'entry'}."))
+        _refresh_tailored_report(doc)
+    if doc.structured is not None:
+        doc.report = run_ats_checks(
+            render_markdown(doc.structured), doc.jd_text or None, doc.structured)
+    doc.updated_at = datetime.utcnow()
+    _save_resume_doc(doc)
     return doc
 
 

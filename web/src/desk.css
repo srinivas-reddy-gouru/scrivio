@@ -709,6 +709,55 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 .edit-hint { font-size: 0.72rem; color: var(--teal); margin: 0.15rem 0 0.7rem; }
 .gate-note { font-size: 0.7rem; color: var(--amber); margin-top: 0.5rem; line-height: 1.45; }
 
+/* Adding to the paper. These controls live ON the document, in the place
+   the new line will appear, so the resume never stops looking like the
+   thing that gets sent. They stay quiet until hovered: the paper is for
+   reading first and editing second. */
+.add-line {
+  background: none; border: 1px dashed rgba(12, 32, 30, 0.28); border-radius: 6px;
+  color: #4E5F5C; font-size: 0.78rem; font-family: inherit; cursor: pointer;
+  padding: 0.24rem 0.6rem; margin: 0.15rem 0 0.3rem; transition: all 0.15s;
+}
+.add-line:hover { border-color: var(--teal); color: var(--teal); background: rgba(32, 184, 205, 0.08); }
+.add-line-form { margin: 0.35rem 0 0.6rem; }
+.add-line-form textarea {
+  width: 100%; font: inherit; font-size: 0.85rem; line-height: 1.5; color: #1C2523;
+  border: 1px solid var(--teal); border-radius: 6px; padding: 0.5rem 0.6rem;
+  background: rgba(32, 184, 205, 0.06); resize: vertical;
+}
+.add-line-form textarea:focus { outline: none; box-shadow: 0 0 0 3px rgba(32, 184, 205, 0.18); }
+.add-line-actions { display: flex; gap: 0.4rem; margin-top: 0.4rem; }
+.btn-sm { padding: 0.28rem 0.7rem; font-size: 0.76rem; }
+
+/* Remove sits on the entry it removes, and only in edit mode. */
+.entry-remove {
+  background: none; border: none; cursor: pointer; color: rgba(12, 32, 30, 0.35);
+  font-size: 0.78rem; margin-left: 0.5rem; padding: 0 0.25rem; border-radius: 4px;
+  opacity: 0; transition: opacity 0.15s, color 0.15s;
+}
+.paper h2:hover .entry-remove, .paper h3:hover .entry-remove,
+.entry-remove:focus { opacity: 1; }
+.entry-remove:hover { color: var(--redpen); background: rgba(224, 106, 85, 0.12); }
+
+.paper-add {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
+  margin-top: 1.6rem; padding-top: 0.9rem; border-top: 1px dashed rgba(12, 32, 30, 0.18);
+}
+.paper-add-label { font-size: 0.78rem; color: #4E5F5C; margin-right: 0.2rem; }
+.new-entry { width: 100%; }
+.new-entry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
+.new-entry-grid label { display: flex; flex-direction: column; gap: 0.2rem; }
+.new-entry-grid label.wide { grid-column: 1 / -1; }
+.new-entry-grid span { font-size: 0.7rem; color: #4E5F5C; }
+.new-entry-grid input, .new-entry-grid textarea {
+  font: inherit; font-size: 0.84rem; color: #1C2523; background: rgba(12, 32, 30, 0.04);
+  border: 1px solid rgba(12, 32, 30, 0.16); border-radius: 6px; padding: 0.38rem 0.5rem;
+}
+.new-entry-grid input:focus, .new-entry-grid textarea:focus {
+  outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(32, 184, 205, 0.15);
+}
+@media (max-width: 640px) { .new-entry-grid { grid-template-columns: 1fr; } }
+
 /* The coach chat */
 .coach-log {
   max-height: 260px; overflow-y: auto; display: flex; flex-direction: column;

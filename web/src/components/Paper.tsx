@@ -2,7 +2,7 @@
  * Report mode derives red/amber marks from the live AtsReport; tailored
  * mode marks changed lines teal (from the change log's where-paths) and
  * renders [METRIC] placeholders as editable chips in place. */
-import { Fragment, useRef } from "react";
+import { Fragment, useRef, useState } from "react";
 import type { AtsReport, ResumeChange, StructuredResume } from "../types";
 import { changeIndex, displayNote, markForHighlight, METRIC_TOKEN } from "../marks";
 import type { PaperNote } from "../marks";
@@ -25,6 +25,111 @@ interface PaperProps {
   activeNote?: string | null;
   onNote?: (path: string) => void;
   answerSlot?: (path: string, notes: PaperNote[]) => React.ReactNode;
+  /** Adding, as opposed to rewriting. Present only in edit mode, and only
+   * ever driven by the user: the studio will rephrase what is on the
+   * resume, but it will never put something new there. */
+  onAdd?: (payload: AddPayload) => void;
+  onRemoveEntry?: (path: string, label: string) => void;
+}
+
+export type AddPayload =
+  | { kind: "bullet"; parent: string; text: string }
+  | { kind: "certificate"; text: string }
+  | { kind: "skill"; parent: string; text: string }
+  | { kind: "work" | "projects" | "education" | "custom"; fields: Record<string, unknown> };
+
+/** A quiet "add a line" that becomes an input in place. Deliberately not a
+ * modal: adding a bullet is the most common thing here, and it should cost
+ * one click and a return key. */
+function AddLine({ label, onSave }: { label: string; onSave: (text: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const save = () => {
+    const v = text.trim();
+    if (v) onSave(v);
+    setText(""); setOpen(false);
+  };
+  if (!open) {
+    return (
+      <button className="add-line" onClick={() => setOpen(true)}>+ {label}</button>
+    );
+  }
+  return (
+    <div className="add-line-form">
+      <textarea autoFocus value={text} rows={2}
+        placeholder="Write it the way you would say it out loud, with the number first."
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); }
+          if (e.key === "Escape") { setText(""); setOpen(false); }
+        }} />
+      <div className="add-line-actions">
+        <button className="btn btn-sm" onClick={save} disabled={!text.trim()}>Add</button>
+        <button className="btn btn-sm btn-quiet" onClick={() => { setText(""); setOpen(false); }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const ENTRY_FIELDS: Record<string, { key: string; label: string; wide?: boolean }[]> = {
+  work: [
+    { key: "name", label: "Employer" }, { key: "position", label: "Job title" },
+    { key: "startDate", label: "Start (e.g. Mar 2023)" }, { key: "endDate", label: "End or Present" },
+    { key: "summary", label: "Tech stack (optional)", wide: true },
+  ],
+  projects: [
+    { key: "name", label: "Project" }, { key: "url", label: "Link (optional)" },
+    { key: "description", label: "What it is", wide: true },
+  ],
+  education: [
+    { key: "institution", label: "School" }, { key: "area", label: "Field" },
+    { key: "studyType", label: "Degree (e.g. B.S.)" }, { key: "endDate", label: "Year" },
+  ],
+  custom: [{ key: "name", label: "Section name, e.g. Publications", wide: true }],
+};
+
+/** The form for a whole new entry. Employer, title, and dates are typed by
+ * the user here, which is the one place in the studio that is allowed:
+ * these are facts about their life, not text a model is generating. */
+function NewEntry({ kind, onSave, onCancel }: {
+  kind: "work" | "projects" | "education" | "custom";
+  onSave: (fields: Record<string, unknown>) => void; onCancel: () => void;
+}) {
+  const [fields, setFields] = useState<Record<string, string>>({});
+  const [first, setFirst] = useState("");
+  const set = (k: string, v: string) => setFields((f) => ({ ...f, [k]: v }));
+  const required = kind === "education" ? "institution" : "name";
+  const firstLabel = kind === "custom" ? "First line of the section" : "First bullet (optional)";
+
+  return (
+    <div className="new-entry">
+      <div className="new-entry-grid">
+        {ENTRY_FIELDS[kind].map((f) => (
+          <label key={f.key} className={f.wide ? "wide" : ""}>
+            <span>{f.label}</span>
+            <input value={fields[f.key] ?? ""} onChange={(e) => set(f.key, e.target.value)} />
+          </label>
+        ))}
+        <label className="wide">
+          <span>{firstLabel}</span>
+          <textarea rows={2} value={first} onChange={(e) => setFirst(e.target.value)} />
+        </label>
+      </div>
+      <div className="add-line-actions">
+        <button className="btn btn-sm" disabled={!(fields[required] ?? "").trim()}
+          onClick={() => {
+            const payload: Record<string, unknown> = { ...fields };
+            if (first.trim()) {
+              payload[kind === "custom" ? "items" : "highlights"] = [first.trim()];
+            }
+            onSave(payload);
+          }}>Add to the resume</button>
+        <button className="btn btn-sm btn-quiet" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
 }
 
 function EditableText({ path, text, onEdit, as: Tag = "p", className = "" }: {
@@ -98,8 +203,16 @@ function MetricText({ text, counter, values, onMetric }: {
 
 export function Paper({
   resume, mode, report, changes = [], litFinding, metricValues, onMetric, onEdit,
-  notes, activeNote, onNote, answerSlot,
+  notes, activeNote, onNote, answerSlot, onAdd, onRemoveEntry,
 }: PaperProps) {
+  const [adding, setAdding] = useState<"work" | "projects" | "education" | "custom" | null>(null);
+  /** The remove control sits on the entry it removes, and only in edit
+   * mode, so a stray click on a read-only paper cannot delete a job. */
+  const removeBtn = (path: string, label: string) => onRemoveEntry && (
+    <button className="entry-remove" title={`Remove ${label}`}
+      aria-label={`Remove ${label}`}
+      onClick={() => onRemoveEntry(path, label)}>✕</button>
+  );
   const counter = useRef({ n: 0 });
   counter.current.n = 0; // occurrence numbering restarts every render
   const idx = changeIndex(changes);
@@ -173,7 +286,10 @@ export function Paper({
           <h2 data-finding="section-headers">Experience</h2>
           {resume.work.map((w, wi) => (
             <Fragment key={wi}>
-              <h3>{[w.position, w.name].filter(Boolean).join(", ")}</h3>
+              <h3>
+                {[w.position, w.name].filter(Boolean).join(", ")}
+                {removeBtn(`work[${wi}]`, w.name || "this job")}
+              </h3>
               <div className="dates" data-finding="dates">
                 {[w.startDate, w.endDate].filter(Boolean).join(" - ")}
               </div>
@@ -222,6 +338,10 @@ export function Paper({
                   );
                 })}
               </ul>
+              {onAdd && (
+                <AddLine label="Add a bullet"
+                  onSave={(text) => onAdd({ kind: "bullet", parent: `work[${wi}]`, text })} />
+              )}
             </Fragment>
           ))}
         </>
@@ -232,7 +352,10 @@ export function Paper({
           <h2>Projects</h2>
           {resume.projects.map((p, pi) => (
             <Fragment key={pi}>
-              <h3>{p.name || "Project"}</h3>
+              <h3>
+                {p.name || "Project"}
+                {removeBtn(`projects[${pi}]`, p.name || "this project")}
+              </h3>
               {p.description && (onEdit
                 ? <EditableText path={`projects[${pi}].description`} text={p.description} onEdit={onEdit} />
                 : <>
@@ -250,6 +373,10 @@ export function Paper({
                   </li>
                 ))}
               </ul>
+              {onAdd && (
+                <AddLine label="Add a bullet"
+                  onSave={(text) => onAdd({ kind: "bullet", parent: `projects[${pi}]`, text })} />
+              )}
             </Fragment>
           ))}
         </>
@@ -263,6 +390,7 @@ export function Paper({
               <h3>
                 {[[e.studyType, e.area].filter(Boolean).join(" in "), e.institution]
                   .filter(Boolean).join(", ")}
+                {removeBtn(`education[${ei}]`, e.institution || "this entry")}
               </h3>
               <div className="dates">
                 {[[e.startDate, e.endDate].filter(Boolean).join(" - "), e.score]
@@ -295,13 +423,55 @@ export function Paper({
         </>
       )}
 
-      {resume.certificates.length > 0 && (
+      {(resume.certificates.length > 0 || onAdd) && (
         <>
           <h2>Certifications</h2>
           <ul>
-            {resume.certificates.map((c, i) => <li key={i}>{c}</li>)}
+            {resume.certificates.map((c, i) => onEdit ? (
+              <EditableText key={i} as="li" path={`certificates[${i}]`} text={c} onEdit={onEdit} />
+            ) : <li key={i}>{c}</li>)}
           </ul>
+          {onAdd && (
+            <AddLine label="Add a certification"
+              onSave={(text) => onAdd({ kind: "certificate", text })} />
+          )}
         </>
+      )}
+
+      {(resume.custom ?? []).map((section, ci) => (
+        <Fragment key={ci}>
+          <h2>
+            {section.name || "Additional"}
+            {removeBtn(`custom[${ci}]`, section.name || "this section")}
+          </h2>
+          <ul>
+            {section.items.map((item, ii) => onEdit ? (
+              <EditableText key={ii} as="li"
+                path={`custom[${ci}].items[${ii}]`} text={item} onEdit={onEdit} />
+            ) : <li key={ii}>{metric(item)}</li>)}
+          </ul>
+          {onAdd && (
+            <AddLine label="Add a line"
+              onSave={(text) => onAdd({ kind: "bullet", parent: `custom[${ci}]`, text })} />
+          )}
+        </Fragment>
+      ))}
+
+      {onAdd && (
+        <div className="paper-add">
+          {adding ? (
+            <NewEntry kind={adding} onCancel={() => setAdding(null)}
+              onSave={(fields) => { onAdd({ kind: adding, fields }); setAdding(null); }} />
+          ) : (
+            <>
+              <span className="paper-add-label">Missing something?</span>
+              <button className="btn btn-sm btn-quiet" onClick={() => setAdding("work")}>+ Job</button>
+              <button className="btn btn-sm btn-quiet" onClick={() => setAdding("projects")}>+ Project</button>
+              <button className="btn btn-sm btn-quiet" onClick={() => setAdding("education")}>+ Education</button>
+              <button className="btn btn-sm btn-quiet" onClick={() => setAdding("custom")}>+ Section</button>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
