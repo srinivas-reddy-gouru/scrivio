@@ -49,7 +49,9 @@ Upload your resume and a job description; interview for *that* job:
 
 Voice interviews on any topic, with grading you can trust:
 
-- **The interviewer speaks** (natural TTS), **you answer out loud** (live dictation transcript, editable before submit)
+- **The interviewer speaks, and sounds like one.** Questions are read by a steerable TTS voice told how to deliver them: unhurried, pausing at commas, lifting at the end of a question rather than landing it flat. A question read as a statement arrives as an interrogation, which is not what you are practicing for. Pick the voice from inside the room and preview it on the real question, since a list of adjectives tells you nothing about what you want to hear for twenty minutes
+- **You answer out loud.** The mic records and transcribes through Whisper, which is accurate and punctuated and works in any browser with a microphone; the browser's own dictation is the fallback when no key is set. The transcript is yours to edit before you submit, and every failure says what went wrong instead of leaving a dead button
+- **Manners, without a softer bar.** The first question of every mode opens with a courteous line before it, the way a real interviewer starts. The rubric and the difficulty are untouched
 - **Hidden rubric.** The grading rubric and ideal answer are written *before* you answer and physically withheld from the client until the question closes; the grader scores against a fixed bar it cannot sweet-talk
 - **Three modes.** Practice (feedback each answer + one drill-down follow-up), Simulation (silent grading, end-of-screen debrief with hire signal), Drill (60-second rapid fire seeded from your weak spots)
 - **Progress that compounds.** Topic mastery (recent sessions weighted), daily streaks, badges, confidence calibration (predict your score before the verdict), and weak areas that automatically seed your next drill
@@ -80,6 +82,20 @@ about what the app currently looks like:
 ```bash
 python -m uvicorn api.server:app --port 8899   # in another shell
 python scripts/capture_screenshots.py          # --light for light theme too
+```
+
+The resume shot is the exception, because a resume screenshot is exactly
+where documentation leaks a real person: a contact line and an employment
+history, at full resolution, forever. So it is taken against an invented
+resume on a server pointed at an output directory of its own, where
+nothing personal is loadable at all. The content is fiction; the before
+and after scores are not, since they come from the same checks the
+product runs.
+
+```bash
+python scripts/demo_resume.py /tmp/demo-output
+ARTICLE_OUTPUT_DIR=/tmp/demo-output python -m uvicorn api.server:app --port 8897
+python scripts/capture_screenshots.py --base http://localhost:8897 --only resume-studio
 ```
 
 ---
@@ -130,7 +146,7 @@ python -m uvicorn api.server:app --host 0.0.0.0 --port 8899
 | --- | ------- |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | API-billed LLM providers (faster than CLI) |
 | `TAVILY_API_KEY` (or Brave/Exa) | Live web search; without any, search falls back to the Claude CLI's WebSearch tool, then degrades gracefully |
-| `OPENAI_API_KEY` (again) | Voice extras: natural interviewer TTS + Whisper transcription. Without it, the browser's built-in voice and dictation take over (Chrome dictation is free and live) |
+| `OPENAI_API_KEY` (again) | Both directions of voice: the interviewer's TTS and Whisper transcription of your answers. Without it the browser's own voice and dictation take over, which is free but noticeably more robotic and unavailable in some browsers. `TTS_VOICE` sets the default voice (`sage`), overridable per listener in the room; `TTS_MODEL` defaults to `gpt-4o-mini-tts`, the tier that accepts delivery instructions |
 | `JINA_API_KEY` | Fallback fetcher for scraper-blocking sites |
 
 ### Model selection is your call, not ours
