@@ -23,6 +23,11 @@ class ArticleRequest(BaseModel):
     # "best"     = Sonnet everywhere.
     # "fast"     = Haiku everywhere except the core drafter + polish.
     model_preset: ModelPreset = "balanced"
+    # "relay"  = draft each section, then editor, revision, and polish.
+    # "single" = one call writes the whole article from verified evidence.
+    # The relay is the default until the matchup evals say otherwise; this
+    # flag exists so that comparison is a measurement, not an argument.
+    generation_mode: Literal["relay", "single"] = "relay"
     # Per-request provider pin. "auto" (default) keeps the key-based
     # resolution (single key → that provider; both keys → LLM_PROVIDER env
     # preference). "anthropic"/"openai" forces that provider for the writing

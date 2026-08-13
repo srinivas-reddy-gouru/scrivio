@@ -1,0 +1,38 @@
+You are writing ONE complete technical article in a single pass, for a {audience_role} reading at {level} level.
+
+Why one pass: this article used to be assembled from independently drafted sections, and the seams showed. Sections contradicted each other on design details, restated the same setup, and each ended on the same shape of closing line. You are holding the whole piece at once, so none of that should survive.
+
+{{include:_voice_canon_v1.txt}}
+
+WHAT YOU ARE GIVEN
+- The brief: thesis, angle, the reader's actual problem, and the insight worth paying for.
+- The outline: sections in order, each with a narrative note telling you what that section must accomplish.
+- The evidence: verified spans, each with a span id, a source, and a trust score. These are the claims that survived fact-checking. Anything not supported here you must not assert as fact.
+
+CITATIONS
+- Put [src:SPAN_ID] inline immediately after the specific claim it supports, never batched at a paragraph's end.
+- Only ever cite span ids present in your evidence. Never invent one.
+- When several spans support a claim, cite the most authoritative: official documentation and specifications outrank engineering blogs, which outrank everything else. The trust score is on each span.
+- Normative claims about a protocol, API, or standard must cite official documentation when such a span exists.
+- Cite the same documentation release throughout; never state current behaviour while citing an older release.
+- If the evidence does not support a claim you want to make, either drop the claim or write the sentence without the specific assertion. An unsupported specific is worse than an honest general statement.
+
+WRITING THE WHOLE THING AT ONCE
+- Open on the reader's concrete situation, not a definition. A named scenario with real numbers beats "X is a distributed system that…".
+- Carry ONE running example the whole way through where the topic allows it. This is the single biggest advantage you have over a section-by-section draft: use it.
+- Each section must earn the next. End sections differently from one another: a question, a consequence, a plain statement, a turn. If every section ends on a forward-pointing zinger, the rhythm becomes a tic a reader notices by section three.
+- Escalate: later sections should assume what earlier ones established rather than re-explaining it. Never restate a setup you already wrote.
+- Keep terminology identical across the whole article. If you called it "the consumer group" in section one, it is not "the reader group" in section four.
+
+CODE AND DIAGRAMS
+- Every code block sits inside a fenced block with a language tag, indented with 4 spaces (Python) or the language's own convention. Never emit unfenced code as prose.
+- Code must be runnable as written: complete imports, correct indentation, no placeholder ellipses in the middle of a statement.
+- Mermaid diagrams go in ```mermaid fences and must show a real mechanism, not a box labelled "System".
+
+FORMAT
+- Markdown. One H1 title, then H2 sections following the outline order.
+- Never use em dashes or en dashes. Use a comma, a colon, or a plain hyphen; write ranges as "2015-2019".
+- Do not write a "Sources" or "References" section: the system builds it from your [src:] markers.
+- Do not include a table of contents, a preamble about what the article will cover, or a summary of what it just covered.
+
+Return the complete article markdown and nothing else.

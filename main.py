@@ -33,6 +33,10 @@ from pipeline.workers.compiler_worker import compile_all_levels
 from pipeline.workers.citation_utils import resolve_citations, scrub_em_dashes
 from pipeline.workers.drafting_worker import draft_all_sections
 from pipeline.workers.editor_worker import revise_draft, run_editor_review
+from pipeline.workers.single_draft_worker import (
+    SinglePassRejected,
+    generate_whole_article,
+)
 from pipeline.cache import StageCache
 from pipeline.workers.extraction_worker import process_search_result, score_url
 from pipeline.workers.critic_worker import critique_article
@@ -370,6 +374,48 @@ async def generate_article(
             for r in reports[:6]
         ],
     )
+
+    # ─── single-pass generation (opt-in), with fallback to the relay ──
+    # The relay below is the default. When generation_mode="single", one
+    # call writes the whole article from the same verified evidence; the
+    # relay stays reachable as the fallback because a single call can fail
+    # in ways a per-section draft cannot (token ceiling, dropped sections,
+    # ignored citations). Those failures are checked deterministically, so
+    # a rejected single pass degrades to the relay instead of publishing a
+    # truncated article.
+    single_pass_fell_back: list[str] = []
+    if request.generation_mode == "single":
+        await _emit(progress_callback, "stage_started", "drafting",
+                    "Writing the whole article in one pass")
+        assets = await _generate_assets(publishable_plan, anthropic_client)
+        try:
+            article = await generate_whole_article(
+                publishable_plan, verified_spans, request,
+                anthropic_client, assets=assets,
+            )
+            await _emit(
+                progress_callback, "stage_completed", "drafting",
+                mode="single", total_words=len(article.markdown.split()),
+            )
+            # Same deterministic gates the relay ends on. No critic pass
+            # and no refinement loop: the hypothesis under test is that
+            # ONE generation plus these gates beats the relay, so adding
+            # LLM calls back would measure something else.
+            article.markdown = resolve_citations(
+                scrub_em_dashes(article.markdown), verified_spans
+            )
+            article.assets = assets
+            article.verification_reports = reports
+            return {request.explanation_level: article}
+        except SinglePassRejected as exc:
+            single_pass_fell_back = exc.defects
+            logging.warning(
+                "Single-pass generation rejected after retry (%s); "
+                "falling back to the section relay", exc)
+            await _emit(
+                progress_callback, "stage_completed", "drafting",
+                mode="single", fell_back_to_relay=True, defects=exc.defects,
+            )
 
     # ─── drafting + visuals ───────────────────────────────────────────
     await _emit(progress_callback, "stage_started", "drafting", "Writing sections")
@@ -1291,6 +1337,8 @@ class MockAnthropicMessages:
             # final-pass copyeditor AND level-adapter", so "copyeditor"
             # routes it here.
             content = _mock_humanized_markdown(user_content)
+        elif "writing one complete technical article in a single pass" in system.lower():
+            content = _mock_single_pass_article(user_content)
         elif "resume metrics coach" in system:
             content = (
                 "For the deploy-time bullet, use a percentage from your CI "
@@ -1789,6 +1837,31 @@ def _mock_compiled_markdown(system: str, draft_markdown: str) -> str:
         "This article was generated with local mock LLM responses because API keys "
         "were not available."
     )
+
+
+def _mock_single_pass_article(user_content: str) -> str:
+    """A whole article in one response: title, every outlined section, and a
+    citation on the first span offered, so the acceptance gate in
+    single_draft_worker sees a well-formed article in tests."""
+    titles = [
+        line.split(". ", 1)[1]
+        for line in user_content.splitlines()
+        if line.strip() and line[0].isdigit() and ". " in line
+    ]
+    span_id = ""
+    for line in user_content.splitlines():
+        if line.startswith("[") and "] (" in line:
+            span_id = line[1:line.index("]")]
+            break
+    cite = f" [src:{span_id}]" if span_id else ""
+    filler = ("The mechanism matters more than the label here, so the example "
+              "carries through the whole piece rather than restarting. ") * 12
+    body = "\n\n".join(
+        f"## {t}\n\n{filler}This section closes on the consequence rather than a "
+        f"forward-pointing question.{cite if i == 0 else ''}"
+        for i, t in enumerate(titles or ["How it works", "What it costs"])
+    )
+    return f"# The Whole Article, Written Once\n\n{body}\n"
 
 
 def _mock_humanized_markdown(user_content: str) -> str:
