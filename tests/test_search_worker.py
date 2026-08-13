@@ -209,3 +209,33 @@ def test_process_search_result_falls_back_when_upgrade_404s(monkeypatch):
         "https://kafka.apache.org/0101/javadoc/X.html",
     ]
     assert spans and spans[0].source_url == "https://kafka.apache.org/0101/javadoc/X.html"
+
+
+def test_upgraded_source_title_drops_the_release_it_no_longer_points_at():
+    """Measured on a real run: the URL was upgraded to /41/ but the
+    indexed title still read "kafka 2.7.0 API", so the reference claimed
+    a release it did not link to."""
+    from pipeline.workers.search_worker import strip_stale_version_from_title
+
+    assert strip_stale_version_from_title("KafkaConsumer (kafka 2.7.0 API)") \
+        == "KafkaConsumer (kafka API)"
+    assert strip_stale_version_from_title("Kafka 3.9 Documentation") == "Kafka Documentation"
+    # Titles without a release are left exactly as they are.
+    assert strip_stale_version_from_title("Design | Apache Kafka") == "Design | Apache Kafka"
+
+
+def test_upgraded_fetch_records_cleaned_title(monkeypatch):
+    import asyncio
+    from pipeline.workers import extraction_worker as ew
+
+    async def fake_fetch(url, *a, **k):
+        return "Consumer rebalance protocol text.", "direct"
+
+    monkeypatch.setattr(ew, "fetch_with_retry", fake_fetch)
+    spans = asyncio.run(ew.process_search_result(
+        ew.SearchResult(url="https://kafka.apache.org/27/javadoc/KafkaConsumer.html",
+                        title="KafkaConsumer (kafka 2.7.0 API)", snippet=""),
+        newest_by_host={"kafka.apache.org": "41"},
+    ))
+    assert spans[0].source_url == "https://kafka.apache.org/41/javadoc/KafkaConsumer.html"
+    assert spans[0].source_title == "KafkaConsumer (kafka API)"

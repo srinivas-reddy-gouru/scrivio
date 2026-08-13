@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from pipeline.schemas.models import EvidenceSpan
-from pipeline.workers.search_worker import upgrade_doc_url, SearchResult
+from pipeline.workers.search_worker import strip_stale_version_from_title, upgrade_doc_url, SearchResult
 
 
 REDACTION_TEXT = "[REDACTED — injection attempt detected]"
@@ -413,12 +413,14 @@ async def process_search_result(
     # and a 2016 javadoc cited for current behaviour is a defect even when
     # the text happens to match. Fall back to the original: not every page
     # survives every release.
-    url = result.url
+    url, title = result.url, result.title
     upgraded = upgrade_doc_url(url, newest_by_host or {})
     if upgraded:
         try:
             raw, strategy = await fetch_with_retry(upgraded)
             url = upgraded
+            # The indexed title names the release we just moved off.
+            title = strip_stale_version_from_title(title)
             logging.info("Upgraded doc version: %s -> %s", result.url, upgraded)
         except FetchError:
             upgraded = None
@@ -437,7 +439,7 @@ async def process_search_result(
     chunks = chunk_text(filtered_text)
     return build_evidence_spans(
         url,
-        result.title,
+        title,
         chunks,
         published_at=result.published_at,
         official_domains=official_domains,

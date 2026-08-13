@@ -133,6 +133,22 @@ def upgrade_doc_url(url: str, newest_by_host: dict[str, str]) -> str | None:
     return None
 
 
+_TITLE_VERSION = re.compile(r"\s*\bv?\d+\.\d+(?:\.\d+)?\b")
+
+
+def strip_stale_version_from_title(title: str) -> str:
+    """Drop the release number from a title whose URL has been upgraded.
+
+    Search engines return the title of the page they indexed, so after a
+    URL is rewritten to the current release the reference would read
+    "KafkaConsumer (kafka 2.7.0 API)" while linking to 4.1: a reader
+    would reasonably believe they were getting 2.7 docs. Removing the
+    number is honest; inventing the new one would not be."""
+    cleaned = _TITLE_VERSION.sub("", title)
+    cleaned = re.sub(r"\(\s*\)", "", cleaned)
+    return re.sub(r"\s{2,}", " ", cleaned).strip(" -|·")
+
+
 def canonical_url(url: str) -> str:
     """Normalise a URL for deduplication.
 
