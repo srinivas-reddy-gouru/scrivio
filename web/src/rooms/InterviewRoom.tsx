@@ -60,14 +60,49 @@ function useDictation(onText: (final: string, interim: string) => void) {
   return { supported, recording, start, stop };
 }
 
-const speak = (text: string) => {
-  if (localStorage.getItem("studio-tts") === "off") return;
+/** Server TTS is the good voice; the browser's is the fallback nobody
+ * enjoys. The classic room asked /speak first and only degraded when the
+ * server had no key, and the React port shipped with just the fallback,
+ * so a configured OPENAI_API_KEY was being ignored. One latch: once the
+ * server says it cannot speak, stop asking for the rest of the session. */
+let serverVoiceDown = false;
+let currentAudio: HTMLAudioElement | null = null;
+
+function browserSpeak(text: string) {
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.04;
     speechSynthesis.speak(u);
   } catch { /* voice is garnish */ }
+}
+
+export function stopSpeaking() {
+  try { speechSynthesis.cancel(); } catch { /* ignore */ }
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+}
+
+const speak = async (text: string) => {
+  if (localStorage.getItem("studio-tts") === "off") return;
+  stopSpeaking();
+  if (serverVoiceDown) { browserSpeak(text); return; }
+  try {
+    const res = await fetch("/speak", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    const url = URL.createObjectURL(await res.blob());
+    const audio = new Audio(url);
+    currentAudio = audio;
+    audio.onended = audio.onerror = () => URL.revokeObjectURL(url);
+    await audio.play();
+  } catch {
+    // No key, quota, or autoplay refusal: the browser voice still works.
+    serverVoiceDown = true;
+    browserSpeak(text);
+  }
 };
 
 /* ── Room ── */
@@ -276,10 +311,10 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
     const next = !voiceOn;
     setVoiceOn(next);
     localStorage.setItem("studio-tts", next ? "on" : "off");
-    if (!next) speechSynthesis.cancel();
+    if (!next) stopSpeaking();
   };
 
-  useEffect(() => { speak(followup || q.question); return () => speechSynthesis.cancel(); },
+  useEffect(() => { speak(followup || q.question); return () => stopSpeaking(); },
     [q.question, followup]);
 
   useEffect(() => {
