@@ -1,9 +1,11 @@
 # Scrivio
 
 > **Learn it. Prove it. Get the job.**
-> Deep-researched technical articles, voice-first interview practice, job-targeted mock interviews with recruiter-grade scorecards, and honest ATS-aware resume tailoring, all running on the AI subscription you already pay for.
+> Honest ATS-aware resume tailoring, job-targeted mock interviews with recruiter-grade scorecards, voice-first interview practice graded against a rubric sealed before you speak, and deep-researched technical articles, all running on the AI subscription you already pay for.
 
-Scrivio started as an article generator and grew into an interview-preparation platform. It researches like a journalist (live web sources, every claim fact-checked), interviews like a senior engineer (spoken questions, strict rubric grading, real follow-ups), gives feedback like a hiring panel (competency scorecards, hire signals, cited study plans), and edits your resume like a writer with ethics (explainable ATS checks, tailoring that refuses to invent).
+Scrivio started as an article generator and grew into a job-search platform. It edits your resume like a writer with ethics (explainable ATS checks, tailoring that refuses to invent a single fact), gives feedback like a hiring panel (competency scorecards, hire signals, cited study plans), interviews like a senior engineer (spoken questions, a rubric written before you answer, real follow-ups), and researches like a journalist (live web sources, every claim fact-checked).
+
+Two things here are unusual enough to be the reason to look: **the honesty guards**, which are deterministic Python that reverts any number or employer a model invents rather than prompt text asking it not to, and **the eval harness**, which is why the roadmap below is written from measurements instead of opinion, including where it says this project loses.
 
 ![Scrivio home](docs/home.png)
 
@@ -11,37 +13,10 @@ Scrivio started as an article generator and grew into an interview-preparation p
 
 ## The four studios
 
-### ✏️ Article studio
-
-![Article studio](docs/article-studio.png)
-Type a topic, get a sourced technical article:
-
-- **Docs-first research.** Scrivio resolves the official documentation domains for your topic (Kafka → kafka.apache.org) and ranks them above blogs and Q&A forums by trust tier
-- **Verify before draft.** Every claim is checked against fetched evidence *before* a word of prose is written; unsupported claims are dropped, not published
-- **Editorial pipeline.** Plan → draft with inline citations → editor review → targeted revision → level compilation (basic/intermediate/advanced) → voice polish → final critic gate
-- **Citation integrity.** Versioned documentation is collapsed to one entry per page at its newest release, so a single doc cannot appear three times as three references, and a lone hit on an old release is re-fetched at the current one. User-hosted pages do not qualify as documentation, which keeps a personal blog from outranking the official reference
-- **Mermaid diagrams**, numbered citations with a Sources section, resumable runs served from a stage cache
-
-### 🎤 Topic practice
-
-![Topic practice](docs/topic-practice.png)
-
-Voice interviews on any topic, with grading you can trust:
-
-- **The interviewer speaks** (natural TTS), **you answer out loud** (live dictation transcript, editable before submit)
-- **Hidden rubric.** The grading rubric and ideal answer are written *before* you answer and physically withheld from the client until the question closes; the grader scores against a fixed bar it cannot sweet-talk
-- **Three modes.** Practice (feedback each answer + one drill-down follow-up), Simulation (silent grading, end-of-screen debrief with hire signal), Drill (60-second rapid fire seeded from your weak spots)
-- **Progress that compounds.** Topic mastery (recent sessions weighted), daily streaks, badges, confidence calibration (predict your score before the verdict), and weak areas that automatically seed your next drill
-
-### 💼 Job interview prep
-
-![Job interview prep](docs/job-prep.png)
-
-Upload your resume and a job description; interview for *that* job:
-
-- **Fit analysis.** Five to eight competencies derived from the JD itself, each mapped against your resume's evidence (strong / partial / missing), with the gaps a sharp interviewer would probe
-- **A realistic 30 to 45 minute screen.** Warm-up → resume deep-dive (it grills *your own claims* by name) → technical → behavioral (STAR required) → gap-probe → closing, using questions real interviewers ask for that role and company
-- **Recruiter-grade scorecard.** A hire signal calibrated to the role's seniority, per-competency scores with quoted evidence from your answers, JD requirement coverage (met/partial/missing), panel notes, and a **study plan with trust-ranked citations** for every weak area
+Ordered by how well the evidence supports them. The resume and interview
+work is where this project's differentiated engineering lives; the article
+studio is measured, honestly, as the weakest of the four (see
+[the matchup evals](#measured-not-asserted-the-article-matchup-evals)).
 
 ### 📄 Resume studio
 
@@ -56,6 +31,42 @@ Upload or paste your resume; get a report you can argue with, then a rewrite you
 - **Nothing ships half-finished.** The packaging button stays disabled while `[METRIC]` placeholders or unsaved edits remain, and every change is one Undo away
 
 ---
+
+### 💼 Job interview prep
+
+![Job interview prep](docs/job-prep.png)
+
+Upload your resume and a job description; interview for *that* job:
+
+- **Fit analysis.** Five to eight competencies derived from the JD itself, each mapped against your resume's evidence (strong / partial / missing), with the gaps a sharp interviewer would probe
+- **A realistic 30 to 45 minute screen.** Warm-up → resume deep-dive (it grills *your own claims* by name) → technical → behavioral (STAR required) → gap-probe → closing, using questions real interviewers ask for that role and company
+- **Recruiter-grade scorecard.** A hire signal calibrated to the role's seniority, per-competency scores with quoted evidence from your answers, JD requirement coverage (met/partial/missing), panel notes, and a **study plan with trust-ranked citations** for every weak area
+
+### 🎤 Topic practice
+
+![Topic practice](docs/topic-practice.png)
+
+Voice interviews on any topic, with grading you can trust:
+
+- **The interviewer speaks** (natural TTS), **you answer out loud** (live dictation transcript, editable before submit)
+- **Hidden rubric.** The grading rubric and ideal answer are written *before* you answer and physically withheld from the client until the question closes; the grader scores against a fixed bar it cannot sweet-talk
+- **Three modes.** Practice (feedback each answer + one drill-down follow-up), Simulation (silent grading, end-of-screen debrief with hire signal), Drill (60-second rapid fire seeded from your weak spots)
+- **Progress that compounds.** Topic mastery (recent sessions weighted), daily streaks, badges, confidence calibration (predict your score before the verdict), and weak areas that automatically seed your next drill
+
+### ✏️ Article studio
+
+![Article studio](docs/article-studio.png)
+Type a topic, get a sourced technical article. **Read the eval section
+below before judging this one:** a single prompt to the same model beats
+this pipeline on prose, and rebuilding it around one research-grounded
+generation is the top item on the roadmap. What it does keep, and what the
+baseline has no answer to, is the citation trail:
+
+- **Docs-first research.** Scrivio resolves the official documentation domains for your topic (Kafka → kafka.apache.org) and ranks them above blogs and Q&A forums by trust tier
+- **Verify before draft.** Every claim is checked against fetched evidence *before* a word of prose is written; unsupported claims are dropped, not published
+- **Editorial pipeline.** Plan → draft with inline citations → editor review → targeted revision → level compilation (basic/intermediate/advanced) → voice polish → final critic gate
+- **Citation integrity.** Versioned documentation is collapsed to one entry per page at its newest release, so a single doc cannot appear three times as three references, and a lone hit on an old release is re-fetched at the current one. User-hosted pages do not qualify as documentation, which keeps a personal blog from outranking the official reference
+- **Mermaid diagrams**, numbered citations with a Sources section, resumable runs served from a stage cache
 
 ## Screenshots
 
