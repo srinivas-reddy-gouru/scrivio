@@ -156,7 +156,7 @@ A standalone version of the article pipeline ships as a Claude Code skill that n
 ## Development
 
 ```bash
-python3 -m pytest tests/ -q     # 403 tests, fully hermetic (no network, no keys)
+python3 -m pytest -q            # the full suite: hermetic, no network, no keys
 ```
 
 The suite is deliberately isolated from the host machine: mock LLM clients for every pipeline stage, and fixtures that neutralize the developer's own `.env` preferences, installed CLIs, and saved model overrides (all three have caused order-dependent failures before; see `tests/conftest.py`).
@@ -203,5 +203,6 @@ Issues and pull requests are welcome. Two house rules the codebase holds to:
   discipline has been measured failing here repeatedly (ignored word caps,
   misfiled warnings, invented numbers). If a rule matters, enforce it in
   Python and cover it with a test.
-- **Run the suite before opening a PR:** `python -m pytest -q` (429 tests,
-  no API keys or network needed; the mock provider covers every LLM path).
+- **Run the suite before opening a PR:** `python -m pytest -q`. It needs no
+  API keys and no network; the mock provider covers every LLM path, so a
+  green run on a laptop means the same thing it means in CI.
