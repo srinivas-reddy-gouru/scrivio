@@ -49,7 +49,7 @@ from pipeline.providers.claude_cli_adapter import (
     claude_cli_available,
 )
 from pipeline.providers.openai_adapter import OpenAIAnthropicAdapter, _map_model
-from pipeline.workers.search_worker import dedupe_doc_versions, canonical_url, multi_search
+from pipeline.workers.search_worker import dedupe_doc_versions, newest_version_by_host, canonical_url, multi_search
 from pipeline.workers.source_resolver import resolve_official_sources
 from pipeline.workers.style_checks import find_banned_phrases
 from pipeline.workers.verification_worker import (
@@ -737,9 +737,15 @@ async def _collect_evidence_spans(
     selected, skipped = _select_fetch_candidates(
         search_results, official_domains, MAX_FETCH_URLS
     )
+    # Learn the newest release each doc host is serving from the FULL
+    # result set, so a lone hit on an old release still fetches current.
+    newest_by_host = newest_version_by_host(search_results)
     span_groups = await asyncio.gather(
         *(
-            process_search_result(result, official_domains=official_domains)
+            process_search_result(
+                result, official_domains=official_domains,
+                newest_by_host=newest_by_host,
+            )
             for result in selected
         )
     )

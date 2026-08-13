@@ -160,3 +160,52 @@ def test_personal_github_io_is_not_documentation_grade():
     # Official docs for the topic still win outright.
     assert score_url("https://kafka.apache.org/43/design/design",
                      frozenset({"kafka.apache.org"})) == 1.0
+
+
+def test_newest_version_by_host_and_url_upgrade():
+    """A lone hit on an old release survives dedup (nothing newer of THAT
+    page is present), so the fetcher upgrades it to the newest release the
+    host is serving anywhere in the result set."""
+    from pipeline.workers.search_worker import (
+        SearchResult, newest_version_by_host, upgrade_doc_url,
+    )
+
+    results = [
+        SearchResult(url="https://kafka.apache.org/43/design/design", title="a", snippet=""),
+        SearchResult(url="https://kafka.apache.org/0101/javadoc/KafkaConsumer.html", title="b", snippet=""),
+        SearchResult(url="https://example.com/post", title="c", snippet=""),
+    ]
+    newest = newest_version_by_host(results)
+    assert newest == {"kafka.apache.org": "43"}
+
+    assert upgrade_doc_url("https://kafka.apache.org/0101/javadoc/KafkaConsumer.html", newest) \
+        == "https://kafka.apache.org/43/javadoc/KafkaConsumer.html"
+    # Already newest, or not versioned: nothing to do.
+    assert upgrade_doc_url("https://kafka.apache.org/43/design/design", newest) is None
+    assert upgrade_doc_url("https://example.com/post", newest) is None
+
+
+def test_process_search_result_falls_back_when_upgrade_404s(monkeypatch):
+    """Not every page survives every release: if the newer URL is missing,
+    the original must still be fetched rather than the source dropped."""
+    import asyncio
+    from pipeline.workers import extraction_worker as ew
+
+    tried = []
+
+    async def fake_fetch(url, *a, **k):
+        tried.append(url)
+        if "/43/" in url:
+            raise ew.FetchError("gone", status_code=404)
+        return "Kafka consumer position semantics.", "direct"
+
+    monkeypatch.setattr(ew, "fetch_with_retry", fake_fetch)
+    spans = asyncio.run(ew.process_search_result(
+        ew.SearchResult(url="https://kafka.apache.org/0101/javadoc/X.html", title="t", snippet=""),
+        newest_by_host={"kafka.apache.org": "43"},
+    ))
+    assert tried == [
+        "https://kafka.apache.org/43/javadoc/X.html",
+        "https://kafka.apache.org/0101/javadoc/X.html",
+    ]
+    assert spans and spans[0].source_url == "https://kafka.apache.org/0101/javadoc/X.html"

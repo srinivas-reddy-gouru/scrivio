@@ -86,6 +86,53 @@ def dedupe_doc_versions(results: list) -> list:
     return kept
 
 
+def newest_version_by_host(results: list) -> dict[str, str]:
+    """Highest version segment seen per host across a result set.
+
+    Dedup only removes a stale page when a newer copy of THAT page is also
+    in the results. A lone hit on an old release (a 0.10.1 javadoc when
+    the rest of the evidence is 4.3) survives, and the article ends up
+    citing decade-old docs for current behaviour. Knowing the newest
+    release a host is serving lets the fetcher try that one instead."""
+    newest: dict[str, tuple[tuple[float, ...], str]] = {}
+    for r in results:
+        try:
+            parsed = urlparse(r.url)
+        except Exception:
+            continue
+        for seg in parsed.path.split("/"):
+            if seg and _VERSION_SEGMENT.match(seg):
+                rank = _version_rank(seg)
+                host = parsed.netloc.lower()
+                if host not in newest or rank > newest[host][0]:
+                    newest[host] = (rank, seg)
+                break
+    return {host: seg for host, (_, seg) in newest.items()}
+
+
+def upgrade_doc_url(url: str, newest_by_host: dict[str, str]) -> str | None:
+    """Rewrite a versioned doc URL to the newest release that host serves.
+
+    Returns None when there is nothing to upgrade. The caller must fall
+    back to the original if the rewritten URL does not exist: not every
+    page survives every release."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+    target = newest_by_host.get(parsed.netloc.lower())
+    if not target:
+        return None
+    segments = parsed.path.split("/")
+    for i, seg in enumerate(segments):
+        if seg and _VERSION_SEGMENT.match(seg):
+            if _version_rank(seg) >= _version_rank(target):
+                return None
+            segments[i] = target
+            return urlunparse(parsed._replace(path="/".join(segments)))
+    return None
+
+
 def canonical_url(url: str) -> str:
     """Normalise a URL for deduplication.
 

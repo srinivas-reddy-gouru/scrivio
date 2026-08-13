@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from pipeline.schemas.models import EvidenceSpan
-from pipeline.workers.search_worker import SearchResult
+from pipeline.workers.search_worker import upgrade_doc_url, SearchResult
 
 
 REDACTION_TEXT = "[REDACTED — injection attempt detected]"
@@ -406,12 +406,28 @@ def build_evidence_spans(
 async def process_search_result(
     result: SearchResult,
     official_domains: frozenset[str] = frozenset(),
+    newest_by_host: dict[str, str] | None = None,
 ) -> list[EvidenceSpan]:
-    try:
-        raw, strategy = await fetch_with_retry(result.url)
-    except FetchError as exc:
-        logging.warning("Skipping %s after all fetch attempts: %s", result.url, exc)
-        return []
+    # Prefer the newest release of a versioned doc page. Search engines
+    # rank old releases highly (they have had years to accumulate links),
+    # and a 2016 javadoc cited for current behaviour is a defect even when
+    # the text happens to match. Fall back to the original: not every page
+    # survives every release.
+    url = result.url
+    upgraded = upgrade_doc_url(url, newest_by_host or {})
+    if upgraded:
+        try:
+            raw, strategy = await fetch_with_retry(upgraded)
+            url = upgraded
+            logging.info("Upgraded doc version: %s -> %s", result.url, upgraded)
+        except FetchError:
+            upgraded = None
+    if not upgraded:
+        try:
+            raw, strategy = await fetch_with_retry(url)
+        except FetchError as exc:
+            logging.warning("Skipping %s after all fetch attempts: %s", url, exc)
+            return []
 
     # Jina already returns clean plain text/markdown; only raw HTML from the
     # direct fetcher needs boilerplate stripping (nav / footer / scripts).
@@ -420,7 +436,7 @@ async def process_search_result(
     filtered_text = injection_filter(text)
     chunks = chunk_text(filtered_text)
     return build_evidence_spans(
-        result.url,
+        url,
         result.title,
         chunks,
         published_at=result.published_at,
