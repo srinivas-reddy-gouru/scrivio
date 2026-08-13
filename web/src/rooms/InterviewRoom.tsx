@@ -18,27 +18,111 @@ const VERDICT_STYLE: Record<string, { color: string; bg: string }> = {
   incorrect: { color: "var(--redpen)", bg: "rgba(224,106,85,0.14)" },
 };
 
-/* ── Browser dictation (graceful: absent → typing only) ── */
-function useDictation(onText: (final: string, interim: string) => void) {
-  const recRef = useRef<{ stop: () => void } | null>(null);
-  const [recording, setRecording] = useState(false);
-  const [supported] = useState(() =>
-    "webkitSpeechRecognition" in window || "SpeechRecognition" in window);
+/* ── Voice capability probe ──────────────────────────────────────────
+ * One OPENAI_API_KEY gates both directions of voice: /transcribe for the
+ * candidate and /speak for the interviewer. Asking once at mount means
+ * the mic never has to discover mid-recording that the good path was
+ * never available, which would throw away what was just said. */
+type VoiceOption = { name: string; description: string };
+type VoiceConfig = { voices: VoiceOption[]; default: string; available: boolean };
+let voiceConfig: VoiceConfig | null = null;
+let voiceProbe: Promise<VoiceConfig | null> | null = null;
 
-  const stop = useCallback(() => {
-    recRef.current?.stop(); recRef.current = null; setRecording(false);
+function loadVoiceConfig(): Promise<VoiceConfig | null> {
+  if (!voiceProbe) {
+    voiceProbe = fetch("/speak/voices")
+      .then((r) => (r.ok ? (r.json() as Promise<VoiceConfig>) : null))
+      .then((c) => (voiceConfig = c))
+      .catch(() => (voiceConfig = null));
+  }
+  return voiceProbe;
+}
+
+export const chosenVoice = () => localStorage.getItem("studio-voice") || voiceConfig?.default || "sage";
+
+/* ── Answering by voice ──────────────────────────────────────────────
+ * Record and send to Whisper (/transcribe): accurate, punctuated, and
+ * working in every browser that has a microphone. The React port shipped
+ * with only browser SpeechRecognition, which is missing or blocked in
+ * most browsers and fails through a silent onerror, so the mic button
+ * appeared to do nothing at all. Dictation stays as the fallback for
+ * servers with no key, and every failure now says so out loud. */
+type MicState = "idle" | "recording" | "thinking";
+
+function recorderMime(): string {
+  const supported = (window.MediaRecorder as unknown as {
+    isTypeSupported?: (t: string) => boolean } | undefined)?.isTypeSupported;
+  for (const m of ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]) {
+    if (supported?.(m)) return m;
+  }
+  return "";
+}
+
+type SpeechRec = {
+  continuous: boolean; interimResults: boolean; lang: string;
+  onresult: (e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void;
+  onend: () => void; onerror: (e: { error?: string }) => void;
+  start: () => void; stop: () => void;
+};
+
+function useVoiceAnswer(handlers: { append: (t: string) => void; live: (t: string) => void }) {
+  const h = useRef(handlers); h.current = handlers;
+  const [state, setState] = useState<MicState>("idle");
+  const [error, setError] = useState("");
+  const stream = useRef<MediaStream | null>(null);
+  const recorder = useRef<MediaRecorder | null>(null);
+  const chunks = useRef<BlobPart[]>([]);
+  const mime = useRef("audio/webm");
+  const dictation = useRef<SpeechRec | null>(null);
+
+  const [supported] = useState(() =>
+    !!navigator.mediaDevices?.getUserMedia
+    || "webkitSpeechRecognition" in window || "SpeechRecognition" in window);
+
+  const release = useCallback(() => {
+    stream.current?.getTracks().forEach((t) => t.stop());
+    stream.current = null;
   }, []);
 
-  const start = useCallback(() => {
+  const fail = useCallback((message: string) => {
+    setError(message); setState("idle"); release();
+  }, [release]);
+
+  const transcribe = useCallback(async () => {
+    const blob = new Blob(chunks.current, { type: mime.current });
+    chunks.current = [];
+    release();
+    if (!blob.size) { setState("idle"); setError("Nothing was recorded. Try again."); return; }
+    try {
+      const b64 = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result).split(",")[1] || "");
+        fr.onerror = reject;
+        fr.readAsDataURL(blob);
+      });
+      const res = await fetch("/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio_b64: b64, mime_type: mime.current }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+        fail(d.detail || `HTTP ${res.status}`); return;
+      }
+      const { text } = await res.json();
+      if (!text?.trim()) { setState("idle"); setError("That came through silent. Try again."); return; }
+      h.current.append(text.trim());
+      setState("idle");
+    } catch {
+      fail("Could not reach the transcriber. Type your answer instead.");
+    }
+  }, [fail, release]);
+
+  const startDictation = useCallback(() => {
     const Ctor = (window as unknown as Record<string, unknown>).SpeechRecognition
       || (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
-    if (!Ctor) return;
-    const rec = new (Ctor as new () => {
-      continuous: boolean; interimResults: boolean; lang: string;
-      onresult: (e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void;
-      onend: () => void; onerror: () => void;
-      start: () => void; stop: () => void;
-    })();
+    if (!Ctor) { fail("This browser cannot record. Type your answer instead."); return; }
+    const rec = new (Ctor as new () => SpeechRec)();
     rec.continuous = true; rec.interimResults = true; rec.lang = "en-US";
     let finals = "";
     rec.onresult = (e) => {
@@ -48,16 +132,59 @@ function useDictation(onText: (final: string, interim: string) => void) {
         if (r.isFinal) finals += r[0].transcript + " ";
         else interim += r[0].transcript;
       }
-      onText(finals, interim);
+      h.current.live(finals + interim);
     };
-    rec.onend = () => setRecording(false);
-    rec.onerror = () => setRecording(false);
-    rec.start();
-    recRef.current = rec; setRecording(true);
-  }, [onText]);
+    rec.onend = () => setState("idle");
+    rec.onerror = (e) => fail(
+      e.error === "not-allowed" || e.error === "service-not-allowed"
+        ? "Microphone blocked. Allow it in the browser, or type your answer."
+        : "Browser dictation is unavailable here. Type your answer instead.");
+    try { rec.start(); } catch { fail("Dictation could not start. Type your answer instead."); return; }
+    dictation.current = rec; setState("recording");
+  }, [fail]);
 
-  useEffect(() => stop, [stop]);
-  return { supported, recording, start, stop };
+  const start = useCallback(async () => {
+    setError("");
+    await loadVoiceConfig();
+    if (!voiceConfig?.available || !navigator.mediaDevices?.getUserMedia) {
+      startDictation(); return;
+    }
+    let media: MediaStream;
+    try {
+      media = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      fail("Microphone blocked. Allow it in the browser, or type your answer.");
+      return;
+    }
+    stream.current = media;
+    if (!window.MediaRecorder) { release(); startDictation(); return; }
+    const type = recorderMime();
+    const mr = type ? new MediaRecorder(media, { mimeType: type }) : new MediaRecorder(media);
+    mime.current = mr.mimeType || type || "audio/webm";
+    chunks.current = [];
+    mr.ondataavailable = (e) => { if (e.data?.size) chunks.current.push(e.data); };
+    mr.onstop = () => { setState("thinking"); void transcribe(); };
+    recorder.current = mr;
+    mr.start(1000); // timeslices, so audio survives a tab hiccup
+    setState("recording");
+  }, [fail, release, startDictation, transcribe]);
+
+  const stop = useCallback(() => {
+    if (dictation.current) {
+      try { dictation.current.stop(); } catch { /* already ended */ }
+      dictation.current = null; setState("idle"); return;
+    }
+    if (recorder.current?.state === "recording") recorder.current.stop();
+    recorder.current = null;
+  }, []);
+
+  useEffect(() => () => {
+    try { dictation.current?.stop(); } catch { /* ignore */ }
+    if (recorder.current?.state === "recording") recorder.current.stop();
+    stream.current?.getTracks().forEach((t) => t.stop());
+  }, []);
+
+  return { supported, state, error, start, stop, clearError: () => setError("") };
 }
 
 /** Server TTS is the good voice; the browser's is the fallback nobody
@@ -82,28 +209,77 @@ export function stopSpeaking() {
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
 }
 
-const speak = async (text: string) => {
+const speak = async (text: string, style = "interviewer") => {
   if (localStorage.getItem("studio-tts") === "off") return;
   stopSpeaking();
   if (serverVoiceDown) { browserSpeak(text); return; }
+  let url = "";
   try {
     const res = await fetch("/speak", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, voice: chosenVoice(), style }),
     });
-    if (!res.ok) throw new Error(String(res.status));
-    const url = URL.createObjectURL(await res.blob());
+    // Only the request failing means the server cannot speak. A refused
+    // play() is the browser's autoplay rule, and latching on it would
+    // demote a working key to the robot voice for the whole session.
+    if (!res.ok) { serverVoiceDown = true; browserSpeak(text); return; }
+    url = URL.createObjectURL(await res.blob());
     const audio = new Audio(url);
     currentAudio = audio;
     audio.onended = audio.onerror = () => URL.revokeObjectURL(url);
     await audio.play();
   } catch {
-    // No key, quota, or autoplay refusal: the browser voice still works.
-    serverVoiceDown = true;
+    if (url) URL.revokeObjectURL(url);
     browserSpeak(text);
   }
 };
+
+/** Which voice asks the questions is a matter of taste, and taste is not
+ * something to guess at from a config file. The picker previews on the
+ * spot with the real question, because a list of adjectives tells you
+ * nothing about whether you want to hear it for twenty minutes. */
+function VoicePicker({ enabled, sample }: { enabled: boolean; sample: string }) {
+  const [voices, setVoices] = useState<VoiceOption[]>([]);
+  const [voice, setVoice] = useState(chosenVoice);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    void loadVoiceConfig().then((c) => {
+      if (c?.available) { setVoices(c.voices); setVoice(chosenVoice()); }
+    });
+  }, []);
+
+  if (!voices.length) return null;   // no key: the browser voice has no options
+  const pick = (name: string) => {
+    setVoice(name);
+    localStorage.setItem("studio-voice", name);
+    localStorage.setItem("studio-tts", "on");
+    void speak(sample.slice(0, 180));
+  };
+
+  return (
+    <span className="voice-pick">
+      <button className="btn btn-quiet" onClick={() => setOpen(!open)}
+        aria-expanded={open} disabled={!enabled}
+        title={enabled ? "Choose the interviewer's voice" : "Turn the voice on first"}>
+        Voice: {voice}
+      </button>
+      {open && (
+        <div className="voice-menu" role="listbox">
+          <p className="voice-menu-hint">Pick one and hear this question in it.</p>
+          {voices.map((v) => (
+            <button key={v.name} role="option" aria-selected={v.name === voice}
+              className={"voice-opt" + (v.name === voice ? " on" : "")}
+              onClick={() => pick(v.name)}>
+              <b>{v.name}</b><span>{v.description}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
 
 /* ── Room ── */
 
@@ -304,14 +480,23 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
   const isCodePhase = !!coding && phaseIndex === 2;
   const quiet = session.mode !== "practice"; // simulation + drill: no per-answer reveal
 
-  const dict = useDictation((finals, interim) => setAnswer(finals + interim));
+  // Dictation writes over the answer as it goes, so it needs the text that
+  // was already typed as its base; Whisper hands back one finished block
+  // and appends to whatever is there.
+  const typedBase = useRef("");
+  const mic = useVoiceAnswer({
+    append: (t) => setAnswer((a) => (a.trim() ? a.trimEnd() + " " : "") + t),
+    live: (t) => setAnswer(typedBase.current + t),
+  });
   const [voiceOn, setVoiceOn] = useState(() => localStorage.getItem("studio-tts") !== "off");
 
   const toggleVoice = () => {
     const next = !voiceOn;
     setVoiceOn(next);
     localStorage.setItem("studio-tts", next ? "on" : "off");
-    if (!next) stopSpeaking();
+    // Turning it on used to take effect only at the NEXT question, which
+    // read as a dead button. Switch it on and you hear this one.
+    if (next) void speak(followup || q.question); else stopSpeaking();
   };
 
   useEffect(() => { speak(followup || q.question); return () => stopSpeaking(); },
@@ -329,7 +514,7 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
   }, [drillLeft]);
 
   const submit = async (skip = false) => {
-    dict.stop(); setGrading(true); setError("");
+    mic.stop(); setGrading(true); setError("");
     try {
       const res = await interviewApi.answer(session.session_id, {
         question_id: q.id, answer: skip ? "" : answer.trim(), skip,
@@ -425,7 +610,7 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
             } : undefined}
             placeholder={isCodePhase
               ? `${coding?.signature ?? ""}\n    # your implementation`
-              : dict.supported
+              : mic.supported
                 ? "Tap the mic and speak, or type your answer here…"
                 : "Type your answer here…"}
           />
@@ -438,12 +623,23 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
             </div>
           )}
           <div className="mic-row">
-            {dict.supported && (
-              <button className={"mic-btn" + (dict.recording ? " recording" : "")}
-                aria-label={dict.recording ? "Stop dictation" : "Answer by voice"}
-                onClick={() => (dict.recording ? dict.stop() : dict.start())}>
+            {mic.supported && (
+              <button className={"mic-btn" + (mic.state === "recording" ? " recording" : "")}
+                disabled={mic.state === "thinking"}
+                aria-label={mic.state === "recording" ? "Stop recording" : "Answer by voice"}
+                onClick={() => {
+                  if (mic.state === "recording") { mic.stop(); return; }
+                  stopSpeaking();            // never record the interviewer
+                  typedBase.current = answer ? answer.trimEnd() + " " : "";
+                  void mic.start();
+                }}>
                 ◉
               </button>
+            )}
+            {mic.state !== "idle" && (
+              <span className="mic-state">
+                {mic.state === "recording" ? "Listening, tap again when you are done" : "Writing down what you said…"}
+              </span>
             )}
             <button className="btn" onClick={() => submit(false)}
               disabled={grading || !answer.trim()}>
@@ -452,8 +648,10 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
             <button className="btn btn-quiet" onClick={() => submit(true)} disabled={grading}>Skip</button>
             <button className="btn btn-quiet" onClick={toggleVoice}
               aria-pressed={voiceOn}>{voiceOn ? "Voice on" : "Voice off"}</button>
+            <VoicePicker enabled={voiceOn} sample={q.question} />
             <button className="btn btn-quiet" onClick={onQuit}>Leave the room</button>
           </div>
+          {mic.error && <div className="errbox" style={{ margin: "0.6rem 0" }}>{mic.error}</div>}
         </>
       )}
       {error && <div className="errbox" style={{ margin: "0.8rem 0" }}>{error}</div>}

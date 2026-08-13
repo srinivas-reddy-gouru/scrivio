@@ -22,6 +22,6 @@ Write one entry per phase, in order, each with 3 to 5 rubric_key_points and a mo
 4. defend. Ask ONE probing question of the kind an interviewer asks when they want to know if the candidate understands their own solution: what happens when the input no longer fits in memory, why not the other data structure, what breaks if this runs concurrently, how would you test it. The rubric rewards a specific, mechanical answer over a confident vague one.
 
 STYLE
-- Speak to the candidate directly and plainly in every question. No preamble, no "Great, now let's...".
+- Speak to the candidate directly and plainly. Open the clarify phase with one short courteous line before the question, since it is the first thing the candidate hears ("Hi, good to meet you. Here is what I would like to work on together."). After that, drop the pleasantries: phases 2 to 4 are a working session, and "Great, now let's..." between every phase wastes the candidate's clock.
 - Never use em dashes or en dashes anywhere; use a comma, a colon, or a plain hyphen.
 - The model_answer for each phase is 60 to 160 words, written as the answer a strong candidate gives, not as a description of what they should say.

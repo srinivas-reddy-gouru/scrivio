@@ -2654,12 +2654,73 @@ async def transcribe_audio(body: TranscribeRequest) -> TranscribeResponse:
 # Browser SpeechSynthesis sounds robotic; OpenAI's TTS voices are close to
 # human. The client tries POST /speak first and falls back to the browser
 # voice when this returns 503 (no key) or errors.
+#
+# Voice choice is half the story. The gpt-4o TTS models take an
+# `instructions` argument that steers delivery (pace, warmth, inflection),
+# and leaving it unset is what makes a good voice read like an
+# announcement: correct words, no interviewer behind them. The styles
+# below live on the server so every caller gets the tuned wording, and the
+# client sends only a style name.
 
 _SPEAK_MAX_CHARS = 2000
+
+# Curated first, in the order the picker shows them. Descriptions are what
+# the UI renders, so they say how a voice sounds, not what it is called.
+TTS_VOICES: tuple[tuple[str, str], ...] = (
+    ("sage", "Calm and thoughtful. Unhurried, the way a senior interviewer speaks."),
+    ("coral", "Warm and friendly. Conversational, a little brighter than sage."),
+    ("ballad", "Soft and measured. The gentlest of the set."),
+    ("alloy", "Neutral and even. No particular colour."),
+    ("ash", "Clear and direct. Crisper, closer to a panel interviewer."),
+    ("verse", "Expressive and varied. The most animated."),
+    ("echo", "Low and steady."),
+    ("onyx", "Deep and authoritative."),
+    ("nova", "Bright and assertive."),
+    ("shimmer", "Light and airy."),
+    ("fable", "Storytelling warmth."),
+)
+_VOICE_NAMES = frozenset(name for name, _ in TTS_VOICES)
+
+# An interview question read as a statement lands as an interrogation. The
+# instruction asks for the pacing and inflection of someone genuinely
+# curious about the answer.
+SPEAK_STYLES: dict[str, str] = {
+    "interviewer": (
+        "Speak like a friendly senior engineer conducting an interview. "
+        "Warm, measured, and unhurried, at a natural conversational pace "
+        "slightly slower than default. Take a short breath between "
+        "sentences and pause briefly at commas. Sound genuinely curious "
+        "about the answer: lift gently at the end of a question rather "
+        "than landing it flat, and never sound clipped, stern, or "
+        "announcer-like."
+    ),
+    "plain": "Speak clearly and naturally at a relaxed pace.",
+}
+_DEFAULT_STYLE = "interviewer"
+
+
+def _supports_instructions(model: str) -> bool:
+    """tts-1 and tts-1-hd reject `instructions`; the gpt-4o voices take it.
+    Sending it to a legacy model would 400 the whole request, so the styles
+    degrade to plain voice selection instead of failing."""
+    return "gpt-4o" in model
 
 
 class SpeakRequest(BaseModel):
     text: str
+    voice: str | None = None
+    style: str | None = None
+
+
+@app.get("/speak/voices")
+def list_speak_voices() -> dict:
+    """The picker renders this rather than a hardcoded copy, so the list the
+    user sees and the list the server accepts cannot drift apart."""
+    return {
+        "voices": [{"name": n, "description": d} for n, d in TTS_VOICES],
+        "default": os.environ.get("TTS_VOICE", "sage"),
+        "available": _openai_audio_client() is not None,
+    }
 
 
 @app.post("/speak")
@@ -2671,18 +2732,25 @@ async def speak(body: SpeakRequest) -> Response:
         raise HTTPException(
             status_code=413, detail=f"Text exceeds {_SPEAK_MAX_CHARS} characters"
         )
+    voice = body.voice or os.environ.get("TTS_VOICE", "sage")
+    if voice not in _VOICE_NAMES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown voice {voice!r}. Choose one of: {', '.join(sorted(_VOICE_NAMES))}",
+        )
     client = _openai_audio_client()
     if client is None:
         raise HTTPException(
             status_code=503,
             detail="Natural voice requires OPENAI_API_KEY; falling back to browser voice.",
         )
+    model = os.environ.get("TTS_MODEL", "gpt-4o-mini-tts")
+    kwargs: dict = {"model": model, "voice": voice, "input": text}
+    if _supports_instructions(model):
+        kwargs["instructions"] = SPEAK_STYLES.get(
+            body.style or _DEFAULT_STYLE, SPEAK_STYLES[_DEFAULT_STYLE])
     try:
-        result = await client.audio.speech.create(
-            model=os.environ.get("TTS_MODEL", "gpt-4o-mini-tts"),
-            voice=os.environ.get("TTS_VOICE", "nova"),
-            input=text,
-        )
+        result = await client.audio.speech.create(**kwargs)
         data = getattr(result, "content", None)
         if not isinstance(data, (bytes, bytearray)):
             data = result.read()

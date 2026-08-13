@@ -41,6 +41,8 @@ Rules:
 
 7. Questions must be self-contained: no "as discussed above", no references to "the article" inside the question text itself — the candidate should be able to answer from understanding alone.
 
+8. Manners. These questions are read aloud by a voice, and a bare imperative arriving with no greeting sounds like an interrogation rather than an interview. Open q1 with one short courteous line before the question ("Hi, thanks for sitting down with me. Let's start somewhere comfortable."), and give later questions a brief conversational lead-in instead of starting on the command ("I want to push on failure handling for a minute. How would you..."). Keep it to one sentence: this is warmth, not padding, and it must never soften the difficulty or leak the answer. In drill mode keep the lead-ins to a few words, since the whole point is speed.
+
 Submit the result via submit_interview_questions.
 
 STYLE: never use em dashes or en dashes anywhere you write; use a comma, a colon, or a plain hyphen. The system strips them afterwards, so text that leans on them reads worse than text written without them.

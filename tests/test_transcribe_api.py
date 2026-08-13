@@ -165,3 +165,71 @@ def test_speak_provider_error_502(monkeypatch) -> None:
     client = TestClient(server.app)
     response = client.post("/speak", json={"text": "hello"})
     assert response.status_code == 502
+
+
+# ── Delivery, not just words ─────────────────────────────────────────
+# A good voice reading an interview question flat still sounds like an
+# announcement. `instructions` is what makes it sound like a person, and
+# it was never being sent.
+
+def test_speak_steers_delivery_on_models_that_support_it(monkeypatch) -> None:
+    fake = _fake_speech_client()
+    monkeypatch.setattr(server, "_openai_audio_client", lambda: fake)
+    monkeypatch.setenv("TTS_MODEL", "gpt-4o-mini-tts")
+    client = TestClient(server.app)
+    client.post("/speak", json={"text": "Walk me through it."})
+    assert "unhurried" in fake.audio.speech.calls[0]["instructions"]
+
+
+def test_speak_omits_instructions_on_legacy_models(monkeypatch) -> None:
+    """tts-1 rejects the argument, and sending it would 400 the request,
+    losing the voice entirely rather than only its styling."""
+    fake = _fake_speech_client()
+    monkeypatch.setattr(server, "_openai_audio_client", lambda: fake)
+    monkeypatch.setenv("TTS_MODEL", "tts-1")
+    client = TestClient(server.app)
+    client.post("/speak", json={"text": "hello"})
+    assert "instructions" not in fake.audio.speech.calls[0]
+
+
+def test_speak_voice_choice_travels_from_the_client(monkeypatch) -> None:
+    fake = _fake_speech_client()
+    monkeypatch.setattr(server, "_openai_audio_client", lambda: fake)
+    monkeypatch.setenv("TTS_VOICE", "sage")
+    client = TestClient(server.app)
+    client.post("/speak", json={"text": "hello", "voice": "coral"})
+    assert fake.audio.speech.calls[0]["voice"] == "coral"
+
+
+def test_speak_rejects_an_unknown_voice_before_spending_a_call(monkeypatch) -> None:
+    fake = _fake_speech_client()
+    monkeypatch.setattr(server, "_openai_audio_client", lambda: fake)
+    client = TestClient(server.app)
+    response = client.post("/speak", json={"text": "hello", "voice": "bartholomew"})
+    assert response.status_code == 422
+    assert not fake.audio.speech.calls, "a bad voice must not reach the provider"
+
+
+def test_voice_list_is_the_same_list_the_server_accepts(monkeypatch) -> None:
+    """The picker renders this endpoint, so a voice offered in the UI that
+    the endpoint would reject is not possible by construction."""
+    monkeypatch.setattr(server, "_openai_audio_client", _fake_speech_client)
+    client = TestClient(server.app)
+    body = client.get("/speak/voices").json()
+    assert body["available"] is True
+    assert body["voices"][0]["name"] == "sage", "the calm voice leads the list"
+    assert all(v["description"] for v in body["voices"]), "a name alone tells nobody how it sounds"
+
+    fake = _fake_speech_client()
+    monkeypatch.setattr(server, "_openai_audio_client", lambda: fake)
+    for voice in body["voices"]:
+        assert client.post(
+            "/speak", json={"text": "hi", "voice": voice["name"]}).status_code == 200
+
+
+def test_voice_list_reports_when_there_is_no_key(monkeypatch) -> None:
+    """The mic uses this to decide between Whisper and browser dictation,
+    so it must not claim availability the server cannot deliver."""
+    monkeypatch.setattr(server, "_openai_audio_client", lambda: None)
+    client = TestClient(server.app)
+    assert client.get("/speak/voices").json()["available"] is False

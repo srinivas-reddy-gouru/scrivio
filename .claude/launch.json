@@ -6,6 +6,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "uvicorn", "api.server:app", "--port", "8899"],
       "port": 8899
+    },
+    {
+      "name": "scrivio-verify",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "uvicorn", "api.server:app", "--port", "8898"],
+      "port": 8898
     }
   ]
 }
