@@ -49,7 +49,7 @@ from pipeline.providers.claude_cli_adapter import (
     claude_cli_available,
 )
 from pipeline.providers.openai_adapter import OpenAIAnthropicAdapter, _map_model
-from pipeline.workers.search_worker import canonical_url, multi_search
+from pipeline.workers.search_worker import dedupe_doc_versions, canonical_url, multi_search
 from pipeline.workers.source_resolver import resolve_official_sources
 from pipeline.workers.style_checks import find_banned_phrases
 from pipeline.workers.verification_worker import (
@@ -665,6 +665,10 @@ def _select_fetch_candidates(
     half the budget when other sources are available — the planner needs
     evidence from many distinct URLs, so official docs must anchor the
     article without monopolizing it."""
+    # One page per doc, newest release only: three versions of the same
+    # design doc would otherwise eat three fetches and land in the article
+    # as three separate references to the same thing.
+    results = dedupe_doc_versions(results)
     ranked = sorted(
         results, key=lambda r: score_url(r.url, official_domains), reverse=True
     )

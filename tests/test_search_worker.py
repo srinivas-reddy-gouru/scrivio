@@ -108,3 +108,55 @@ def test_search_error_raised_on_401(monkeypatch) -> None:
 
     with pytest.raises(SearchError, match="401"):
         asyncio.run(search_brave("database indexing"))
+
+
+# ── Versioned documentation dedup ────────────────────────────────────
+
+def test_doc_version_identity_groups_releases_and_orders_them():
+    """Every release of one page shares an identity; ranks sort oldest
+    to newest, including the compressed forms Kafka uses (0100 = 0.10.0)."""
+    from pipeline.workers.search_worker import doc_version_identity
+
+    ids = [doc_version_identity(f"https://kafka.apache.org/{v}/design/design")
+           for v in ("0100", "30", "43")]
+    assert len({i[0] for i in ids}) == 1, "same page must share one identity"
+    assert ids[0][1] < ids[1][1] < ids[2][1], "0.10.0 < 3.0 < 4.3"
+
+    # Named channels are the newest by definition.
+    _, current = doc_version_identity("https://docs.confluent.io/platform/current/x.html")
+    assert current > ids[2][1]
+
+    # A URL with no version segment is left alone.
+    _, none = doc_version_identity("https://example.com/blog/post")
+    assert none == (-1.0,)
+
+
+def test_dedupe_doc_versions_keeps_only_the_newest_of_each_page():
+    """The defect this prevents: one design doc entering the evidence set
+    three times and leaving as three numbered references."""
+    from pipeline.workers.search_worker import dedupe_doc_versions, SearchResult
+
+    results = [
+        SearchResult(url="https://kafka.apache.org/0100/design/design", title="a", snippet=""),
+        SearchResult(url="https://kafka.apache.org/43/design/design", title="b", snippet=""),
+        SearchResult(url="https://kafka.apache.org/30/design/design", title="c", snippet=""),
+        SearchResult(url="https://kafka.apache.org/25/operations/monitoring", title="d", snippet=""),
+        SearchResult(url="https://factorhouse.io/articles/kafka", title="e", snippet=""),
+    ]
+    kept = [r.url for r in dedupe_doc_versions(results)]
+    assert kept == [
+        "https://kafka.apache.org/43/design/design",       # newest design page
+        "https://kafka.apache.org/25/operations/monitoring",  # only release present
+        "https://factorhouse.io/articles/kafka",           # unversioned, untouched
+    ]
+
+
+def test_personal_github_io_is_not_documentation_grade():
+    """A hobby site on github.io outranked the official config reference
+    for a version-specific API claim; user hosting is not a publisher."""
+    from pipeline.workers.extraction_worker import score_url
+
+    assert score_url("https://advanced-beginner.github.io/en/docs/kafka/x") < 0.7
+    # Official docs for the topic still win outright.
+    assert score_url("https://kafka.apache.org/43/design/design",
+                     frozenset({"kafka.apache.org"})) == 1.0

@@ -114,7 +114,12 @@ _SOCIAL_UGC_DOMAINS = frozenset({
 # common SEO-farm path segment ("The Ultimate Guide to X") and were letting
 # spam domains score docs-grade trust on URL shape alone.
 _DOCS_HOST_PREFIXES = ("docs.", "doc.", "developer.", "developers.", "wiki.")
-_DOCS_HOST_SUFFIXES = (".readthedocs.io", ".github.io")
+# NOTE: ".github.io" is deliberately absent. It is user hosting, not a
+# publisher: anyone's personal blog lives there, and treating it as
+# docs-grade let a hobby site outrank the official configuration
+# reference for a version-specific API claim. Real project docs on
+# github.io still qualify through the per-topic official_domains set.
+_DOCS_HOST_SUFFIXES = (".readthedocs.io",)
 _DOCS_PATH_PREFIXES = (
     "/docs", "/documentation", "/reference", "/manual", "/javadoc",
     "/apidocs", "/api-reference",

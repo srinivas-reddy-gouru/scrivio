@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 from urllib.parse import urlparse, urlunparse, urlencode, parse_qsl
 
 import httpx
@@ -13,6 +14,76 @@ _TRACKING_PARAMS = frozenset({
     "ref", "source", "via", "fbclid", "gclid", "mc_cid", "mc_eid",
     "yclid", "gbraid", "wbraid", "_ga", "msclkid",
 })
+
+
+# Documentation sites publish the same page once per release
+# (kafka.apache.org/0100/design/design, /30/…, /43/…). Left alone, one page
+# enters the evidence set several times, burns fetch budget, and comes out
+# of citation resolution as three separate numbered references to what a
+# reader would call "the Kafka design doc". Worse, the oldest copy often
+# ranks first, so an article about current behaviour cites decade-old docs.
+_VERSION_SEGMENT = re.compile(
+    r"^(?:v?\d{1,4}(?:[._]\d+){0,3}|latest|current|stable|master|main)$",
+    re.IGNORECASE,
+)
+_UNVERSIONED = (-1.0,)
+
+
+def _version_rank(segment: str) -> tuple[float, ...]:
+    """Sortable rank for a version path segment. Named channels outrank
+    numbers because "latest" is by definition the current release."""
+    seg = segment.lower().lstrip("v")
+    if seg in ("latest", "current", "stable", "master", "main"):
+        return (float("inf"),)
+    parts = re.split(r"[._]", seg)
+    if len(parts) == 1 and parts[0].isdigit() and len(parts[0]) >= 2:
+        # Compressed forms: "0100" is 0.10.0, "43" is 4.3, "25" is 2.5.
+        digits = parts[0]
+        if digits.startswith("0") and len(digits) >= 3:
+            return (0.0, float(digits[1:3]), float(digits[3:] or 0))
+        return tuple(float(d) for d in digits)
+    return tuple(float(p) if p.isdigit() else 0.0 for p in parts)
+
+
+def doc_version_identity(url: str) -> tuple[str, tuple[float, ...]]:
+    """Split a documentation URL into (page identity, version rank).
+
+    The identity is the URL with its version segment removed, so every
+    release of one page shares it; the rank orders those releases."""
+    try:
+        parsed = urlparse(canonical_url(url))
+    except Exception:
+        return url, _UNVERSIONED
+    segments = [seg for seg in parsed.path.split("/") if seg]
+    for i, seg in enumerate(segments):
+        if _VERSION_SEGMENT.match(seg):
+            rest = segments[:i] + segments[i + 1:]
+            identity = f"{parsed.netloc}/{'/'.join(rest)}"
+            return identity, _version_rank(seg)
+    return f"{parsed.netloc}{parsed.path}", _UNVERSIONED
+
+
+def dedupe_doc_versions(results: list) -> list:
+    """Keep one result per documentation page: the newest release of it.
+
+    Order is preserved so trust ranking upstream still decides priority."""
+    best: dict[str, tuple[float, ...]] = {}
+    for r in results:
+        identity, rank = doc_version_identity(r.url)
+        if rank == _UNVERSIONED:
+            continue
+        if identity not in best or rank > best[identity]:
+            best[identity] = rank
+    kept, seen = [], set()
+    for r in results:
+        identity, rank = doc_version_identity(r.url)
+        if rank == _UNVERSIONED:
+            kept.append(r)
+            continue
+        if rank == best[identity] and identity not in seen:
+            seen.add(identity)
+            kept.append(r)
+    return kept
 
 
 def canonical_url(url: str) -> str:
