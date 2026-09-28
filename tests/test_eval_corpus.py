@@ -46,20 +46,18 @@ def test_with_the_guard_removed_every_adversarial_case_fails(corpus):
     passed_anyway = [
         r.id for r in report.results
         if r.category in ADVERSARIAL and r.outcome in ("held", "gap_closed")
-        # This one is about the guard choosing NOT to remove something.
-        and r.id not in {"new-technology-in-a-sentence"}
     ]
     assert passed_anyway == []
 
 
 def test_a_weakened_guard_is_caught(corpus):
     """The regression this exists for: someone loosens the number check."""
-    from pipeline.workers.resume_fact_guard import enforce_honesty, note_new_terms
+    from pipeline.workers.resume_fact_guard import enforce_honesty, refuse_new_terms
 
     def without_the_number_check(original, candidate, *, baseline=None,
                                  user_text="", jd_text=""):
         candidate = enforce_honesty(original, candidate)
-        return note_new_terms(original, candidate, baseline=baseline,
+        return refuse_new_terms(original, candidate, baseline=baseline,
                               user_text=user_text, jd_text=jd_text)
 
     report = resume_guard_eval.evaluate(corpus, guard=without_the_number_check)
@@ -104,20 +102,33 @@ def test_strict_is_red_while_any_gap_remains():
     assert resume_guard_eval.main(["--strict"]) == 1
 
 
-def test_the_first_corpus_is_as_it_was_when_results_were_recorded_against_it():
+def test_the_first_corpus_is_kept_as_written_and_one_case_in_it_is_out_of_date():
+    """v1 is not edited, because results were reported against it. One
+    of its cases recorded that a name the model added was kept with a
+    note. The follow-up review showed why that was not enough, the guard
+    changed, and that case now fails against v1, as it should. v2
+    records the new behaviour. CI runs v2."""
     v1 = resume_guard_eval.evaluate(resume_guard_eval.load("v1"))
 
-    assert (v1.cases, v1.held, v1.failed, v1.gaps) == (38, 35, 0, 3)
+    assert (v1.cases, v1.held, v1.failed, v1.gaps) == (38, 34, 1, 3)
+    assert [r.id for r in v1.results if r.outcome == "failed"] == [
+        "new-technology-in-a-sentence"]
 
 
-def test_the_second_corpus_keeps_every_case_of_the_first_unchanged():
+def test_the_second_corpus_keeps_every_case_of_the_first_but_the_one_it_supersedes():
     v1, v2 = resume_guard_eval.load("v1"), resume_guard_eval.load("v2")
     carried = {c.id: c for c in v2.cases}
+    changed = []
 
     for case in v1.cases:
         kept = carried[case.id]
         assert kept.baseline is None
-        assert kept.model_dump(exclude={"baseline"}) == case.model_dump(), case.id
+        assert kept.original == case.original and kept.model_output == case.model_output
+        if kept.model_dump(exclude={"baseline"}) != case.model_dump():
+            changed.append(case.id)
+
+    assert changed == ["new-technology-in-a-sentence"]
+    assert "new-technology-in-a-sentence" in v2.changed_from_v1
 
 
 def test_the_second_corpus_has_the_cases_the_follow_up_review_asked_for(corpus):
@@ -126,7 +137,7 @@ def test_the_second_corpus_has_the_cases_the_follow_up_review_asked_for(corpus):
     assert {"edit-count-changes-what-it-counts", "edit-percentage-moved-in-place",
             "edit-amount-moved-in-place", "edit-percentage-reworded",
             "edit-amount-reworded", "user-rejected-the-number"} <= ids
-    assert sum(c.baseline is not None for c in corpus.cases) == 15
+    assert sum(c.baseline is not None for c in corpus.cases) == 18
 
 
 def test_without_the_fix_the_edit_cases_fail(corpus, monkeypatch):

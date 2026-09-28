@@ -1,7 +1,7 @@
 {
   "version": "v2",
   "written_by": "Written by an AI assistant (Claude) during the September 2026 review. Every person, employer, and school is invented. Not reviewed by a recruiter.",
-  "changed_from_v1": "Every v1 case is here unchanged. Added: 15 cases about an edit to an existing tailored resume, which v1 had none of. They came from the follow-up review of 28 September 2026, which found that a figure could change what it counts without leaving its line.",
+  "changed_from_v1": "Every v1 case is here unchanged but one: new-technology-in-a-sentence recorded that a name the model added was kept with a note, and now records that the line is put back. Added: 18 cases about an edit to an existing tailored resume, which v1 had none of. They came from the follow-up review of 28 September 2026, which found that a figure could change what it counts without leaving its line.",
   "cases": [
     {
       "id": "invented-metric",
@@ -1015,7 +1015,7 @@
     {
       "id": "new-technology-in-a-sentence",
       "category": "unsupported_fact",
-      "probes": "A technology is named inside a bullet. This one is put to the candidate, not deleted, because whether the work implied it is theirs to say.",
+      "probes": "A technology is named inside a bullet. In v1 the line was kept and a note attached, and nothing required the note to be answered. The line now goes back as it was, and the candidate is told how to add the name themselves.",
       "original": {
         "basics": {
           "name": "Sam Okafor",
@@ -1118,6 +1118,9 @@
       "jd_text": "",
       "expect": {
         "must_contain": [
+          "Built pipelines processing 2M events/day"
+        ],
+        "must_not_contain": [
           "Flink"
         ],
         "warnings_must_mention": [
@@ -6671,6 +6674,408 @@
         ]
       },
       "known_gap": "What the candidate types is taken at its word. A sentence that gives a figure and does not refuse it in so many words is read as giving it. The guards bind the model and not the person, and the README says so."
+    },
+    {
+      "id": "edit-names-something-new",
+      "category": "unsupported_fact",
+      "probes": "An edit names a technology that is nowhere on the resume or in what the candidate typed.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Software Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Denver, CO",
+          "summary": "Software engineer who builds internal platforms."
+        },
+        "work": [
+          {
+            "name": "Initrode",
+            "position": "Software Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Maintained 12 services behind the internal gateway",
+              "Mentored engineers joining the platform team",
+              "Cut build failures by 40% after moving to hermetic builds",
+              "Saved $30,000 a year in cloud storage",
+              "Consolidated build clusters to reduce costs"
+            ]
+          }
+        ],
+        "education": [],
+        "skills": [
+          {
+            "name": "Languages",
+            "keywords": [
+              "Python"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Software Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Denver, CO",
+            "summary": "Software engineer who builds internal platforms."
+          },
+          "work": [
+            {
+              "name": "Initrode",
+              "position": "Software Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Maintained 12 services behind the internal gateway",
+                "Mentored engineers joining the platform team",
+                "Cut build failures by 40% after moving to hermetic builds",
+                "Saved $30,000 a year in cloud storage",
+                "Consolidated Kubernetes clusters to reduce costs"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Python"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "baseline": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Software Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Denver, CO",
+            "summary": "Software engineer who builds internal platforms."
+          },
+          "work": [
+            {
+              "name": "Initrode",
+              "position": "Software Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Maintained 12 services behind the internal gateway",
+                "Mentored engineers joining the platform team",
+                "Cut build failures by 40% after moving to hermetic builds",
+                "Saved $30,000 a year in cloud storage",
+                "Consolidated build clusters to reduce costs"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Python"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_contain": [
+          "Consolidated build clusters to reduce costs"
+        ],
+        "must_not_contain": [
+          "Kubernetes"
+        ],
+        "warnings_must_mention": [
+          "Kubernetes"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "edit-names-something-the-candidate-vouched-for",
+      "category": "legitimate_edit",
+      "probes": "The same edit, after the candidate has said in their own words that it is true.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Software Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Denver, CO",
+          "summary": "Software engineer who builds internal platforms."
+        },
+        "work": [
+          {
+            "name": "Initrode",
+            "position": "Software Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Maintained 12 services behind the internal gateway",
+              "Mentored engineers joining the platform team",
+              "Cut build failures by 40% after moving to hermetic builds",
+              "Saved $30,000 a year in cloud storage",
+              "Consolidated build clusters to reduce costs"
+            ]
+          }
+        ],
+        "education": [],
+        "skills": [
+          {
+            "name": "Languages",
+            "keywords": [
+              "Python"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Software Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Denver, CO",
+            "summary": "Software engineer who builds internal platforms."
+          },
+          "work": [
+            {
+              "name": "Initrode",
+              "position": "Software Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Maintained 12 services behind the internal gateway",
+                "Mentored engineers joining the platform team",
+                "Cut build failures by 40% after moving to hermetic builds",
+                "Saved $30,000 a year in cloud storage",
+                "Consolidated build clusters on Kubernetes to reduce costs"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Python"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "baseline": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Software Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Denver, CO",
+            "summary": "Software engineer who builds internal platforms."
+          },
+          "work": [
+            {
+              "name": "Initrode",
+              "position": "Software Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Maintained 12 services behind the internal gateway",
+                "Mentored engineers joining the platform team",
+                "Cut build failures by 40% after moving to hermetic builds",
+                "Saved $30,000 a year in cloud storage",
+                "Consolidated build clusters to reduce costs"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Python"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "Those clusters ran on Kubernetes, I set them up",
+      "jd_text": "",
+      "expect": {
+        "must_contain": [
+          "on Kubernetes"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "edit-names-something-the-candidate-refused",
+      "category": "unsupported_fact",
+      "probes": "The candidate's instruction names the technology in order to rule it out.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Software Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Denver, CO",
+          "summary": "Software engineer who builds internal platforms."
+        },
+        "work": [
+          {
+            "name": "Initrode",
+            "position": "Software Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Maintained 12 services behind the internal gateway",
+              "Mentored engineers joining the platform team",
+              "Cut build failures by 40% after moving to hermetic builds",
+              "Saved $30,000 a year in cloud storage",
+              "Consolidated build clusters to reduce costs"
+            ]
+          }
+        ],
+        "education": [],
+        "skills": [
+          {
+            "name": "Languages",
+            "keywords": [
+              "Python"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Software Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Denver, CO",
+            "summary": "Software engineer who builds internal platforms."
+          },
+          "work": [
+            {
+              "name": "Initrode",
+              "position": "Software Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Maintained 12 services behind the internal gateway",
+                "Mentored engineers joining the platform team",
+                "Cut build failures by 40% after moving to hermetic builds",
+                "Saved $30,000 a year in cloud storage",
+                "Consolidated build clusters on Kubernetes to reduce costs"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Python"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "baseline": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Software Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Denver, CO",
+            "summary": "Software engineer who builds internal platforms."
+          },
+          "work": [
+            {
+              "name": "Initrode",
+              "position": "Software Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Maintained 12 services behind the internal gateway",
+                "Mentored engineers joining the platform team",
+                "Cut build failures by 40% after moving to hermetic builds",
+                "Saved $30,000 a year in cloud storage",
+                "Consolidated build clusters to reduce costs"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Python"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "I have never used Kubernetes, do not mention it",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "Kubernetes"
+        ]
+      },
+      "known_gap": ""
     }
   ]
 }

@@ -1111,6 +1111,9 @@ export function SendStation({ doc }: { doc: ResumeDoc }) {
   const remaining = countMetrics(t.resume);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  // The server can refuse for a reason this page cannot count for itself,
+  // and its refusal offers a draft. So the page has to be able to give one.
+  const [refused, setRefused] = useState(false);
 
   /** The server decides whether this may leave, not this component: the
    * count above only chooses which buttons to offer. `expect` makes the
@@ -1121,7 +1124,10 @@ export function SendStation({ doc }: { doc: ResumeDoc }) {
       await api.downloadResume(doc.resume_id, fmt, {
         version: "tailored", draft, expect: doc.updated_at,
       });
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) {
+      setError((e as Error).message);
+      if (!draft && (e as { status?: number }).status === 409) setRefused(true);
+    }
     finally { setBusy(""); }
   };
   const formats: Array<[string, string]> = [
@@ -1171,6 +1177,16 @@ export function SendStation({ doc }: { doc: ResumeDoc }) {
         </div>
       )}
       {error && <div className="errbox" role="alert" style={{ margin: "0.8rem auto", maxWidth: 560 }}>{error}</div>}
+      {refused && remaining === 0 && (
+        <div className="dl-row">
+          {formats.map(([fmt, label]) => (
+            <button key={fmt} className="btn btn-quiet" disabled={!!busy}
+              onClick={() => download(fmt, true)}>
+              {busy === `${fmt}-draft` ? "Preparing…" : `Draft ${label}`}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="recap">
         <div style={{ "--i": 0 } as React.CSSProperties}>
           <span className="mono" style={{ color: "var(--green)" }}>

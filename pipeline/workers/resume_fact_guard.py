@@ -921,33 +921,211 @@ def new_named_terms(text: str, known_squashed: str, jd_text: str = "") -> list[s
     return found
 
 
-def note_new_terms(
+def vouched_text(user_text: str) -> str:
+    """What the user typed, less what they were refusing or only
+    repeating. "I have never used Kubernetes" names Kubernetes and is not
+    a claim to have used it."""
+    kept: list[str] = []
+    for sentence in _SENTENCE_BREAK.split(user_text or ""):
+        clauses = [c for c in _CLAUSE_BREAK.split(sentence) if c and c.strip()]
+        rejected = [bool(_REJECTS.search(c)) for c in clauses]
+        accepted = bool(_ACCEPTS.search(sentence))
+        for i, clause in enumerate(clauses):
+            if rejected[i]:
+                continue
+            if _REPORTS.search(clause) and not accepted:
+                continue
+            later = clauses[i + 1] if i + 1 < len(clauses) else ""
+            if later and rejected[i + 1] and _POINTS_BACK.search(later):
+                continue
+            kept.append(clause)
+    return " ".join(kept)
+
+
+_SAME_LINE = 0.2      # below this, two lines are not versions of each other
+
+
+def _pair_lines(lines: list[str], sources: list[str]) -> dict[int, int]:
+    """Which source line each line is a version of. Best matches first,
+    each source used once, so a reordered list still finds its own."""
+    scored = sorted(
+        ((1.0 if _norm_name(a) == _norm_name(b) else _similarity(a, b), i, k)
+         for i, a in enumerate(lines) for k, b in enumerate(sources)),
+        key=lambda t: (-t[0], t[1], t[2]))
+    paired: dict[int, int] = {}
+    taken: set[int] = set()
+    for score, i, k in scored:
+        if score < _SAME_LINE or i in paired or k in taken:
+            continue
+        paired[i] = k
+        taken.add(k)
+    return paired
+
+
+def _named(terms: list[str]) -> str:
+    return ", ".join(f"'{t}'" for t in terms)
+
+
+_HOW_TO_KEEP = (
+    "If you have worked with it, write it into the line yourself, or tell "
+    "the editor so in your own words."
+)
+
+
+def refuse_new_terms(
     original: StructuredResume, candidate: TailoredResume, *,
     baseline: TailoredResume | None = None, user_text: str = "",
-    jd_text: str = "", limit: int = 6,
+    jd_text: str = "",
 ) -> TailoredResume:
-    """Surface, never remove. Naming a technology the resume implies is
-    legitimate tailoring and naming one it does not is fabrication, and
-    telling those apart is a judgment about the candidate's life. So the
-    line stays and the candidate is asked."""
-    known = _squash(" ".join(_all_strings(original)) + " " + user_text)
-    if baseline is not None:
-        known += _squash(" ".join(_all_strings(baseline.resume)))
-    raised = 0
-    seen: set[str] = set()
-    for path, get, _, _ in _fields_with_sources(candidate.resume, original):
-        for term in new_named_terms(get(), known, jd_text):
-            if term.casefold() in seen or raised >= limit:
-                continue
-            seen.add(term.casefold())
-            raised += 1
-            candidate.warnings.append(
-                f"[{path}] New term: '{term}' appears here but nowhere in your "
-                "original resume. Keep it only if you have really worked with "
-                "it and could answer an interviewer's follow-up. Otherwise "
-                "edit the line to remove it."
-            )
+    """A line in which the model names something new is put back.
+
+    Naming a technology the resume implies is tailoring, and naming one it
+    does not is fabrication, and code cannot tell which. The first
+    version of this kept the line and attached a note asking the
+    candidate to check. Nothing required the note to be answered, and
+    the resume could be downloaded as finished with the line in it.
+
+    So the question is put the other way round. The model does not get
+    to add a name. The candidate does: by typing it into the line, or by
+    saying so in an instruction. Both are their own words, and both are
+    in what this checks against.
+
+    Every offending line is handled. The note used to stop at six."""
+    earlier = baseline.resume if baseline is not None else None
+    known = _squash(" ".join(_all_strings(original)) + " " + vouched_text(user_text))
+    if earlier is not None:
+        known += _squash(" ".join(_all_strings(earlier)))
+    source = earlier if earlier is not None else original
+    resume = candidate.resume
+
+    def new_in(text: str) -> list[str]:
+        return new_named_terms(text, known, jd_text) if text else []
+
+    def scalar(path: str, holder, field: str, was: str) -> None:
+        terms = new_in(getattr(holder, field))
+        if not terms:
+            return
+        setattr(holder, field, was)
+        candidate.warnings.append(
+            f"[{path}] Put back as it was: the rewrite named {_named(terms)}, which "
+            f"is nowhere in your resume or in what you have typed. {_HOW_TO_KEEP}")
+
+    def lines(path: str, holder, field: str, was: list[str]) -> None:
+        current: list[str] = getattr(holder, field)
+        offending = {i: new_in(line) for i, line in enumerate(current)}
+        offending = {i: terms for i, terms in offending.items() if terms}
+        if not offending:
+            return
+        paired = _pair_lines(current, was)
+        # A line rewritten past recognition still replaced something. What
+        # it replaced is whichever source line nothing else accounts for,
+        # and putting that back is what keeps the candidate's own claim
+        # from being lost along with the model's.
+        unclaimed = [k for k in range(len(was)) if k not in paired.values()]
+        for i in sorted(offending):
+            if i not in paired and unclaimed:
+                k = i if i in unclaimed else unclaimed[0]
+                paired[i] = k
+                unclaimed.remove(k)
+        drop: list[int] = []
+        for i, terms in offending.items():
+            if i in paired:
+                current[i] = was[paired[i]]
+                candidate.warnings.append(
+                    f"[{path}[{i}]] Put back as it was: the rewrite named "
+                    f"{_named(terms)}, which is nowhere in your resume or in what "
+                    f"you have typed. {_HOW_TO_KEEP}")
+            else:
+                drop.append(i)
+                candidate.warnings.append(
+                    f"[{path}] Removed a line the rewrite added: it named "
+                    f"{_named(terms)} and came from nothing on your resume. "
+                    "If it is true, add the line yourself.")
+        for i in sorted(drop, reverse=True):
+            del current[i]
+
+    scalar("basics.label", resume.basics, "label", source.basics.label)
+    scalar("basics.summary", resume.basics, "summary", source.basics.summary)
+
+    for i, (w, si) in enumerate(zip(resume.work, match_work(resume.work, source.work))):
+        was = source.work[si] if si is not None else None
+        scalar(f"work[{i}].summary", w, "summary", was.summary if was else "")
+        lines(f"work[{i}].highlights", w, "highlights", list(was.highlights) if was else [])
+
+    projects = {_norm_name(p.name): p for p in source.projects}
+    for i, p in enumerate(resume.projects):
+        was = projects.get(_norm_name(p.name))
+        scalar(f"projects[{i}].description", p, "description", was.description if was else "")
+        lines(f"projects[{i}].highlights", p, "highlights", list(was.highlights) if was else [])
+
+    sections = {c.name: c for c in source.custom}
+    for i, c in enumerate(resume.custom):
+        was = sections.get(c.name)
+        lines(f"custom[{i}].items", c, "items", list(was.items) if was else [])
     return candidate
+
+
+# ── Notes left by the earlier guard ─────────────────────────────────────────
+# Resumes tailored before refuse_new_terms() may hold a line the model
+# added to, with a note beside it that nobody had to answer. They are
+# recognised by the note, which the present guard never writes.
+
+# The path has brackets of its own: "[work[0].highlights[2]] New term: ..."
+_EARLIER_NOTE = re.compile(r"^\[(?P<path>.+?)\] New term: '(?P<term>[^']+)'")
+_PATH = re.compile(
+    r"^(?:basics\.(?P<basic>label|summary)"
+    r"|(?P<group>work|projects|custom)\[(?P<i>\d+)\]\."
+    r"(?P<field>summary|description|highlights|items)(?:\[(?P<j>\d+)\])?)$")
+
+
+def _at(resume: StructuredResume, path: str) -> tuple[str, str] | None:
+    """(the text at `path`, where that is in words), or None."""
+    m = _PATH.match(path)
+    if not m:
+        return None
+    if m["basic"]:
+        return (getattr(resume.basics, m["basic"]),
+                "the headline" if m["basic"] == "label" else "the summary")
+    group = getattr(resume, m["group"])
+    i = int(m["i"])
+    if i >= len(group):
+        return None
+    item = group[i]
+    at = (getattr(item, "name", "") or getattr(item, "position", "")
+          or {"work": "a job", "projects": "a project", "custom": "a section"}[m["group"]])
+    value = getattr(item, m["field"], None)
+    if m["j"] is None:
+        return (value, f"the description under {at}") if isinstance(value, str) else None
+    j = int(m["j"])
+    if not isinstance(value, list) or j >= len(value):
+        return None
+    return value[j], f"the {_ordinal(j + 1)} bullet under {at}"
+
+
+def unanswered_additions(original: StructuredResume | None,
+                         tailored: TailoredResume) -> list[str]:
+    """Names an earlier rewrite added that are still on the resume and
+    that the candidate has not put on it themselves.
+
+    Answered by taking the name out of the line, or by adding it to the
+    resume (as a skill, say), which writes it into the original. That is
+    the one confirmation that can be recorded without a new field: it is
+    the candidate's own act, it names the thing, and it is kept."""
+    theirs = _squash(" ".join(_all_strings(original))) if original is not None else ""
+    found: list[str] = []
+    for note in tailored.warnings:
+        m = _EARLIER_NOTE.match(note)
+        if not m:
+            continue
+        here = _at(tailored.resume, m["path"])
+        if here is None:
+            continue
+        text, where = here
+        term = m["term"]
+        if not _term_present(term, _squash(text)) or _term_present(term, theirs):
+            continue
+        found.append(f"'{term}' in {where}")
+    return found
 
 
 # ── The one validator ───────────────────────────────────────────────────────
@@ -959,11 +1137,13 @@ def validate_model_output(
 ) -> TailoredResume:
     """Run after every model mutation of a resume, without exception."""
     candidate = enforce_honesty(original, candidate)
-    candidate = guard_numbers(
-        original, candidate, baseline=baseline, user_text=user_text)
-    candidate = note_new_terms(
+    # Names before numbers. Putting a line back can remove one the model
+    # added, and the number check reports by position.
+    candidate = refuse_new_terms(
         original, candidate, baseline=baseline, user_text=user_text,
         jd_text=jd_text)
+    candidate = guard_numbers(
+        original, candidate, baseline=baseline, user_text=user_text)
     return candidate
 
 

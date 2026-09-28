@@ -104,6 +104,7 @@ from pipeline.workers.resume_studio_worker import (
     render_docx,
     render_markdown,
     render_pdf,
+    unanswered_additions,
     unresolved_placeholders,
     users_own_words,
     review_resume,
@@ -3471,15 +3472,27 @@ def _export_refusal(doc: ResumeDoc) -> str | None:
     cannot be walked around: the button is disabled in one browser, and
     the URL behind it answers anyone."""
     unresolved = unresolved_placeholders(doc.tailored.resume)
-    if not unresolved:
-        return None
-    return (
-        "This resume is not finished: a [METRIC] placeholder is still in "
-        + "; ".join(unresolved)
-        + ". Type the real number into each one and save, or reword the "
-        "line so it does not need one. To download it unfinished, ask for "
-        "a draft."
-    )
+    if unresolved:
+        return (
+            "This resume is not finished: a [METRIC] placeholder is still in "
+            + "; ".join(unresolved)
+            + ". Type the real number into each one and save, or reword the "
+            "line so it does not need one. To download it unfinished, ask for "
+            "a draft."
+        )
+    # A resume tailored by the earlier guard may hold a name the rewrite
+    # added, with a note beside it that nothing required anyone to read.
+    added = unanswered_additions(doc.structured, doc.tailored)
+    if added:
+        return (
+            "This resume is not finished: an earlier rewrite added "
+            + "; ".join(added)
+            + ", which your original resume does not mention. If it is true, "
+            "add it to your resume yourself (as a skill, for example). If it "
+            "is not, edit the line to take it out. To download it as it "
+            "stands, ask for a draft."
+        )
+    return None
 
 
 @app.get("/resumes/{resume_id}/download")

@@ -26,8 +26,9 @@ from pipeline.workers.resume_fact_guard import (
     enforce_honesty,
     find_entry,
     guard_numbers,
-    note_new_terms,
+    refuse_new_terms,
     summary_rewrite_is_safe,
+    unanswered_additions,
     unresolved_placeholders,
     validate_model_output,
 )

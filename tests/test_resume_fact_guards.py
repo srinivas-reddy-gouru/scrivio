@@ -173,17 +173,20 @@ def test_a_safe_summary_condensation_is_still_applied():
     assert out.resume.basics.summary == "Software engineer who builds internal platforms."
 
 
-def test_a_new_named_term_in_prose_is_put_to_the_candidate_not_deleted():
-    """Naming a technology the resume implies is tailoring; naming one it
-    does not is fabrication. Code cannot tell which, so it asks."""
+def test_a_new_named_term_in_prose_does_not_stay_on_the_models_say_so():
+    """This test used to assert that the line was kept and a note
+    attached. The follow-up review (F03) showed what that was worth: the
+    note did not have to be answered, and the resume could be downloaded
+    as finished with the line in it. The line now goes back, and the
+    candidate is told how to put the name in themselves.
+    tests/test_resume_review_gate.py covers the rest."""
     stuffed = copy.deepcopy(ORIGINAL)
     stuffed["work"][0]["highlights"][2] = "Consolidated build clusters on Kubernetes to reduce costs"
 
     out = _tailor(stuffed)
 
-    assert "Kubernetes" in out.resume.work[0].highlights[2]
-    assert any("New term" in w and "Kubernetes" in w and "work[0].highlights[2]" in w
-               for w in out.warnings)
+    assert out.resume.work[0].highlights[2] == "Consolidated build clusters to reduce costs"
+    assert any("Kubernetes" in w and "work[0].highlights[2]" in w for w in out.warnings)
 
 
 def test_changed_contact_details_are_reverted():
