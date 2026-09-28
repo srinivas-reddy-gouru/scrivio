@@ -2023,25 +2023,38 @@ async def _resolve_jd_text(body: JobProfileCreateRequest) -> str:
     if body.job_description.strip():
         return body.job_description.strip()[:30_000]
     if body.jd_url.strip():
-        from pipeline.workers.extraction_worker import (
-            fetch_with_retry, injection_filter, remove_boilerplate,
-        )
-        try:
-            raw, _strategy = await fetch_with_retry(body.jd_url.strip())
-            text = injection_filter(remove_boilerplate(raw)).strip()
-        except Exception:
-            raise HTTPException(
-                status_code=422,
-                detail="Could not fetch the job posting URL — paste the JD text instead.",
-            )
-        if len(text) < 200:
-            raise HTTPException(
-                status_code=422,
-                detail="The job posting page yielded almost no text (likely "
-                       "behind a login or rendered by JavaScript) — paste the JD text instead.",
-            )
-        return text[:30_000]
+        return await _fetch_job_description(body.jd_url.strip())
     raise HTTPException(status_code=422, detail="Provide the job description (text or URL)")
+
+
+async def _fetch_job_description(url: str) -> str:
+    """Fetch a posting the user gave a URL for. The one place both studios
+    do this, so the outbound policy and the injection filter are applied
+    once and cannot be forgotten in one of two copies."""
+    from pipeline.workers.extraction_worker import (
+        BlockedFetchError, fetch_with_retry, injection_filter, remove_boilerplate,
+    )
+    try:
+        raw, _strategy = await fetch_with_retry(url)
+        text = injection_filter(remove_boilerplate(raw)).strip()
+    except BlockedFetchError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"That address was not fetched. {exc} Paste the job "
+                   "description text instead.",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Could not fetch the job posting URL. Paste the JD text instead.",
+        )
+    if len(text) < 200:
+        raise HTTPException(
+            status_code=422,
+            detail="The job posting page yielded almost no text (likely "
+                   "behind a login or rendered by JavaScript). Paste the JD text instead.",
+        )
+    return text[:30_000]
 
 
 def _resolve_resume_text(body: JobProfileCreateRequest) -> str:
@@ -2206,24 +2219,7 @@ async def _resolve_resume_jd(body: ResumeCreateRequest) -> tuple[str, str]:
     if body.jd_text.strip():
         return body.jd_text.strip()[:30_000], "pasted JD"
     if body.jd_url.strip():
-        from pipeline.workers.extraction_worker import (
-            fetch_with_retry, injection_filter, remove_boilerplate,
-        )
-        try:
-            raw, _strategy = await fetch_with_retry(body.jd_url.strip())
-            text = injection_filter(remove_boilerplate(raw)).strip()
-        except Exception:
-            raise HTTPException(
-                status_code=422,
-                detail="Could not fetch the job posting URL — paste the JD text instead.",
-            )
-        if len(text) < 200:
-            raise HTTPException(
-                status_code=422,
-                detail="The job posting page yielded almost no text (likely behind "
-                       "a login or rendered by JavaScript) — paste the JD text instead.",
-            )
-        return text[:30_000], body.jd_url.strip()
+        return await _fetch_job_description(body.jd_url.strip()), body.jd_url.strip()
     return "", ""
 
 
