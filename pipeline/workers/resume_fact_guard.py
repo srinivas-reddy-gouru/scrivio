@@ -1197,14 +1197,24 @@ def _every_line(resume: StructuredResume):
 
 
 def open_findings(original: StructuredResume | None, tailored: TailoredResume,
-                  carried=()) -> list[Finding]:
+                  carried=(), *, stored: bool = True) -> list[Finding]:
     """What is still unanswered, and where each name now is.
 
-    `carried` is warnings from an earlier version of the same document.
-    A name flagged there is looked for here as well, whatever this
-    version's own warnings say."""
+    Which names are flagged is taken from two places, and both are the
+    application's own record:
+
+      carried   warnings from the earlier version of this document
+      stored    this version's own warnings, when `tailored` is a record
+                that was read from storage
+
+    `stored=False` is for a resume a model has just returned. Its
+    warnings are the model's, and a finding among them is a model's
+    claim that something is unresolved. It is not read. It used to be:
+    the warnings were searched for findings first and cleared of them
+    afterwards, so the line was thrown away and what it said was kept."""
     found: list[Finding] = []
-    for term in flagged_names([*carried, *tailored.warnings]):
+    flagged = [*carried, *(tailored.warnings if stored else ())]
+    for term in flagged_names(flagged):
         if on_the_resume(term, original):
             continue                                     # confirmed
         for path, text, where in _every_line(tailored.resume):
@@ -1213,13 +1223,18 @@ def open_findings(original: StructuredResume | None, tailored: TailoredResume,
     return found                                         # nowhere: removed
 
 
+def without_findings(warnings) -> list[str]:
+    """Every warning that is not in the form of a finding, in order."""
+    return [w for w in warnings if not FINDING.match(w)]
+
+
 def settle_findings(original: StructuredResume | None, tailored: TailoredResume,
-                    carried=()) -> TailoredResume:
+                    carried=(), *, stored: bool = True) -> TailoredResume:
     """Make the warnings say exactly what is open, in the application's
-    words. Lines of that form from anywhere else are discarded."""
-    still_open = open_findings(original, tailored, carried)
-    kept = [w for w in tailored.warnings if not FINDING.match(w)]
-    tailored.warnings = kept + [finding.note() for finding in still_open]
+    words. See open_findings() for `carried` and `stored`."""
+    still_open = open_findings(original, tailored, carried, stored=stored)
+    tailored.warnings = (without_findings(tailored.warnings)
+                         + [finding.note() for finding in still_open])
     return tailored
 
 
@@ -1237,6 +1252,10 @@ def validate_model_output(
     jd_text: str = "",
 ) -> TailoredResume:
     """Run after every model mutation of a resume, without exception."""
+    # First, before anything reads them: what the model returned in the
+    # form of a finding. The steps below add warnings of their own, and
+    # the last one writes the findings. None of them is to see these.
+    candidate.warnings = without_findings(candidate.warnings)
     candidate = enforce_honesty(original, candidate)
     # Names before numbers. Putting a line back can remove one the model
     # added, and the number check reports by position.
@@ -1248,7 +1267,8 @@ def validate_model_output(
     # Last, and not the model's to decide: what was open before this
     # edit and is still on the resume is open after it.
     return settle_findings(
-        original, candidate, carried=baseline.warnings if baseline is not None else ())
+        original, candidate, stored=False,
+        carried=baseline.warnings if baseline is not None else ())
 
 
 def summary_rewrite_is_safe(

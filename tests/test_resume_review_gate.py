@@ -470,7 +470,13 @@ def test_f03a_a_note_the_model_reworded_is_not_the_note(held):
 
 def test_f03a_a_note_the_model_wrote_for_itself_changes_nothing(held):
     """In the other direction: a model cannot raise a finding either.
-    The list of what is unresolved is the application's."""
+    The list of what is unresolved is the application's.
+
+    The note here is about a word that is already on the original, so a
+    finding about it would be dropped as confirmed whoever had raised
+    it. That makes this a weak test, and it passed while a model could
+    in fact raise a finding. The tests that tell the two apart are
+    further down, under "fe22bc1"."""
     client, rid, scripted = held
     clean = copy.deepcopy(ORIGINAL)
 
@@ -843,3 +849,202 @@ def test_the_candidate_retyping_the_flagged_line_does_not_answer_for_it(held):
 
     blocked_in_every_format(client, rid)
     drafts_still_offered(client, rid)
+
+
+# ── Review of fe22bc1: a model could still RAISE a finding ────────────
+# The warnings a model returned were read for findings before they were
+# discarded. So a finding-shaped warning about a name the candidate had
+# typed themselves became a finding, was written back in the
+# application's own words, and was saved. Nothing unsupported got out.
+# A resume that was fine to send stopped being sendable, on a model's
+# say-so.
+
+TYPED = "Consolidated build clusters on Kubernetes to reduce costs"
+
+
+def invented(name: str = "Kubernetes", path: str = "work[0].highlights[2]") -> str:
+    """What a model might return: a finding in exactly the stored form."""
+    return (f"[{path}] New term: '{name}' appears here but nowhere in your original "
+            "resume. Keep it only if you have really worked with it and could answer "
+            "an interviewer's follow-up. Otherwise edit the line to remove it.")
+
+
+@pytest.fixture
+def typed(api):
+    """A clean tailored resume, onto which the candidate has typed a
+    technology themselves. Nothing is flagged, and it exports."""
+    client, rid, scripted = api
+    scripted["resume"], scripted["warnings"] = copy.deepcopy(ORIGINAL), []
+    assert client.post(f"/resumes/{rid}/tailor").status_code == 200
+    wrote = client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "work[0].highlights[2]", "value": TYPED}]})
+    assert wrote.status_code == 200, wrote.text
+    assert finished(client, rid).status_code == 200
+    return client, rid, scripted
+
+
+def findings_in(warnings) -> list[str]:
+    return [w for w in warnings if "New term:" in w]
+
+
+def test_fe22bc1_the_review_case(typed):
+    client, rid, scripted = typed
+
+    after = edit(client, rid, scripted, with_line(2, TYPED),
+                 warnings=[LEGACY_NOTE], instruction="Tidy the wording.")
+
+    assert after["tailored"]["resume"]["work"][0]["highlights"][2] == TYPED
+    assert findings_in(after["tailored"]["warnings"]) == []
+    sent = finished(client, rid)
+    assert sent.status_code == 200, sent.text
+    assert "on Kubernetes" in sent.text
+
+
+@pytest.mark.parametrize("fmt", FORMATS)
+def test_fe22bc1_every_format_stays_available(typed, fmt):
+    client, rid, scripted = typed
+
+    edit(client, rid, scripted, with_line(2, TYPED), warnings=[invented()])
+
+    sent = finished(client, rid, fmt)
+    assert sent.status_code == 200, (fmt, sent.text[:200])
+    assert sent.headers["x-scrivio-export"] == "final"
+
+
+def test_fe22bc1_nothing_is_saved_and_nothing_appears_on_reload_or_a_second_edit(typed):
+    client, rid, scripted = typed
+
+    edit(client, rid, scripted, with_line(2, TYPED), warnings=[invented()])
+    on_disk = server._resume_path(rid).read_text(encoding="utf-8")
+    reloaded = server._load_resume_doc(rid)
+    again = edit(client, rid, scripted, with_line(2, TYPED), warnings=[invented()])
+
+    assert "New term:" not in on_disk
+    assert findings_in(reloaded.tailored.warnings) == []
+    assert server._export_refusal(reloaded) is None
+    assert findings_in(again["tailored"]["warnings"]) == []
+    assert "New term:" not in server._resume_path(rid).read_text(encoding="utf-8")
+    for snapshot in server._load_resume_doc(rid).tailored_history:
+        assert findings_in(snapshot.warnings) == []
+    assert finished(client, rid).status_code == 200
+
+
+@pytest.mark.parametrize("warning", [
+    invented(),
+    invented(path="work[0].highlights[0]"),
+    invented(path="basics.summary"),
+    invented(path="nowhere[9].at[9]"),
+    invented().upper().replace("NEW TERM", "New term").replace("'KUBERNETES'", "'kubernetes'"),
+], ids=["same-line", "another-line", "the-summary", "no-such-path", "another-case"])
+def test_fe22bc1_whatever_position_or_case_the_model_gives(typed, warning):
+    client, rid, scripted = typed
+
+    after = edit(client, rid, scripted, with_line(2, TYPED), warnings=[warning])
+
+    assert findings_in(after["tailored"]["warnings"]) == []
+    assert finished(client, rid).status_code == 200
+
+
+def test_fe22bc1_a_first_tailoring_cannot_raise_one_either(api):
+    """The candidate added the skill to their resume. A model tailoring
+    from it returns a finding about that skill."""
+    client, rid, scripted = api
+    assert client.post(f"/resumes/{rid}/add", json={
+        "kind": "skill", "parent": "skills[0]", "text": "Terraform"}).status_code == 200
+    written = copy.deepcopy(ORIGINAL)
+    written["skills"][0]["keywords"] = ["Python", "Terraform"]
+    written["work"][0]["highlights"][2] = "Consolidated build clusters with Terraform to reduce costs"
+    scripted["resume"], scripted["warnings"] = written, [invented("Terraform")]
+
+    assert client.post(f"/resumes/{rid}/tailor").status_code == 200
+
+    doc = client.get(f"/resumes/{rid}").json()
+    assert "with Terraform" in str(doc["tailored"]["resume"])
+    assert findings_in(doc["tailored"]["warnings"]) == []
+    assert finished(client, rid).status_code == 200
+
+
+def test_fe22bc1_what_the_model_says_otherwise_is_still_shown(typed):
+    client, rid, scripted = typed
+    said = ["Cannot honestly claim Terraform: nothing on the resume supports it.",
+            "The summary is close to the word limit."]
+
+    after = edit(client, rid, scripted, with_line(2, TYPED), warnings=[*said, invented()])
+
+    assert [w for w in after["tailored"]["warnings"] if w in said] == said
+    assert findings_in(after["tailored"]["warnings"]) == []
+    saved = server._load_resume_doc(rid).tailored.warnings
+    assert [w for w in saved if w in said] == said
+
+
+def test_fe22bc1_a_real_finding_stays_and_an_invented_one_beside_it_does_not(held):
+    """Both at once, on the legacy document: Kubernetes is flagged in
+    the stored record, and the candidate has typed Terraform. The model
+    returns a finding for each, and one for neither."""
+    client, rid, scripted = held
+    assert client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "work[0].highlights[1]",
+         "value": "Mentored engineers joining the platform team on Terraform"}]}
+    ).status_code == 200
+    now = server._load_resume_doc(rid).tailored.resume.model_dump()
+
+    after = edit(client, rid, scripted, now, warnings=[
+        invented("Terraform", "work[0].highlights[1]"), invented("Ansible")])
+
+    found = findings_in(after["tailored"]["warnings"])
+    assert len(found) == 1 and "'Kubernetes'" in found[0]
+    refused = finished(client, rid)
+    assert refused.status_code == 409
+    assert "Kubernetes" in refused.json()["detail"]
+    assert "Terraform" not in refused.json()["detail"]
+
+    client.post(f"/resumes/{rid}/add", json={
+        "kind": "skill", "parent": "skills[0]", "text": "Kubernetes"})
+    sent = finished(client, rid)
+    assert sent.status_code == 200 and "on Terraform" in sent.text
+
+
+def test_fe22bc1_at_the_guard_a_models_finding_is_gone_before_anything_reads_it():
+    before = TailoredResume(
+        resume=StructuredResume.model_validate(with_line(2, TYPED)), changes=[], warnings=[])
+    returned = TailoredResume(
+        resume=StructuredResume.model_validate(with_line(2, TYPED)), changes=[],
+        warnings=["An ordinary remark.", invented()])
+
+    out = validate_model_output(
+        StructuredResume.model_validate(ORIGINAL), returned, baseline=before, jd_text=JD)
+
+    assert findings_in(out.warnings) == []
+    assert "An ordinary remark." in out.warnings
+
+
+def test_fe22bc1_a_stored_finding_is_still_read_from_the_stored_record():
+    """The other side of the same line. What is stored is the
+    application's and is trusted. What a model returns is not."""
+    from pipeline.workers.resume_fact_guard import open_findings
+
+    stored = TailoredResume(
+        resume=StructuredResume.model_validate(with_line(2, TYPED)), changes=[],
+        warnings=[LEGACY_NOTE])
+
+    found = open_findings(StructuredResume.model_validate(ORIGINAL), stored)
+
+    assert [(f.term, f.path) for f in found] == [("Kubernetes", "work[0].highlights[2]")]
+
+
+def test_fe22bc1_a_model_being_right_does_not_make_it_the_models_to_raise(api):
+    """A limit, and the cost of the rule. The model writes a technology
+    in lower case, which the check for new names does not see, and then
+    says so itself in the form of a finding. It is right. The finding is
+    still not the model's to raise, and nothing is raised. What would
+    catch this is the check for new names seeing lower case, which is
+    listed as a limit."""
+    client, rid, scripted = api
+    written = with_line(2, "Consolidated build clusters on kubernetes to reduce costs")
+    scripted["resume"], scripted["warnings"] = written, [invented("kubernetes")]
+
+    assert client.post(f"/resumes/{rid}/tailor").status_code == 200
+
+    doc = client.get(f"/resumes/{rid}").json()
+    assert findings_in(doc["tailored"]["warnings"]) == []
+    assert "on kubernetes" in str(doc["tailored"]["resume"])
