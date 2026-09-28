@@ -10,6 +10,12 @@ directory, and a settings file that does not exist.
 
 Skipped, not failed, when there is no browser to drive or no built
 interface to load. CI installs both (see .github/workflows).
+
+The fixtures last for one test module, not the session. Playwright's
+synchronous API runs an event loop on the test thread for as long as it
+is open, and while it is, every later test that calls asyncio.run() fails
+with "cannot be called from a running event loop". Held for the session,
+that broke 238 unrelated tests on a clean install.
 """
 import sys
 from pathlib import Path
@@ -25,7 +31,7 @@ playwright_api = pytest.importorskip(
     "playwright.sync_api", reason="browser tests need the playwright package")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def browser():
     with playwright_api.sync_playwright() as p:
         launched = None
@@ -41,7 +47,7 @@ def browser():
         launched.close()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def server(tmp_path_factory):
     if not DIST.is_file():
         pytest.skip("web/dist is not built: run `npm ci && npm run build` in web/")
@@ -65,7 +71,7 @@ def page(browser, server):
     context.close()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def demo_server(tmp_path_factory):
     """Demo mode: the whole interface works, on canned model output, so
     the workflows can be driven end to end without a provider."""
@@ -78,7 +84,7 @@ def demo_server(tmp_path_factory):
         live.stop()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def dev_server(demo_server):
     """The Vite development server, proxying to the demo backend: the
     setup the README tells a contributor to use."""

@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import sys
 import tempfile
 from collections.abc import AsyncGenerator
 from datetime import datetime
@@ -220,6 +221,7 @@ class ModeStatus(BaseModel):
     """What will actually run. No keys, no masked keys, no paths."""
     demo: bool
     ready: bool
+    interface: str = "modern"   # "classic" when the current one is not built
     writing: str          # anthropic | openai | claude-cli | demo | none
     fact_checking: str    # the same set; may differ from writing
     cli: dict
@@ -246,6 +248,7 @@ async def mode_status() -> ModeStatus:
                 "last call found it signed out. Sign in from a terminal, or "
                 "add an API key in Settings.")
     return ModeStatus(
+        interface="modern" if boundary.modern_interface_at_root else "classic",
         demo=demo, ready=demo or not problem, writing=writing,
         fact_checking=checking, cli=cli, problem=problem,
         notice=DEMO_LABEL if demo else "",
@@ -3517,5 +3520,24 @@ if _DESK_DIR.exists():
     # Root goes LAST so every API route above wins the match first.
     app.mount("/", StaticFiles(directory=str(_DESK_DIR), html=True), name="app")
 elif _UI_DIR.exists():
-    # No React build on disk (fresh clone, no npm): classic UI still works.
+    # No build on disk. The older interface is served so that there is
+    # something to look at, and it is said plainly, here and on the page:
+    # a fresh clone that quietly shows a different application from the
+    # one in the README looks like a broken install.
     app.mount("/", StaticFiles(directory=str(_UI_DIR), html=True), name="ui")
+
+
+def _say_which_interface() -> None:
+    if boundary.modern_interface_at_root:
+        return
+    print(
+        "\n  The interface has not been built, so the older classic interface\n"
+        "  is being served instead. It is missing features described in the\n"
+        "  README. To build the current one:\n\n"
+        "      cd web && npm ci && npm run build\n\n"
+        "  then start the server again.\n",
+        file=sys.stderr, flush=True,
+    )
+
+
+app.router.on_startup.append(_say_which_interface)

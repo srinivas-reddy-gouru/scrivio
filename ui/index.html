@@ -19,7 +19,22 @@
      is not paired, every request it makes would fail with no explanation,
      so send it to the page that can pair it. */
   fetch('/auth/status').then(function (r) { return r.json(); }).then(function (s) {
-    if (s && s.authenticated === false) location.replace('/auth/pair');
+    if (s && s.authenticated === false) { location.replace('/auth/pair'); return; }
+    /* If this page is being shown because the current interface was never
+       built, say so. Otherwise a fresh install looks like the wrong app. */
+    return fetch('/mode').then(function (r) { return r.json(); }).then(function (m) {
+      if (!m || m.interface !== 'classic' || location.pathname.indexOf('/classic') === 0) return;
+      var note = document.createElement('div');
+      note.setAttribute('role', 'status');
+      note.style.cssText = 'position:sticky;top:0;z-index:100;padding:.6rem 1rem;' +
+        'background:#E5B04C;color:#2A1E05;font:600 14px/1.45 system-ui,sans-serif;text-align:center';
+      note.textContent = 'This is the older interface. The current one has not been built yet: ' +
+        'run "cd web && npm ci && npm run build" and restart the server.';
+      document.addEventListener('DOMContentLoaded', function () {
+        document.body.insertBefore(note, document.body.firstChild);
+      });
+      if (document.body) document.body.insertBefore(note, document.body.firstChild);
+    });
   }).catch(function () {});
 </script>
 <script src="https://cdn.tailwindcss.com"></script>

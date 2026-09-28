@@ -126,13 +126,34 @@ Then select **"Local CLI"** as the provider in Scrivio's Settings. Articles (inc
 
 ## Installation
 
+You need **Python 3.12 or 3.13** and **Node.js 20 or newer**. Those are the
+versions this has been installed and tested on. The pinned dependencies do not
+install on Python 3.10, and 3.11 has not been tested.
+
 ```bash
 git clone https://github.com/srinivas-reddy-gouru/scrivio.git
 cd scrivio
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # optional: only needed for API keys and search keys
+
+# 1. Python, in its own environment
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -c constraints.txt
+
+# 2. The interface. Without this step you get an older interface
+#    that does not match the screenshots above.
+(cd web && npm ci && npm run build)
+
+# 3. Check the install. Calls no model, costs nothing.
+python -m api.doctor
 ```
+
+`python -m api.doctor` tells you what is ready and what is not: runtimes, the
+interface build, whether a provider is configured, and the optional extras.
+
+**To use your own resume you need a provider**, which is one of: an Anthropic
+key, an OpenAI key, or a command-line assistant you are already signed in to
+(no key, no API cost; see the next section). Copy `.env.example` to `.env` and
+fill in what you use. Web search and voice are optional and explained in that
+file.
 
 Run the server and open **http://localhost:8899**:
 
@@ -209,10 +230,48 @@ A standalone version of the article pipeline ships as a Claude Code skill that n
 ## Development
 
 ```bash
-python3 -m pytest -q            # the full suite: hermetic, no network, no keys
+pip install -r requirements-dev.txt -c constraints.txt
+python -m pytest tests/ -q
 ```
 
-The suite is deliberately isolated from the host machine: mock LLM clients for every pipeline stage, and fixtures that neutralize the developer's own `.env` preferences, installed CLIs, and saved model overrides (all three have caused order-dependent failures before; see `tests/conftest.py`).
+The suite needs no network, no keys, and no provider. It runs on canned model
+clients, and its fixtures give every test its own output folder, settings
+file, session key, and stage cache, so it cannot read or write your real work
+(see `tests/conftest.py`).
+
+Three groups of tests do more than call functions:
+
+- `tests/browser` drives a real browser through the real interface. It needs
+  `web/dist` built and Chrome or Chromium available; without them it skips.
+- `tests/live` starts a real server, puts work in flight, and kills it, to
+  check what the next server makes of what was left.
+- `tests/test_render_process.py` starts real child processes, to check that
+  a renderer and everything it started are gone after a timeout.
+
+### Upgrading dependencies
+
+`requirements.txt` holds the direct dependencies as ranges. `constraints.txt`
+holds the exact version of everything. To move to newer versions:
+
+```bash
+python3 -m venv /tmp/scrivio-upgrade && source /tmp/scrivio-upgrade/bin/activate
+pip install -r requirements-dev.txt          # no -c: resolve afresh
+python -m pytest tests/ -q                    # must pass before anything is pinned
+pip freeze --exclude-editable | grep -v -E "^(pip|setuptools|wheel)==" > new-pins.txt
+```
+
+Replace the pins in `constraints.txt` with `new-pins.txt`, keeping the comment
+at the top, and commit the two files together. If the suite fails on the new
+versions, do not pin them: fix the code or narrow the range in
+`requirements.txt` first.
+
+### Temporal
+
+`pipeline/orchestrator/` holds a Temporal workflow for article generation. The
+web application does **not** use it: articles started from the interface run
+in the API process. It is an optional, separate way to run the pipeline, its
+dependencies are in `requirements-temporal.txt`, and it is covered by unit
+tests only. Do not read its presence as meaning the API is durable.
 
 ## Measured, not asserted: the article matchup evals
 
@@ -226,16 +285,27 @@ The verdict so far (Aug 2026, 3 topics + 2 post-fix rematches): **the one-prompt
 - **Rebuild the article flow around one research-grounded generation** (search + trust-ranked evidence + a single strong whole-article draft + verify pass + deterministic gates), re-matched against the same baseline until it wins or the studio is honestly re-scoped
 - Live validation of the codex/gemini/qwen CLI specs against real binaries (specs follow their documented flags; drift is a one-line registry fix)
 
-## The Studio (React)
+## Working on the interface
 
-The app is a Vite + React + TypeScript workspace in `web/`, served at **/**. Plain navigation, five pages: **Home** (your recent work and stats), **Articles** (watch the press run assemble the manuscript from live pipeline events), **Interviews** (the rubric sits sealed on the table and flips when your answer closes), **Job prep** (job targets, fit reports, marked report cards), and **Resume** (your resume as paper with findings drawn ON it, [METRIC] numbers filled inline right where they print). `⌘K` jumps anywhere, including straight into your own resumes, articles, and sessions.
+The interface is a Vite + React + TypeScript workspace in `web/`, served at
+**/** by the API once it is built. Five pages: **Home**, **Resume**,
+**Job prep**, **Interviews**, and **Articles**. `⌘K` jumps anywhere.
+
+For development, run the API and the Vite dev server side by side:
 
 ```bash
-cd web && npm install && npm run build   # FastAPI then serves the app at /
-npm run dev                              # or hot-reload on :5180, proxying the API
+python -m api                      # the API, on :8899
+(cd web && npm run dev)            # the interface with hot reload, on :5180
 ```
 
-`/studio` and `/desk` stay as aliases for old bookmarks. The retired single-file UI is parked at `/classic` for one release; without a `web/dist` build on disk the server falls back to serving it at `/`.
+Open **http://localhost:5180**. The dev server forwards every API route to
+the backend, including progress streams, downloads, and audio. To point it at
+an API on another port, set `SCRIVIO_BACKEND=http://localhost:PORT`.
+
+`/studio` and `/desk` are aliases for old bookmarks. An older single-file
+interface is kept at `/classic`. If the current interface has not been built,
+the server serves that older one at `/` and says so, in the terminal and on
+the page.
 
 ---
 

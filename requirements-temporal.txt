@@ -1,0 +1,5 @@
+# Optional. Only for the Temporal worker in pipeline/orchestrator/, which
+# the web application does not use. See "Temporal" in the README for what
+# is and is not supported.
+-r requirements.txt
+temporalio>=1.7,<2
