@@ -2,9 +2,9 @@
  * Report mode derives red/amber marks from the live AtsReport; tailored
  * mode marks changed lines teal (from the change log's where-paths) and
  * renders [METRIC] placeholders as editable chips in place. */
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type { AtsReport, ResumeChange, StructuredResume } from "../types";
-import { changeIndex, displayNote, markForHighlight, METRIC_TOKEN } from "../marks";
+import { changeIndex, displayNote, markForHighlight, metricStarts, METRIC_TOKEN } from "../marks";
 import type { PaperNote } from "../marks";
 
 interface PaperProps {
@@ -156,9 +156,11 @@ function EditableText({ path, text, onEdit, as: Tag = "p", className = "" }: {
 /** Renders text, replacing each [METRIC] with an editable chip. The
  * counter object keeps occurrence numbering aligned with the server's
  * canonical traversal across the whole document render. */
-function MetricText({ text, counter, values, onMetric }: {
+function MetricText({ text, start, values, onMetric }: {
   text: string;
-  counter: { n: number };
+  /** Index of this field's first placeholder, counting every placeholder
+   * on the resume in the order the server fills them. */
+  start: number;
   values?: Map<number, string>;
   onMetric?: (index: number, value: string) => void;
 }) {
@@ -168,7 +170,7 @@ function MetricText({ text, counter, values, onMetric }: {
     <>
       {parts.map((part, i) => {
         if (i === parts.length - 1) return <Fragment key={i}>{part}</Fragment>;
-        const index = counter.n++;
+        const index = start + i;
         const value = values?.get(index) ?? "";
         return (
           <Fragment key={i}>
@@ -188,7 +190,14 @@ function MetricText({ text, counter, values, onMetric }: {
                 if (!v) e.currentTarget.textContent = METRIC_TOKEN;
                 onMetric(index, v);
               }}
+              // The line this chip sits on may itself be a button: an
+              // honesty note pinned to the line makes the whole line
+              // clickable. Without these, a click meant for the chip
+              // opened the note, and a space typed into it did too.
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
+                e.stopPropagation();
                 if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLElement).blur(); }
               }}
             >
@@ -213,8 +222,13 @@ export function Paper({
       aria-label={`Remove ${label}`}
       onClick={() => onRemoveEntry(path, label)}>✕</button>
   );
-  const counter = useRef({ n: 0 });
-  counter.current.n = 0; // occurrence numbering restarts every render
+  // Where each field's placeholders start, worked out from the resume.
+  // This was a counter incremented while rendering, which is only right
+  // if every component renders exactly once, in order. React's
+  // development mode renders twice on purpose, so there the second
+  // placeholder index was used for the first chip, the number went to the
+  // server in the wrong slot, and nothing was filled.
+  const starts = useMemo(() => metricStarts(resume), [resume]);
   const idx = changeIndex(changes);
   const b = resume.basics;
 
@@ -243,8 +257,8 @@ export function Paper({
   const lit = (findingIds: string[], tone: string) =>
     litFinding && findingIds.includes(litFinding) ? ` lit-${tone}` : "";
 
-  const metric = (text: string) => (
-    <MetricText text={text} counter={counter.current} values={metricValues} onMetric={onMetric} />
+  const metric = (text: string, path: string) => (
+    <MetricText text={text} start={starts.get(path) ?? 0} values={metricValues} onMetric={onMetric} />
   );
 
   return (
@@ -278,7 +292,7 @@ export function Paper({
                 className: mode === "tailored" && idx.byField.has("basics.summary") ? "marked mark-teal note-tip" : "",
                 "data-note": mode === "tailored" ? idx.byField.get("basics.summary")?.what : undefined,
               })}>
-                {metric(b.summary)}
+                {metric(b.summary, "basics.summary")}
               </p>
               {slot("basics.summary")}
             </>
@@ -301,7 +315,7 @@ export function Paper({
               {w.summary && (onEdit
                 ? <EditableText path={`work[${wi}].summary`} text={w.summary} onEdit={onEdit} />
                 : <>
-                    <p {...(flag(`work[${wi}].summary`) ?? {})}>{metric(w.summary)}</p>
+                    <p {...(flag(`work[${wi}].summary`) ?? {})}>{metric(w.summary, `work[${wi}].summary`)}</p>
                     {slot(`work[${wi}].summary`)}
                   </>)}
               <ul>
@@ -336,7 +350,7 @@ export function Paper({
                       {underline ? (
                         <UnderlinedText text={h} phrase={underline} />
                       ) : (
-                        metric(h)
+                        metric(h, path)
                       )}
                       {slot(path)}
                     </li>
@@ -364,7 +378,7 @@ export function Paper({
               {p.description && (onEdit
                 ? <EditableText path={`projects[${pi}].description`} text={p.description} onEdit={onEdit} />
                 : <>
-                    <p {...(flag(`projects[${pi}].description`) ?? {})}>{metric(p.description)}</p>
+                    <p {...(flag(`projects[${pi}].description`) ?? {})}>{metric(p.description, `projects[${pi}].description`)}</p>
                     {slot(`projects[${pi}].description`)}
                   </>)}
               <ul>
@@ -373,7 +387,7 @@ export function Paper({
                     path={`projects[${pi}].highlights[${hi}]`} text={h} onEdit={onEdit} />
                 ) : (
                   <li key={hi} {...(flag(`projects[${pi}].highlights[${hi}]`) ?? {})}>
-                    {metric(h)}
+                    {metric(h, `projects[${pi}].highlights[${hi}]`)}
                     {slot(`projects[${pi}].highlights[${hi}]`)}
                   </li>
                 ))}
@@ -453,7 +467,7 @@ export function Paper({
             {section.items.map((item, ii) => onEdit ? (
               <EditableText key={ii} as="li"
                 path={`custom[${ci}].items[${ii}]`} text={item} onEdit={onEdit} />
-            ) : <li key={ii}>{metric(item)}</li>)}
+            ) : <li key={ii}>{metric(item, `custom[${ci}].items[${ii}]`)}</li>)}
           </ul>
           {onAdd && (
             <AddLine label="Add a line"

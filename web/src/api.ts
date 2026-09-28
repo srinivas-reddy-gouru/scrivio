@@ -4,72 +4,94 @@ import type {
   JobProfileDetail, JobProfileSummary, ModeStatus, ResumeDoc, ResumeSummaryItem, SettingsInfo,
 } from "./types";
 
-async function json<T>(res: Response): Promise<T> {
+/** An error from the API, with the status kept so a caller can tell a
+ * refusal (409, 422) from an outage (502, 503) from "sign in" (401). */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+const FALLBACK: Record<number, string> = {
+  401: "This browser is no longer paired with Scrivio. Reload the page to pair it again.",
+  413: "That is too large to send.",
+  429: "Too much is running at once. Wait for something to finish, then try again.",
+  502: "The provider returned an error. Try again in a moment.",
+  503: "No model provider is available. Check Settings.",
+};
+
+/** Every request goes through here, so a failed one is an error and
+ * never data. Several helpers used to call r.json() without looking at
+ * the status: a 404 body was handed to the caller as if it were the
+ * article, and rendered as a blank page.
+ *
+ * It also catches the quiet failure in development. When the dev server
+ * has no route for a path it answers with the app's own index.html and
+ * status 200. That is not JSON, and it is reported as what it is. */
+async function call<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
+  const { json: body, ...rest } = init ?? {};
+  let res: Response;
+  try {
+    res = await fetch(path, body === undefined ? rest : {
+      ...rest,
+      headers: { "Content-Type": "application/json", ...(rest.headers ?? {}) },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError("Could not reach the server. Is it still running?", 0);
+  }
+  const isJson = (res.headers.get("content-type") ?? "").includes("json");
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(body.detail || `HTTP ${res.status}`);
+    const detail = isJson
+      ? await res.json().then((b) => b?.detail).catch(() => undefined)
+      : undefined;
+    throw new ApiError(
+      typeof detail === "string" && detail ? detail
+        : FALLBACK[res.status] ?? `The request failed (HTTP ${res.status}).`,
+      res.status);
+  }
+  if (res.status === 204) return undefined as T;
+  if (!isJson) {
+    throw new ApiError(
+      "The server answered with a web page instead of data. The API is "
+      + "probably not running, or this address is not routed to it.", res.status);
   }
   return res.json() as Promise<T>;
 }
 
+const post = <T>(path: string, json?: unknown) => call<T>(path, { method: "POST", json });
+
+type Turn = { role: string; content: string };
+
 export const api = {
-  listResumes: () => fetch("/resumes").then((r) => json<ResumeSummaryItem[]>(r)),
-  getResume: (id: string) => fetch(`/resumes/${id}`).then((r) => json<ResumeDoc>(r)),
+  listResumes: () => call<ResumeSummaryItem[]>("/resumes"),
+  getResume: (id: string) => call<ResumeDoc>(`/resumes/${id}`),
   createResume: (body: {
     resume_text?: string; resume_file_b64?: string; resume_filename?: string;
     jd_text?: string; jd_url?: string; job_profile_id?: string | null;
-  }) =>
-    fetch("/resumes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }).then((r) => json<ResumeDoc>(r)),
-  tailor: (id: string) =>
-    fetch(`/resumes/${id}/tailor`, { method: "POST" }).then((r) => json<ResumeDoc>(r)),
+  }) => post<ResumeDoc>("/resumes", body),
+  /** For a resume whose analysis failed or was cut short by a restart. */
+  analyzeAgain: (id: string) => post<ResumeDoc>(`/resumes/${id}/analyze`),
+  tailor: (id: string) => post<ResumeDoc>(`/resumes/${id}/tailor`),
   fillMetrics: (id: string, values: string[]) =>
-    fetch(`/resumes/${id}/fill-metrics`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ values }),
-    }).then((r) => json<ResumeDoc>(r)),
+    post<ResumeDoc>(`/resumes/${id}/fill-metrics`, { values }),
   editTailored: (id: string, edits: Array<{ path: string; value: string }>) =>
-    fetch(`/resumes/${id}/edit-tailored`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ edits }),
-    }).then((r) => json<ResumeDoc>(r)),
+    post<ResumeDoc>(`/resumes/${id}/edit-tailored`, { edits }),
   /** Additions go through their own road, not editTailored: the server
    * writes them into the original structure as well, so the next tailor
    * run does not treat the user's own job as an invention. */
   addToResume: (id: string, payload: Record<string, unknown>) =>
-    fetch(`/resumes/${id}/add`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).then((r) => json<ResumeDoc>(r)),
+    post<ResumeDoc>(`/resumes/${id}/add`, payload),
   removeEntry: (id: string, path: string) =>
-    fetch(`/resumes/${id}/remove-entry`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path }),
-    }).then((r) => json<ResumeDoc>(r)),
-  adviseResume: (id: string, question: string, history: Array<{ role: string; content: string }>) =>
-    fetch(`/resumes/${id}/advise`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history }),
-    }).then((r) => json<{ answer: string }>(r)),
-  requestEdit: (id: string, instruction: string, history: Array<{ role: string; content: string }> = []) =>
-    fetch(`/resumes/${id}/request-edit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instruction, history }),
-    }).then((r) => json<ResumeDoc>(r)),
-  undoTailored: (id: string) =>
-    fetch(`/resumes/${id}/undo-tailored`, { method: "POST" }).then((r) => json<ResumeDoc>(r)),
-  deleteResume: (id: string) => fetch(`/resumes/${id}`, { method: "DELETE" }),
-  listJobProfiles: () =>
-    fetch("/job-profiles").then((r) => json<JobProfileSummary[]>(r)),
+    post<ResumeDoc>(`/resumes/${id}/remove-entry`, { path }),
+  adviseResume: (id: string, question: string, history: Turn[]) =>
+    post<{ answer: string }>(`/resumes/${id}/advise`, { question, history }),
+  requestEdit: (id: string, instruction: string, history: Turn[] = []) =>
+    post<ResumeDoc>(`/resumes/${id}/request-edit`, { instruction, history }),
+  undoTailored: (id: string) => post<ResumeDoc>(`/resumes/${id}/undo-tailored`),
+  deleteResume: (id: string) => call<unknown>(`/resumes/${id}`, { method: "DELETE" }),
+  listJobProfiles: () => call<JobProfileSummary[]>("/job-profiles"),
   /** Exports go through fetch, not a bare link. A link cannot show why
    * the server said no: the browser would navigate to a page of JSON. */
   downloadResume: async (
@@ -79,10 +101,21 @@ export const api = {
     const query = new URLSearchParams({ fmt, version: opts.version });
     if (opts.draft) query.set("draft", "true");
     if (opts.expect) query.set("expect", opts.expect);
-    const res = await fetch(`/resumes/${id}/download?${query}`);
+    let res: Response;
+    try {
+      res = await fetch(`/resumes/${id}/download?${query}`);
+    } catch {
+      throw new ApiError("Could not reach the server. Is it still running?", 0);
+    }
     if (!res.ok) {
-      const body = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(body.detail || `HTTP ${res.status}`);
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(
+        body.detail || FALLBACK[res.status] || `The download failed (HTTP ${res.status}).`,
+        res.status);
+    }
+    if (!res.headers.get("x-scrivio-export")) {
+      throw new ApiError(
+        "The server answered with something that is not a resume export.", res.status);
     }
     const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1]
       ?? `resume.${fmt}`;
@@ -92,29 +125,20 @@ export const api = {
     document.body.appendChild(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
-  listArticles: () => fetch("/articles").then((r) => json<ArticleSummary[]>(r)),
-  listInterviews: () =>
-    fetch("/interviews").then((r) => json<InterviewSessionItem[]>(r)),
-  getInterview: (id: string) =>
-    fetch(`/interviews/${id}`).then((r) => json<InterviewDetail>(r)),
-  interviewStats: () =>
-    fetch("/interviews/stats").then((r) => json<InterviewStats>(r)),
-  settings: () => fetch("/settings").then((r) => json<SettingsInfo>(r)),
-  mode: () => fetch("/mode").then((r) => json<ModeStatus>(r)),
-  getJobProfile: (id: string) =>
-    fetch(`/job-profiles/${id}`).then((r) => json<JobProfileDetail>(r)),
+  listArticles: () => call<ArticleSummary[]>("/articles"),
+  listInterviews: () => call<InterviewSessionItem[]>("/interviews"),
+  getInterview: (id: string) => call<InterviewDetail>(`/interviews/${id}`),
+  interviewStats: () => call<InterviewStats>("/interviews/stats"),
+  settings: () => call<SettingsInfo>("/settings"),
+  mode: () => call<ModeStatus>("/mode"),
+  getJobProfile: (id: string) => call<JobProfileDetail>(`/job-profiles/${id}`),
   createJobProfile: (body: {
     role_title: string; company?: string; location?: string; seniority?: string;
     extra_notes?: string; job_description?: string; jd_url?: string;
     resume_text?: string; resume_file_b64?: string; resume_filename?: string;
-  }) =>
-    fetch("/job-profiles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }).then((r) => json<JobProfileDetail>(r)),
+  }) => post<JobProfileDetail>("/job-profiles", body),
   deleteJobProfile: (id: string) =>
-    fetch(`/job-profiles/${id}`, { method: "DELETE" }),
+    call<unknown>(`/job-profiles/${id}`, { method: "DELETE" }),
 };
 
 /** Poll the doc every 2.5s while `active`; hand every fresh doc to the
@@ -176,43 +200,31 @@ export const interviewApi = {
     topic?: string; article_id?: string; level?: string; num_questions?: number;
     mode?: string; job_profile_id?: string; duration_minutes?: number;
     language?: string;
-  }) =>
-    fetch("/interviews", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }).then((r) => r.ok ? r.json() as Promise<InterviewSessionPublic>
-      : r.json().then((b) => Promise.reject(new Error(b.detail || `HTTP ${r.status}`)))),
-  get: (id: string) =>
-    fetch(`/interviews/${id}`).then((r) => r.json() as Promise<InterviewSessionPublic>),
+  }) => post<InterviewSessionPublic>("/interviews", body),
+  get: (id: string) => call<InterviewSessionPublic>(`/interviews/${id}`),
   answer: (id: string, body: {
     question_id: string; answer?: string; skip?: boolean; predicted_score?: number | null;
-  }) =>
-    fetch(`/interviews/${id}/answers`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }).then((r) => r.ok ? r.json() as Promise<InterviewAnswerResponse>
-      : r.json().then((b) => Promise.reject(new Error(b.detail || `HTTP ${r.status}`)))),
+  }) => post<InterviewAnswerResponse>(`/interviews/${id}/answers`, body),
 };
 
+export interface JobStatus {
+  status: "pending" | "complete" | "error" | "cancelled" | "interrupted";
+  error?: string | null;
+}
+
 export const articleApi = {
-  generate: (body: Record<string, unknown>) =>
-    fetch("/generate", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }).then((r) => r.ok ? r.json() as Promise<GenerateResponse>
-      : r.json().then((b) => Promise.reject(new Error(b.detail || `HTTP ${r.status}`)))),
+  generate: (body: Record<string, unknown>) => post<GenerateResponse>("/generate", body),
   detail: (id: string, level?: string) =>
-    fetch(`/articles/${id}${level ? `?level=${level}` : ""}`)
-      .then((r) => r.json() as Promise<ArticleDetail>),
+    call<ArticleDetail>(`/articles/${id}${level ? `?level=${level}` : ""}`),
   streamUrl: (jobId: string) => `/jobs/${jobId}/stream`,
+  /** Where a job stands, asked directly. The stream is the normal way to
+   * follow one; this is how to find out what happened when it goes quiet. */
+  status: (jobId: string) => call<JobStatus>(`/jobs/${jobId}`),
+  cancel: (jobId: string) => call<unknown>(`/jobs/${jobId}`, { method: "DELETE" }),
 };
 
 export const settingsApi = {
-  full: () => fetch("/settings").then((r) => r.json() as Promise<SettingsFull>),
+  full: () => call<SettingsFull>("/settings"),
   patch: (updates: Record<string, string>) =>
-    fetch("/settings", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ updates }),
-    }).then((r) => r.ok ? r.json()
-      : r.json().then((b) => Promise.reject(new Error(b.detail || `HTTP ${r.status}`)))),
+    call<unknown>("/settings", { method: "PATCH", json: { updates } }),
 };

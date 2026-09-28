@@ -107,21 +107,25 @@ export function Shell({ room, go, children }: {
   }, []);
 
   return (
+    <>
+    {/* Above the app, not inside it: .studio lays its children out in a
+        row, so a banner in there becomes a third column and squeezes the
+        page out of view. */}
+    {mode?.demo && (
+      <div className="mode-banner demo" role="status">
+        <b>Demo mode.</b> Everything here is a canned example. Nothing is sent to a model, and
+        nothing shown is an analysis of your resume, your answers, or your topic.
+      </div>
+    )}
+    {mode && !mode.demo && !mode.ready && (
+      <div className="mode-banner blocked" role="alert">
+        <b>Not ready to run.</b> {mode.problem}{" "}
+        <button className="link-btn" onClick={() => go("office")}>Open Settings</button>
+      </div>
+    )}
     <div className="studio">
       <a className="skip-link" href="#studio-main">Skip to content</a>
       <Announcer />
-      {mode?.demo && (
-        <div className="mode-banner demo" role="status">
-          <b>Demo mode.</b> Everything here is a canned example. Nothing is sent to a model, and
-          nothing shown is an analysis of your resume, your answers, or your topic.
-        </div>
-      )}
-      {mode && !mode.demo && !mode.ready && (
-        <div className="mode-banner blocked" role="alert">
-          <b>Not ready to run.</b> {mode.problem}{" "}
-          <button className="link-btn" onClick={() => go("office")}>Open Settings</button>
-        </div>
-      )}
       <nav className="side" aria-label="Studio navigation">
         <div className="brand-block">
           <div className="brand-name">
@@ -154,6 +158,7 @@ export function Shell({ room, go, children }: {
       <main className="room-main" id="studio-main" tabIndex={-1}>{children}</main>
       {palOpen && <Palette go={(r) => { go(r); setPalOpen(false); }} close={() => setPalOpen(false)} />}
     </div>
+    </>
   );
 }
 

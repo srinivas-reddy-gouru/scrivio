@@ -14,7 +14,20 @@ const STATIONS = ["Target", "Report", "Tailor", "Send"] as const;
 /** The Desk room: the four-station resume flow (formerly the whole app). */
 function DeskRoom() {
   const [station, setStation] = useState(1);
-  const [doc, setDoc] = useState<ResumeDoc | null>(null);
+  const [doc, setDocState] = useState<ResumeDoc | null>(null);
+
+  // Responses do not arrive in the order they were asked for. A status
+  // poll sent before a save can land after it, carrying the resume as it
+  // was, and used to replace the saved one on screen: a number just typed
+  // turned back into a placeholder. The server stamps every save, so an
+  // older copy of the same resume is recognisable and is dropped.
+  const setDoc = (next: ResumeDoc | null) => setDocState((current) => {
+    if (!next || !current || next.resume_id !== current.resume_id) return next;
+    if (next.updated_at && current.updated_at && next.updated_at < current.updated_at) {
+      return current;
+    }
+    return next;
+  });
 
   const openDoc = (d: ResumeDoc) => {
     setDoc(d);

@@ -198,3 +198,17 @@ def test_the_policy_holds_even_if_sanitising_were_bypassed(reader):
     reader.wait_for_timeout(400)
 
     assert reader.evaluate(f"{PWNED} ?? null") is None
+
+
+def test_the_page_is_usable_when_a_mode_banner_is_showing(server, page):
+    """This server has no provider, so the "not ready" banner is up. The
+    banner once sat inside the app's layout row and pushed the page out of
+    view: everything was in the DOM and nothing could be seen."""
+    page.goto(f"{server.base}/#/newsroom")
+    page.wait_for_selector(".mode-banner")
+
+    box = page.locator("main#studio-main").bounding_box()
+    banner = page.locator(".mode-banner").bounding_box()
+
+    assert box["width"] > 400 and box["height"] > 200
+    assert banner["width"] > box["width"], "the banner spans the app, above it"

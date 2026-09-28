@@ -259,7 +259,16 @@ function PressRun({ jobId, topic, onDone, onFail }: {
     () => Object.fromEntries(STAGES.map(([id]) => [id, { status: "idle", note: "" }])));
   const [elapsed, setElapsed] = useState(0);
   const [modelsNote, setModelsNote] = useState("");
+  const [notice, setNotice] = useState("");
+  const [stopping, setStopping] = useState(false);
   const doneRef = useRef(false);
+
+  // A run is minutes of paid model calls. Leaving the page does not stop
+  // it, so there has to be a way to.
+  const stop = () => {
+    setStopping(true);
+    articleApi.cancel(jobId).catch(() => setStopping(false));
+  };
 
   useEffect(() => {
     const startedAt = Date.now();
@@ -269,8 +278,12 @@ function PressRun({ jobId, topic, onDone, onFail }: {
       let ev: ProgressEvent;
       try { ev = JSON.parse(msg.data); } catch { return; }
       if (ev.type === "pipeline_info") {
-        const models = ev.data?.models as Record<string, string> | undefined;
-        if (models) setModelsNote([...new Set(Object.values(models))].join(" · "));
+        // The server sends `stages`. This read `models`, which was never
+        // there, so the summary of what is running has never been shown.
+        const stages = ev.data?.stages as Record<string, string> | undefined;
+        if (stages) setModelsNote([...new Set(Object.values(stages))].join(" · "));
+        const diagrams = String(ev.data?.diagrams ?? "");
+        if (diagrams.startsWith("left out")) setNotice(`Diagrams will be ${diagrams}`);
         return;
       }
       if (ev.type === "stage_started" || ev.type === "stage_completed") {
@@ -294,7 +307,27 @@ function PressRun({ jobId, topic, onDone, onFail }: {
         onFail(ev.message || "The press stopped mid-run.");
       }
     };
-    es.onerror = () => { /* EventSource auto-reconnects; terminal states close above */ };
+    // Events the server no longer holds. Rare, and worth saying: what is
+    // on screen may be missing a step.
+    es.addEventListener("gap", () =>
+      setNotice("Some progress updates were not kept by the server. The run itself is unaffected."));
+    // The browser reconnects by itself and resumes after the last event it
+    // received, so a dropped connection loses nothing. What it cannot do is
+    // notice that there is nothing left to reconnect TO. So each error also
+    // asks where the job stands.
+    es.onerror = () => {
+      if (doneRef.current) return;
+      articleApi.status(jobId).then((job) => {
+        if (doneRef.current || job.status === "pending" || job.status === "complete") return;
+        doneRef.current = true; es.close();
+        onFail(job.error || "The run stopped before it finished.");
+      }).catch((err: { status?: number; message?: string }) => {
+        if (doneRef.current || err.status !== 404) return;   // anything else: keep trying
+        doneRef.current = true; es.close();
+        onFail("This run is no longer on record. It may have been started a long time ago. "
+          + "Check the library for the article, or start it again.");
+      });
+    };
     return () => { clearInterval(clock); es.close(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
@@ -337,6 +370,11 @@ function PressRun({ jobId, topic, onDone, onFail }: {
           {liveIdx === -1 && doneCount === STAGES.length && (
             <p className="classic-note">Binding the paper…</p>
           )}
+          {notice && <p className="classic-note" role="status">{notice}</p>}
+          <button className="btn btn-quiet" style={{ marginTop: "0.9rem" }}
+            onClick={stop} disabled={stopping}>
+            {stopping ? "Stopping…" : "Stop this run"}
+          </button>
         </aside>
       </div>
     </div>

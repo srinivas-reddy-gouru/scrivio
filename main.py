@@ -1728,7 +1728,10 @@ class MockAnthropicMessages:
         non-empty so every UI rendering path is exercised in mock mode."""
         base = {
             "strengths": ["You correctly identified the core concept."],
-            "gaps": ["The failure-mode discussion is missing."],
+            # The label goes where the interface shows it. It was only in
+            # `suggestions`, which the feedback card does not display.
+            "gaps": ([DEMO_LABEL] if demo_mode() else []) + [
+                "The failure-mode discussion is missing."],
             "misconceptions": [],
             "suggestions": ([DEMO_LABEL] if demo_mode() else []) + [
                 "Add a concrete example from a production system."],

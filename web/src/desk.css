@@ -1374,7 +1374,7 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 /* Mode banners: demo and not-ready are states the whole app is in, so they
    sit above everything and do not scroll away. */
 .mode-banner {
-  position: sticky; top: 0; z-index: 60; grid-column: 1 / -1;
+  position: sticky; top: 0; z-index: 60;
   padding: 0.55rem 1.2rem; font-size: 0.84rem; line-height: 1.45; text-align: center;
 }
 .mode-banner.demo { background: #E5B04C; color: #2A1E05; }
