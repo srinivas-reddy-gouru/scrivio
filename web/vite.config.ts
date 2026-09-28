@@ -13,7 +13,7 @@ import react from "@vitejs/plugin-react";
 const BACKEND = process.env.SCRIVIO_BACKEND ?? "http://localhost:8899";
 
 export const API_ROUTES = [
-  "/auth", "/health", "/mode", "/settings", "/data",
+  "/auth", "/health", "/ready", "/diagnostics", "/mode", "/settings", "/data",
   "/generate", "/clarify", "/jobs", "/articles",
   "/interviews", "/job-profiles", "/resumes",
   "/transcribe", "/speak",

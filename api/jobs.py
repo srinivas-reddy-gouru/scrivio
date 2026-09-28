@@ -108,6 +108,7 @@ class Job:
         self.created_at = datetime.now(timezone.utc)
         self.finished_at: float | None = None
         self.last_seq = 0
+        self.last_event_at: float | None = time.monotonic()
         self._events: list[tuple[int, ProgressEvent]] = []
         self._changed = asyncio.Condition()
         self._on_disk = False          # loaded from a record, not running here
@@ -147,6 +148,7 @@ class Job:
         if self.last_seq >= MAX_EVENTS:
             return                           # a runaway job cannot fill the disk
         self.last_seq += 1
+        self.last_event_at = time.monotonic()
         self._events.append((self.last_seq, event))
         del self._events[:-MAX_EVENTS_IN_MEMORY]
         try:

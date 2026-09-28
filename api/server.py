@@ -8,6 +8,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from pathlib import Path
@@ -38,7 +39,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from uuid import uuid4
 
-from api import boundary, data_controls, limits, settings_store
+from api import boundary, data_controls, limits, observability, settings_store
 from pipeline.providers.claude_cli_adapter import cli_status
 from pipeline.runtime_mode import (
     DEMO_LABEL, NO_PROVIDER, ProviderUnavailable, demo_mode,
@@ -157,6 +158,7 @@ if _extra_origins:
         allow_headers=["Content-Type"],
     )
 app.add_middleware(limits.BodyLimit)
+app.add_middleware(observability.RequestId)
 # Added last, so it is outermost: nothing reaches a route, or CORS, without
 # passing the host, origin, and session checks first. A body is not read,
 # let alone measured, for a caller who is not allowed in.
@@ -196,8 +198,30 @@ def _recover_after_restart() -> None:
                         found["interrupted"])
 
 
+async def _leave_things_recoverable() -> None:
+    """On a clean shutdown, say now what the next start would otherwise
+    have to work out: work in flight is interrupted. Anything reading the
+    files in between sees the truth rather than "running"."""
+    for job in list(jobs._jobs.values()):
+        if job.state == jobs.RUNNING:
+            await job.finish(
+                jobs.INTERRUPTED,
+                ProgressEvent(type="error", stage="interrupted",
+                              message=jobs.INTERRUPTED_MESSAGE),
+                error=jobs.INTERRUPTED_MESSAGE)
+            if job.task is not None and not job.task.done():
+                job.task.cancel()
+    for resume_id in list(_RESUME_WORK):
+        _RESUME_WORK.discard(resume_id)
+        try:
+            _load_resume_doc(resume_id)          # recovers as it loads
+        except HTTPException:
+            continue
+
+
 jobs.configure(lambda: OUTPUT_ROOT / "_jobs")
 app.router.on_startup.append(_recover_after_restart)
+app.router.on_shutdown.append(_leave_things_recoverable)
 
 
 @app.exception_handler(ProviderUnavailable)
@@ -491,7 +515,88 @@ class JobStatusResponse(BaseModel):
 
 @app.get("/health")
 async def health() -> dict:
+    """Liveness: the process is up and answering. Nothing else. It stays
+    true when no provider is configured, because restarting the process
+    would not fix that."""
     return {"ok": True}
+
+
+def _readiness() -> dict[str, str]:
+    """Each thing real work depends on. No provider is called."""
+    checks: dict[str, str] = {}
+    try:
+        OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+        probe = OUTPUT_ROOT / f".ready-{os.getpid()}"
+        probe.write_text("ok")
+        probe.unlink()
+        checks["storage"] = "ok"
+    except OSError:
+        checks["storage"] = "failing"
+    if demo_mode():
+        checks["provider"] = "demo"
+    else:
+        writing, checking = _resolve_provider("auto"), verification_provider(None)
+        if "none" in (writing, checking):
+            checks["provider"] = "missing"
+        elif "claude-cli" in (writing, checking) and \
+                cli_status()["state"] == "installed, not signed in":
+            checks["provider"] = "signed out"
+        else:
+            checks["provider"] = "ok"
+    checks["interface"] = "ok" if boundary.modern_interface_at_root else "not built"
+    checks["capacity"] = (
+        "full" if ARTICLE_GATE.running >= ARTICLE_GATE.limit else "ok")
+    return checks
+
+
+@app.get("/ready")
+async def ready() -> Response:
+    """Readiness: whether real work can be done right now. 200 when it
+    can and 503 when it cannot, with the name of each check and nothing
+    about how the install is configured."""
+    checks = _readiness()
+    blocking = [k for k, v in checks.items()
+                if k in ("storage", "provider") and v not in ("ok", "demo")]
+    return Response(
+        content=json.dumps({"ready": not blocking, "checks": checks}),
+        status_code=200 if not blocking else 503,
+        media_type="application/json", headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/diagnostics")
+async def diagnostics() -> dict:
+    """What is running, what has gone quiet, and how long stages took.
+    Behind the session: it names topics, which are the user's."""
+    now = time.monotonic()
+    running, stalled, recent = [], [], []
+    for job in list(jobs._jobs.values()):
+        last = job.last_event_at
+        entry = {"job": job.job_id[:8], "state": job.state, "events": job.last_seq,
+                 "quiet_for": round(now - last, 1) if last else None}
+        if job.state == jobs.RUNNING:
+            running.append(entry)
+            if last and now - last > observability.STALL_SECONDS:
+                stalled.append(entry)
+        else:
+            recent.append({**entry, "stages": observability.stage_timings(
+                job.events_after(0))})
+    return {
+        "readiness": _readiness(),
+        "articles": {"running": len(running), "limit": ARTICLE_GATE.limit,
+                     "stalled": stalled, "in_flight": running,
+                     "recently_finished": recent[-10:]},
+        "resumes": {"in_progress": len(_RESUME_WORK), "limit": RESUME_GATE.limit,
+                    "running_now": RESUME_GATE.running},
+        "stall_threshold_seconds": observability.STALL_SECONDS,
+        "usage": {
+            "measured": False,
+            "note": "Token counts and cost are not recorded. A subscription "
+                    "command-line assistant does not report them, and an "
+                    "estimate presented as a measurement would be worse than "
+                    "none.",
+        },
+    }
 
 
 def _is_steered(request: ArticleRequest) -> bool:
@@ -656,6 +761,7 @@ async def clarify(request: ArticleRequest) -> ClarificationQuestions:
 async def _run_job(
     job: Job, request: ArticleRequest, callback
 ) -> None:
+    observability.job_id.set(job.job_id[:8])
     try:
         result = await generate_article(request, progress_callback=callback)
         if job.closed:
@@ -684,11 +790,15 @@ async def _run_job(
         # the intended outcome.
         logging.info("Job %s cancelled by user", job.job_id)
     except Exception as exc:
-        logging.exception("Job %s failed", job.job_id)
+        # The detail goes to the log, under the job's id. The user gets
+        # what kind of failure it was and that id to quote.
+        logging.error("Job %s failed: %s", job.job_id[:8], type(exc).__name__,
+                      exc_info=not isinstance(exc, ProviderUnavailable))
+        message = observability.public_error(exc, job.job_id[:8])
         await job.finish(
             jobs.FAILED,
-            ProgressEvent(type="error", stage="error", message=str(exc)),
-            error=str(exc),
+            ProgressEvent(type="error", stage="error", message=message),
+            error=message,
         )
 
 

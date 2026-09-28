@@ -126,7 +126,11 @@ def test_job_status_returns_error_when_generate_raises(monkeypatch) -> None:
 
     status = client.get(f"/jobs/{job_id}").json()
     assert status["status"] == "error"
-    assert "kaboom" in status["error"]
+    # The exception's own text is for whoever is debugging and stays in
+    # the log. The user is told what kind of failure it was and given a
+    # reference that finds it there.
+    assert "kaboom" not in status["error"]
+    assert "RuntimeError" in status["error"] and job_id[:8] in status["error"]
 
 
 # ── Sprint 2: clarification-first flow ─────────────────────────────────

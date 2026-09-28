@@ -47,7 +47,11 @@ def main() -> int:
         )
     shown = "localhost" if _is_loopback(host) else host
     print(f"\n  Scrivio: http://{shown}:{port}", file=sys.stderr, flush=True)
-    uvicorn.run("api.server:app", host=host, port=port)
+    from api import observability
+    observability.configure_logging()
+    # log_config=None: keep the format set above, which carries the
+    # request and job ids, instead of uvicorn's own.
+    uvicorn.run("api.server:app", host=host, port=port, log_config=None)
     return 0
 
 

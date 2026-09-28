@@ -48,7 +48,7 @@ _LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 # Reachable without a session. Everything else that is a route needs one;
 # the default is closed, so a route added tomorrow is protected tomorrow.
 PUBLIC_PATHS = frozenset({
-    "/health", "/auth/status", "/auth/pair", "/auth/logout",
+    "/health", "/ready", "/auth/status", "/auth/pair", "/auth/logout",
 })
 
 # The interface renders text a model wrote after reading the open web.
