@@ -1,6 +1,5 @@
 import asyncio
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -12,62 +11,99 @@ from render.mermaid_worker import (
 )
 
 
+def _stub_renderer(monkeypatch, outcome):
+    """Stand in for the renderer process. `outcome(argv)` returns
+    (return code, stdout, stderr) and may write the output file."""
+    seen = []
+
+    async def fake_run(argv, *, timeout, cwd=None, max_output=0):
+        seen.append(list(argv))
+        return outcome(argv)
+
+    monkeypatch.setattr(mermaid_worker, "run_bounded", fake_run)
+    monkeypatch.setattr(mermaid_worker, "diagram_renderer", lambda: ["mmdc"])
+    return seen
+
+
 def test_render_mermaid_returns_path_when_svg_created(monkeypatch, tmp_path) -> None:
-    asset_id = "00000000-0000-0000-0000-000000000001"
-    output_dir = tmp_path / "assets"
-    expected_output = output_dir / f"{asset_id}.svg"
-    input_path = Path(f"/tmp/mmdc_{asset_id}.mmd")
-
-    def fake_run(command, capture_output, timeout):
-        Path(command[command.index("-o") + 1]).write_text(
-            "<svg></svg>", encoding="utf-8"
-        )
-        return SimpleNamespace(returncode=0, stderr=b"")
-
-    monkeypatch.setattr(mermaid_worker.uuid, "uuid4", lambda: asset_id)
-    monkeypatch.setattr(mermaid_worker.subprocess, "run", fake_run)
+    def outcome(argv):
+        Path(argv[argv.index("-o") + 1]).write_text("<svg></svg>", encoding="utf-8")
+        return 0, b"", b""
+    seen = _stub_renderer(monkeypatch, outcome)
 
     output_path = asyncio.run(
-        render_mermaid("flowchart LR\n  A --> B", output_dir=str(output_dir))
-    )
+        render_mermaid("flowchart LR\n  A --> B", output_dir=str(tmp_path / "assets")))
 
-    assert output_path == str(expected_output)
-    assert expected_output.read_text(encoding="utf-8") == "<svg></svg>"
-    assert not input_path.exists()
+    assert Path(output_path).read_text(encoding="utf-8") == "<svg></svg>"
+    assert Path(output_path).parent == tmp_path / "assets"
+    assert not Path(seen[0][seen[0].index("-i") + 1]).exists(), "the input is cleaned up"
 
 
 def test_render_mermaid_raises_render_error_on_subprocess_failure(
     monkeypatch, tmp_path
 ) -> None:
-    asset_id = "00000000-0000-0000-0000-000000000002"
-
-    def fake_run(command, capture_output, timeout):
-        return SimpleNamespace(returncode=1, stderr=b"parse error")
-
-    monkeypatch.setattr(mermaid_worker.uuid, "uuid4", lambda: asset_id)
-    monkeypatch.setattr(mermaid_worker.subprocess, "run", fake_run)
+    _stub_renderer(monkeypatch, lambda argv: (1, b"", b"parse error"))
 
     with pytest.raises(RenderError, match="parse error"):
-        asyncio.run(
-            render_mermaid("flowchart LR\n  A -->", output_dir=str(tmp_path))
-        )
+        asyncio.run(render_mermaid("flowchart LR\n  A -->", output_dir=str(tmp_path)))
 
 
 def test_render_mermaid_cleans_temp_file_on_error(monkeypatch, tmp_path) -> None:
-    asset_id = "00000000-0000-0000-0000-000000000003"
-    input_path = Path(f"/tmp/mmdc_{asset_id}.mmd")
+    inputs = []
 
-    def fake_run(command, capture_output, timeout):
-        assert input_path.exists()
-        return SimpleNamespace(returncode=1, stderr=b"boom")
-
-    monkeypatch.setattr(mermaid_worker.uuid, "uuid4", lambda: asset_id)
-    monkeypatch.setattr(mermaid_worker.subprocess, "run", fake_run)
+    def outcome(argv):
+        path = Path(argv[argv.index("-i") + 1])
+        assert path.exists()
+        inputs.append(path)
+        return 1, b"", b"boom"
+    _stub_renderer(monkeypatch, outcome)
 
     with pytest.raises(RenderError):
         asyncio.run(render_mermaid("flowchart TD\n  A --> B", output_dir=str(tmp_path)))
 
-    assert not input_path.exists()
+    assert inputs and not inputs[0].exists()
+    assert not inputs[0].parent.exists(), "the working directory goes too"
+
+
+def test_a_missing_renderer_is_a_clear_error_and_nothing_is_downloaded(
+    monkeypatch, tmp_path
+) -> None:
+    ran = []
+
+    async def fake_run(argv, **kwargs):
+        ran.append(argv)
+        return 0, b"", b""
+    monkeypatch.setattr(mermaid_worker, "run_bounded", fake_run)
+    monkeypatch.setattr(mermaid_worker, "diagram_renderer", lambda: None)
+
+    with pytest.raises(RenderError, match="No diagram renderer is installed"):
+        asyncio.run(render_mermaid("flowchart TD\n  A --> B", output_dir=str(tmp_path)))
+
+    assert ran == []
+
+
+def test_the_renderer_is_never_fetched_at_job_time(monkeypatch, tmp_path) -> None:
+    """`npx -y` downloads and runs whatever is newest. Whatever command is
+    chosen here must be one that runs only what is already installed."""
+    monkeypatch.delenv("MERMAID_CLI", raising=False)
+    monkeypatch.setattr(mermaid_worker, "_REPO", tmp_path)          # no local install
+    monkeypatch.setattr(mermaid_worker.shutil, "which",
+                        lambda name: "/usr/bin/npx" if name == "npx" else None)
+
+    command = mermaid_worker.diagram_renderer()
+
+    assert "-y" not in command and "--yes" not in command
+    assert "--no-install" in command
+
+
+def test_a_pinned_local_renderer_is_preferred(monkeypatch, tmp_path) -> None:
+    local = tmp_path / ".scrivio" / "tools" / "node_modules" / ".bin"
+    local.mkdir(parents=True)
+    (local / "mmdc").write_text("#!/bin/sh\n")
+    monkeypatch.delenv("MERMAID_CLI", raising=False)
+    monkeypatch.setattr(mermaid_worker, "_REPO", tmp_path)
+
+    assert mermaid_worker.diagram_renderer() == [str(local / "mmdc")]
 
 
 # ── sanitize_mermaid_spec: quote labels containing parens ──────────────

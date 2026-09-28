@@ -1129,9 +1129,18 @@ def _pipeline_models(request: ArticleRequest) -> dict:
         "anthropic": get_model("relevance", "balanced"),
         "none": "unavailable",
     }[checker]
+    from render.mermaid_worker import diagram_renderer
     return {
         "provider": "demo" if demo else provider,
         "verification_provider": checker,
+        # Said before the run starts, so a missing diagram at the end is
+        # something the user was told about rather than something that
+        # silently did not happen.
+        "diagrams": (
+            "checked by rendering" if diagram_renderer() else
+            "left out: no diagram renderer is installed. Run "
+            "`python scripts/setup_renderers.py` once to install one."),
+        "recordings": "disabled in this release",
         "preset": request.model_preset,
         "stages": {
             "brief": writing_model("brief"),

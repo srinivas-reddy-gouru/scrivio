@@ -1,13 +1,15 @@
 import logging
 import os
 import re
-import subprocess
+import shutil
+import tempfile
 import uuid
 from pathlib import Path
 
 from pipeline.model_config import get_model
 from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import RenderAsset, VisualIntent
+from render.process import ProcessFailed, run_bounded
 
 
 # One prompt per renderer role: Mermaid specs and VHS tapes are different
@@ -333,44 +335,78 @@ async def review_diagram(
     return revised, True, errors
 
 
+RENDER_SECONDS = 30.0
+_REPO = Path(__file__).resolve().parent.parent
+
+
+def diagram_renderer() -> list[str] | None:
+    """The command that renders a diagram, or None when there is not one.
+
+    This used to be `npx -y @mermaid-js/mermaid-cli`: whatever version
+    was newest, downloaded and executed in the middle of a user's job.
+    Now it is a renderer that is ALREADY installed, looked for in order:
+
+      1. MERMAID_CLI, a path the operator set
+      2. .scrivio/tools, where scripts/setup_renderers.py installs a
+         pinned version
+      3. web/node_modules/.bin/mmdc, if it was installed with the interface
+      4. mmdc on the PATH
+      5. npx --no-install, which runs a copy npm already holds and
+         downloads nothing. Last because it is the least pinned.
+    """
+    configured = os.environ.get("MERMAID_CLI", "").strip()
+    if configured:
+        return [configured] if Path(configured).is_file() else None
+    for local in (
+        _REPO / ".scrivio" / "tools" / "node_modules" / ".bin" / "mmdc",
+        _REPO / "web" / "node_modules" / ".bin" / "mmdc",
+    ):
+        if local.is_file():
+            return [str(local)]
+    found = shutil.which("mmdc")
+    if found:
+        return [found]
+    npx = shutil.which("npx")
+    if npx:
+        return [npx, "--no-install", "@mermaid-js/mermaid-cli"]
+    return None
+
+
 async def render_mermaid(
     spec: str, output_dir: str = "/tmp/article_assets"
 ) -> str:
-    asset_id = str(uuid.uuid4())
-    input_path = f"/tmp/mmdc_{asset_id}.mmd"
-    output_path = f"{output_dir}/{asset_id}.svg"
+    command = diagram_renderer()
+    if command is None:
+        raise RenderError(
+            "No diagram renderer is installed, so this diagram could not be "
+            "checked and was left out. Run `python scripts/setup_renderers.py` "
+            "once, or set MERMAID_CLI to the path of mmdc.")
+    os.makedirs(output_dir, exist_ok=True)
+    workdir = tempfile.mkdtemp(prefix="scrivio-mermaid-")
+    input_path = os.path.join(workdir, "diagram.mmd")
+    output_path = os.path.join(output_dir, f"{uuid.uuid4()}.svg")
 
     try:
-        os.makedirs(output_dir, exist_ok=True)
         Path(input_path).write_text(spec, encoding="utf-8")
-        result = subprocess.run(
-            [
-                "npx",
-                "-y",
-                "@mermaid-js/mermaid-cli",
-                "-i",
-                input_path,
-                "-o",
-                output_path,
-                "--quiet",
-            ],
-            capture_output=True,
-            timeout=30,
-        )
+        try:
+            code, _out, err = await run_bounded(
+                [*command, "-i", input_path, "-o", output_path, "--quiet"],
+                timeout=RENDER_SECONDS, cwd=workdir,
+            )
+        except ProcessFailed as exc:
+            raise RenderError(str(exc)) from exc
 
-        if result.returncode != 0:
-            raise RenderError(result.stderr.decode("utf-8", errors="replace"))
-
-        output = Path(output_path).read_text(encoding="utf-8")
+        if code != 0:
+            raise RenderError(err.decode("utf-8", errors="replace")[:2000])
+        try:
+            output = Path(output_path).read_text(encoding="utf-8")
+        except OSError:
+            raise RenderError("The diagram renderer produced no file")
         if "<svg" not in output:
             raise RenderError("Mermaid output did not contain an SVG")
-
         return output_path
     finally:
-        try:
-            os.remove(input_path)
-        except FileNotFoundError:
-            pass
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 async def process_visual_intent(

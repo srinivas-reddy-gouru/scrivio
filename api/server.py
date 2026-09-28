@@ -461,6 +461,11 @@ def _require_providers(request: ArticleRequest) -> None:
 
 @app.post("/generate", response_model=GenerateResponse)
 async def generate(request: ArticleRequest) -> GenerateResponse:
+    if request.include_gifs:
+        from render.vhs_worker import DISABLED_REASON
+        raise HTTPException(
+            status_code=422,
+            detail=f"{DISABLED_REASON} Send the request again without include_gifs.")
     _require_providers(request)
     # Step 1: if the topic is broad and the user hasn't given us steering,
     # ask clarifying questions instead of starting a job.
