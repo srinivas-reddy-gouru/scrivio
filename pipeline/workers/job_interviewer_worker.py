@@ -278,7 +278,9 @@ async def generate_job_scorecard(
         hire_signal, debrief_text = debrief.hire_signal, debrief.debrief
         coverage = debrief.requirement_coverage
     except Exception:
-        logging.exception("Job debrief failed; scorecard continues without it")
+        # No traceback: a validation error quotes the text it rejected,
+        # which here is drawn from the candidate's own answers.
+        logging.error("Job debrief failed; scorecard continues without it")
 
     study_plan = await build_study_plan(competency_scores, profile.role_title)
 

@@ -201,6 +201,58 @@ Presets (Fast / Balanced / Best) decide which **tier** each pipeline stage uses.
 
 ---
 
+## Your data
+
+**Stored on your machine. Processed by your provider.** Those are two
+different things and Scrivio does not blur them. Your resumes, job targets,
+interview answers, and articles are files in `./output` on your own disk.
+To analyse them, their text is sent to whichever model provider you
+configured. Running Scrivio locally does not make the model local, unless the
+provider you chose is one.
+
+| What | Where it goes |
+| --- | --- |
+| Resume text and job descriptions | To your provider, each time a resume is analysed, tailored, edited by instruction, or discussed with the coach |
+| Interview answers | To your provider, when they are graded |
+| Spoken answers and the interviewer's voice | To OpenAI, only if an OpenAI key is set. Otherwise your browser does both |
+| Search queries | To your search provider. For job prep these include the role and company |
+| Keys | In the settings file on your machine. Each is sent only to the provider it belongs to |
+
+What your provider keeps from those requests is governed by your agreement
+with them, not by this application.
+
+**Retention.** Scrivio keeps everything until you delete it and never deletes
+on a schedule.
+
+**Taking it out and removing it.** In Settings, under *Your data*: a count of
+everything held and the folder it is in, **Export everything** (a zip of the
+records exactly as stored), and **Delete everything**. Each resume, job target,
+interview, and article can also be deleted one at a time. Deleting a job
+target keeps the interviews you took for it unless you ask for those to go
+too, and says how many there were.
+
+Deleting cannot reach what your provider already received, backups you made,
+or files you downloaded.
+
+**Backup and restore.** An export is also the backup format:
+
+```bash
+python -m api.data show                      # what is stored, and where
+python -m api.data backup  my-backup.zip     # contains your resumes: keep it private
+python -m api.data restore my-backup.zip     # leaves existing records alone
+python -m api.data restore my-backup.zip --replace
+```
+
+`--replace` overwrites records that already exist, and first saves what was
+there as `_before-restore-<time>.zip`, so a restore can itself be undone.
+Records saved by earlier versions restore and open without conversion.
+
+**Logs.** Failures are logged by kind, without the text that caused them, so
+a resume does not end up in a log file.
+
+This describes what the software does. It is not a claim of compliance with
+any regulation.
+
 ## How the interview grading stays honest
 
 The pattern that runs through everything: **the bar is set before you speak.**

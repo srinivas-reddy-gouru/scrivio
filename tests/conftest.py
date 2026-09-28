@@ -143,3 +143,42 @@ def _a_stage_cache_of_its_own(tmp_path, monkeypatch):
     from pipeline import cache
 
     monkeypatch.setattr(cache, "_DEFAULT_CACHE_DIR", tmp_path / ".stage-cache")
+
+
+@pytest.fixture(autouse=True)
+def _no_real_keys_in_any_test(monkeypatch):
+    """No test may hold a real credential, whatever it is testing.
+
+    api/server.py loads the developer's .env when it is imported, so their
+    provider and search keys are in os.environ for the rest of the run.
+    The provider clients are replaced by canned ones above, but search was
+    not: creating an interview researches real questions first, and with
+    a real search key present that was a real search, from the test
+    suite, on the developer's account. A test that needs a key to be
+    present sets a fake one itself."""
+    for name in (
+        "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "TAVILY_API_KEY",
+        "BRAVE_SEARCH_API_KEY", "EXA_API_KEY", "JINA_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_network_in_any_test(monkeypatch):
+    """The last line: if something still tries to reach the internet, it
+    fails at once and says so, instead of succeeding quietly or hanging.
+    Loopback is allowed, which is how tests talk to servers they started."""
+    import socket
+
+    real_connect = socket.socket.connect
+
+    def guarded(self, address, *args, **kwargs):
+        host = address[0] if isinstance(address, tuple) else address
+        if isinstance(host, str) and host not in ("127.0.0.1", "::1", "localhost") \
+                and not host.startswith("/"):
+            raise OSError(
+                f"a test tried to open a network connection to {host!r}. "
+                "Tests must not use the network: stub the call instead.")
+        return real_connect(self, address, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded)

@@ -163,6 +163,15 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<"" | "resume" | "jd">("");
   const fileInput = useRef<HTMLInputElement>(null);
+  // Said before the resume is sent, not in a policy afterwards.
+  const [sentTo, setSentTo] = useState("");
+  useEffect(() => {
+    api.mode().then((m) => setSentTo(
+      m.demo ? "demo"
+        : m.writing === "claude-cli" ? `the ${m.cli.cli} command-line assistant's provider`
+        : m.writing === "anthropic" ? "Anthropic" : m.writing === "openai" ? "OpenAI" : ""))
+      .catch(() => setSentTo(""));
+  }, []);
 
   const refreshLists = () => {
     api.listJobProfiles().then(setProfiles).catch(() => {});
@@ -307,6 +316,14 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
           </div>
         </div>
         {error && <div className="errbox" style={{ marginTop: "1rem" }}>{error}</div>}
+        {sentTo && (
+          <p className="sent-note">
+            {sentTo === "demo"
+              ? "Demo mode: nothing you enter here is sent anywhere."
+              : <>Your resume and the job description are stored on this machine and sent
+                  to <b>{sentTo}</b> to be read. Do not include anything you would not send them.</>}
+          </p>
+        )}
         <div className="go-row">
           <button className="btn" onClick={analyze}
             disabled={!resumeText.trim() && !file && !profileId}>

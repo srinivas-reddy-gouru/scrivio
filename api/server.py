@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import sys
 import tempfile
 from collections.abc import AsyncGenerator
@@ -37,7 +38,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from uuid import uuid4
 
-from api import boundary, limits, settings_store
+from api import boundary, data_controls, limits, settings_store
 from pipeline.providers.claude_cli_adapter import cli_status
 from pipeline.runtime_mode import (
     DEMO_LABEL, NO_PROVIDER, ProviderUnavailable, demo_mode,
@@ -215,6 +216,98 @@ async def _say_which_mode(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Scrivio-Mode"] = "demo" if demo_mode() else "real"
     return response
+
+
+# ── Your data ───────────────────────────────────────────────────────
+
+_SENT_TO_PROVIDER = [
+    ("Resume", "The full text of your resume, and the job description, each "
+               "time it is analysed, tailored, edited by instruction, or "
+               "discussed with the coach."),
+    ("Job prep", "Your resume text and the job description, when a job "
+                 "target is analysed and when its interview is written and graded."),
+    ("Interviews", "Your answers, as typed or transcribed, when they are graded."),
+    ("Voice", "Audio of your spoken answers goes to OpenAI for transcription, "
+              "and the interviewer's questions go there to be spoken. Only "
+              "when an OpenAI key is set; otherwise the browser does both."),
+    ("Articles", "The topic and your instructions. Web pages are fetched "
+                 "from this machine."),
+    ("Web search", "Search queries, to the search provider you configured. "
+                   "For job prep these include the role and company name."),
+]
+
+
+def _log_failure(what: str) -> None:
+    """Log that something failed, and what kind of failure, without the
+    traceback. A validation error quotes the input it rejected, and near
+    a resume or an interview answer that input is the user's own text."""
+    exc = sys.exc_info()[1]
+    logging.error("%s (%s)", what, type(exc).__name__ if exc else "unknown")
+
+
+def _stage_cache_dir() -> Path:
+    from pipeline import cache
+    return Path(cache._DEFAULT_CACHE_DIR)
+
+
+@app.get("/data")
+async def data_overview() -> dict:
+    """Where your data is, how much there is, and where it is sent."""
+    writing = "demo" if demo_mode() else _resolve_provider("auto")
+    return {
+        "stored": data_controls.inventory(OUTPUT_ROOT, _stage_cache_dir()),
+        "processed_by": {
+            "provider": writing,
+            "local": writing in ("demo", "none"),
+            "statement": (
+                "Nothing is sent anywhere: this is demo mode." if writing == "demo" else
+                "Nothing can be sent: no provider is configured." if writing == "none" else
+                "Your data is stored on this machine and sent to your "
+                "provider to be processed. Stored locally does not mean "
+                "processed locally."),
+            "what_is_sent": [{"studio": a, "sent": b} for a, b in _SENT_TO_PROVIDER],
+        },
+        "retention": (
+            "Scrivio keeps everything until you delete it. It never deletes "
+            "on a schedule. What your provider keeps is governed by your "
+            "agreement with them, not by this application."),
+        "not_covered_by_delete": [
+            "Anything your provider retained from requests already sent.",
+            "Backups you made with `python -m api.data backup`.",
+            "Files you downloaded.",
+        ],
+    }
+
+
+@app.get("/data/export")
+async def data_export() -> Response:
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return Response(
+        content=data_controls.export_all(OUTPUT_ROOT), media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="scrivio-export-{stamp}.zip"',
+                 "Cache-Control": "no-store"},
+    )
+
+
+class DeleteAllRequest(BaseModel):
+    confirm: str = ""
+
+
+@app.post("/data/delete-all")
+async def data_delete_all(body: DeleteAllRequest) -> dict:
+    """Irreversible, so it has to be asked for in words."""
+    if body.confirm.strip().lower() != data_controls.CONFIRMATION:
+        raise HTTPException(
+            status_code=422,
+            detail=f'To delete everything, send confirm: "{data_controls.CONFIRMATION}".')
+    if _RESUME_WORK or ARTICLE_GATE.running:
+        raise HTTPException(
+            status_code=409,
+            detail="Something is still running. Wait for it to finish or stop "
+                   "it, then delete.")
+    removed = data_controls.delete_all(OUTPUT_ROOT, _stage_cache_dir())
+    jobs.clear_jobs()
+    return {"deleted": removed}
 
 
 class ModeStatus(BaseModel):
@@ -899,6 +992,20 @@ async def list_articles(limit: int = 50) -> list[ArticleSummary]:
     # Scan everything, THEN group and cap: a lineage member older than the
     # limit window must still fold into its representative card.
     return _group_into_lineages(_scan_summaries())[:limit]
+
+
+@app.delete("/articles/{article_id}")
+async def delete_article(article_id: str) -> dict:
+    """Removes the article's folder: every level, and its record of
+    sources. Interviews that were grounded in it are kept; they hold their
+    own questions and answers."""
+    if not _ARTICLE_DIR_PATTERN.match(article_id):
+        raise HTTPException(status_code=404, detail="Article not found")
+    article_dir = OUTPUT_ROOT / article_id
+    if not article_dir.is_dir() or not (article_dir / "meta.json").is_file():
+        raise HTTPException(status_code=404, detail="Article not found")
+    shutil.rmtree(article_dir)
+    return {"deleted": article_id}
 
 
 @app.get("/articles/{article_id}", response_model=ArticleDetail)
@@ -1759,6 +1866,19 @@ def _compute_streak(dates: set) -> int:
 # NOTE: registered before GET /interviews/{session_id} — FastAPI matches
 # routes in registration order, so "/interviews/stats" must come first or
 # it would be captured as session_id="stats".
+@app.delete("/interviews/{session_id}")
+async def delete_interview(session_id: str) -> dict:
+    if not _SESSION_ID_PATTERN.match(session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    path = _session_path(session_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Session not found")
+    async with _session_lock(session_id):
+        path.unlink(missing_ok=True)
+    _interview_locks.pop(session_id, None)
+    return {"deleted": session_id}
+
+
 @app.get("/interviews/stats", response_model=InterviewStats)
 async def interview_stats() -> InterviewStats:
     """Deterministic aggregates over every stored session — the data behind
@@ -2061,7 +2181,7 @@ async def submit_interview_answer(
                         results=results, client=client, preset=preset,
                     )
                 except Exception:
-                    logging.exception("Debrief generation failed; continuing without it")
+                    _log_failure("Debrief generation failed; continuing without it")
             elif session.mode == "job" and session.job_profile_id:
                 # Recruiter-grade scorecard: competency rollup + panel
                 # debrief + cited study plan. Failure-tolerant garnish.
@@ -2075,7 +2195,7 @@ async def submit_interview_answer(
                     session.summary.scorecard = scorecard
                     session.summary.debrief = scorecard.debrief
                 except Exception:
-                    logging.exception("Scorecard generation failed; continuing without it")
+                    _log_failure("Scorecard generation failed; continuing without it")
         _save_session(session)
 
         followup = (
@@ -2289,15 +2409,37 @@ async def get_job_profile(profile_id: str) -> JobProfileResponse:
     return JobProfileResponse(profile=profile, analysis=analysis)
 
 
+def _sessions_for_job(profile_id: str) -> list[Path]:
+    found = []
+    root = _sessions_root()
+    for path in (root.glob("*.json") if root.is_dir() else []):
+        try:
+            if json.loads(path.read_text(encoding="utf-8")).get("job_profile_id") == profile_id:
+                found.append(path)
+        except (ValueError, OSError):
+            continue
+    return found
+
+
 @app.delete("/job-profiles/{profile_id}")
-async def delete_job_profile(profile_id: str) -> dict:
+async def delete_job_profile(profile_id: str, with_interviews: bool = False) -> dict:
+    """A job target holds a copy of your resume and the job description.
+    The interviews taken for it are separate records that hold their own
+    questions and answers, so by default they are kept. The response says
+    how many there are, because "deleted" should not mean "mostly"."""
     if not _SESSION_ID_PATTERN.match(profile_id):
         raise HTTPException(status_code=404, detail="Job profile not found")
     path = _job_profile_path(profile_id)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Job profile not found")
+    linked = _sessions_for_job(profile_id)
     path.unlink()
-    return {"deleted": profile_id}
+    if with_interviews:
+        for session in linked:
+            session.unlink(missing_ok=True)
+    return {"deleted": profile_id,
+            "interviews_deleted": len(linked) if with_interviews else 0,
+            "interviews_kept": 0 if with_interviews else len(linked)}
 
 
 def _job_context_for(profile: JobProfile, question) -> str:
@@ -2556,7 +2698,7 @@ async def _finish_resume_analysis(resume_id: str) -> None:
         except Exception:
             # A failed extraction degrades to text-only checks — the report
             # still ships, minus the structure-aware rows and tailoring.
-            logging.exception("Resume extraction failed; continuing text-only")
+            _log_failure("Resume extraction failed; continuing text-only")
             return None
 
     try:
@@ -2580,7 +2722,7 @@ async def _finish_resume_analysis(resume_id: str) -> None:
         _merge_background_result(resume_id, failed(str(exc)))
         return
     except Exception:
-        logging.exception("Resume review failed")
+        _log_failure("Resume review failed")
         _merge_background_result(resume_id, failed(
             "The recruiter review failed. Check your provider in Settings "
             "and analyze again. The checklist above is still valid."))
@@ -2723,7 +2865,7 @@ async def _finish_resume_tailor(resume_id: str) -> None:
         _merge_background_result(resume_id, failed(str(exc)))
         return
     except Exception:
-        logging.exception("Resume tailoring failed")
+        _log_failure("Resume tailoring failed")
         _merge_background_result(resume_id, failed(
             "Tailoring failed. Check your provider in Settings and try again."))
         return
@@ -3070,7 +3212,7 @@ async def advise_resume_endpoint(
             client=client, preset=preset,
         )
     except Exception:
-        logging.exception("Resume advice failed")
+        _log_failure("Resume advice failed")
         raise HTTPException(
             status_code=502,
             detail="The coach is unavailable — check your provider in Settings.",
@@ -3136,7 +3278,7 @@ async def _apply_instructed_edit(
             client=client, preset=preset, conversation=history,
         )
     except Exception:
-        logging.exception("Instructed resume edit failed")
+        _log_failure("Instructed resume edit failed")
         raise HTTPException(
             status_code=502,
             detail="The edit did not go through — check your provider in Settings "

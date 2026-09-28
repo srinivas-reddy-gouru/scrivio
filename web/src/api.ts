@@ -191,7 +191,7 @@ export const fmtElapsed = (s: number) =>
 
 /* ── Interview Room ── */
 import type {
-  ArticleDetail, GenerateResponse, InterviewAnswerResponse,
+  ArticleDetail, DataOverview, GenerateResponse, InterviewAnswerResponse,
   InterviewSessionPublic, SettingsFull,
 } from "./types";
 
@@ -221,6 +221,28 @@ export const articleApi = {
    * follow one; this is how to find out what happened when it goes quiet. */
   status: (jobId: string) => call<JobStatus>(`/jobs/${jobId}`),
   cancel: (jobId: string) => call<unknown>(`/jobs/${jobId}`, { method: "DELETE" }),
+};
+
+/** Save a response body as a file, under the name the server gave it. */
+async function saveAs(res: Response, fallback: string): Promise<void> {
+  const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1]
+    ?? fallback;
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement("a");
+  link.href = url; link.download = name;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export const dataApi = {
+  overview: () => call<DataOverview>("/data"),
+  exportAll: async (): Promise<void> => {
+    const res = await fetch("/data/export");
+    if (!res.ok) throw new ApiError(`The export failed (HTTP ${res.status}).`, res.status);
+    await saveAs(res, "scrivio-export.zip");
+  },
+  deleteAll: (confirm: string) =>
+    post<{ deleted: Record<string, number> }>("/data/delete-all", { confirm }),
 };
 
 export const settingsApi = {

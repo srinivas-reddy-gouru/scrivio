@@ -116,6 +116,16 @@ export interface ModeStatus {
   problem: string; notice: string;
 }
 
+export interface DataOverview {
+  stored: Record<string, { count: number; bytes: number; folder: string }>;
+  processed_by: {
+    provider: string; local: boolean; statement: string;
+    what_is_sent: Array<{ studio: string; sent: string }>;
+  };
+  retention: string;
+  not_covered_by_delete: string[];
+}
+
 export interface SettingsInfo {
   resolved_provider: string; provider_auto: boolean; active_cli: string;
   has_search: boolean;
