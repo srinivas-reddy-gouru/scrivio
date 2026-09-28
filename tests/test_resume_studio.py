@@ -270,7 +270,11 @@ def test_honesty_guard_strips_and_reverts_inventions():
     assert kept.position == "Software Engineer"
     assert (kept.startDate, kept.endDate) == ("Jan 2021", "Present")
     assert kept.highlights == ["Rephrased bullet"]  # honest edits survive
-    assert guarded.resume.education == []
+    # The invented MIT doctorate goes. The real degree, which this model
+    # output had dropped, comes back: a rewrite cannot delete a degree.
+    assert [e.institution for e in guarded.resume.education] == ["State University"]
+    assert guarded.resume.education[0].studyType == "B.S."
+    assert any("MIT" in w for w in guarded.warnings)
     assert guarded.resume.certificates == ["AWS SAA"]
     assert "model warning" in guarded.warnings
     assert any("Google" in w for w in guarded.warnings)

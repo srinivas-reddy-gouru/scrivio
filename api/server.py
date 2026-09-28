@@ -44,6 +44,7 @@ from pipeline.schemas.models import (
     CodingProblem,
     ResumeChange,
     ResumeDoc,
+    ResumeIssue,
     StructuredResume,
     TailoredResume,
 )
@@ -64,7 +65,9 @@ from pipeline.workers.resume_studio_worker import (
     add_resume_entry,
     advise_resume,
     apply_tailored_edits,
+    audit_extraction,
     build_resume_advice_context,
+    counterpart_index,
     mirror_append,
     remove_resume_entry,
     edit_resume_by_instruction,
@@ -75,6 +78,7 @@ from pipeline.workers.resume_studio_worker import (
     render_docx,
     render_markdown,
     render_pdf,
+    users_own_words,
     review_resume,
     run_ats_checks,
     tailor_resume,
@@ -2109,6 +2113,24 @@ def _resolve_resume_input(body: ResumeCreateRequest) -> tuple[str, StructuredRes
     raise HTTPException(status_code=422, detail="Provide a resume (file upload or pasted text)")
 
 
+def _report_extraction_audit(doc: ResumeDoc) -> None:
+    """The extracted structure is what every honesty check later treats as
+    the candidate's record, and it was written by a model. Anything in it
+    that the uploaded text does not contain is put in front of the user
+    now, as a finding to correct, rather than trusted."""
+    if doc.structured is None or doc.review is None:
+        return
+    for finding in audit_extraction(doc.original_text, doc.structured)[:8]:
+        doc.review.issues.insert(0, ResumeIssue(
+            category="red-flag",
+            detail=(f"Reading your resume produced {finding}, which does not "
+                    "appear in the text you uploaded."),
+            fix=("Check this against your document. If the parse got it wrong, "
+                 "correct or remove it in edit mode before tailoring, because "
+                 "tailoring treats the parsed resume as your record."),
+        ))
+
+
 async def _finish_resume_analysis(resume_id: str) -> None:
     """Background phase of analysis: the two LLM calls. The deterministic
     report already shipped in the POST response; this fills in structure +
@@ -2144,6 +2166,7 @@ async def _finish_resume_analysis(resume_id: str) -> None:
         doc.report = run_ats_checks(
             doc.original_text, doc.jd_text or None, doc.structured
         )
+        _report_extraction_audit(doc)
         doc.status, doc.error = "ready", ""
     except Exception:
         logging.exception("Resume review failed")
@@ -2522,18 +2545,21 @@ async def remove_from_resume(resume_id: str, body: ResumeRemoveRequest) -> Resum
         raise HTTPException(status_code=409, detail="Tailoring is still running.")
     shown, other = _resume_pair(doc)
     snapshot = doc.tailored.model_copy(deep=True) if doc.tailored else None
+    kind = body.path.split("[")[0]
+    index = re.fullmatch(r"(?:work|projects|education|custom)\[(\d+)\]", body.path)
+    doomed = None
+    if index and int(index.group(1)) < len(getattr(shown, kind, [])):
+        doomed = getattr(shown, kind)[int(index.group(1))].model_copy(deep=True)
     try:
         name = remove_resume_entry(shown, body.path)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    if other is not None:
-        kind = body.path.split("[")[0]
-        items = getattr(other, kind)
-        for i, item in enumerate(items):
-            their = item.institution if kind == "education" else item.name
-            if their == name:
-                items.pop(i)
-                break
+    if other is not None and doomed is not None:
+        # By identity: two roles at one employer share a name, and removing
+        # "the one called Acme" would take whichever came first.
+        theirs = counterpart_index(other, kind, doomed)
+        if theirs is not None:
+            getattr(other, kind).pop(theirs)
     if snapshot is not None:
         _push_tailored_history(doc, snapshot)
         doc.tailored.changes.append(ResumeChange(
@@ -2635,10 +2661,11 @@ async def request_tailored_edit(
         )
     # Belts behind the model: invented numbers revert, and the change log
     # is reconciled against the real diff so the UI never under-reports.
-    user_text = body.instruction + " " + " ".join(
-        m.get("content", "") for m in history
-    )
-    edited = guard_edited_numbers_and_log(snapshot, edited, user_text)
+    # Only the USER's turns count as the user's words: a figure the coach
+    # proposed is model output, and would launder itself otherwise.
+    user_text = users_own_words(body.instruction, history)
+    edited = guard_edited_numbers_and_log(
+        snapshot, edited, user_text, original=doc.structured)
     # Belt for the prompt's warnings/note separation: a status message
     # that slipped into warnings is not a durable honesty note — move it.
     status_like = [

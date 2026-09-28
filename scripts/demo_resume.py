@@ -29,6 +29,7 @@ from pipeline.schemas.models import (
     ResumeBasics, ResumeChange, ResumeDoc, ResumeEducationItem, ResumeSkill,
     ResumeProject, ResumeWorkItem, StructuredResume, TailoredResume,
 )
+from pipeline.workers.resume_fact_guard import validate_model_output
 from pipeline.workers.resume_studio_worker import render_markdown, run_ats_checks
 
 DEMO_ID = "20260101-000000-demo01"
@@ -144,7 +145,9 @@ TAILORED_BASICS = BASICS.model_copy(update={
     ),
 })
 # Every tailored bullet is the same fact with the duty phrasing removed
-# and the number moved to the front. No new claim appears anywhere.
+# and the number moved to the front. main() runs the product's own fact
+# guard over this pair and refuses to write the file if it objects, so
+# "no new claim" is checked rather than asserted.
 TAILORED_WORK = [w.model_copy(deep=True) for w in WORK]
 TAILORED_WORK[0].highlights = [
     "Own the backend architecture of a payment reconciliation platform on "
@@ -153,7 +156,7 @@ TAILORED_WORK[0].highlights = [
     "redesigning the event pipeline in Java 17.",
     "Built the retry and replay tooling that recovers a failed batch with no "
     "operator intervention.",
-    "Mentor 4 engineers and run design review for the payments group.",
+    "Mentor junior engineers and run design reviews for the payments group.",
 ]
 TAILORED_WORK[1].highlights = [
     "Rebuilt the billing ledger as an append only event store, ending a "
@@ -175,7 +178,7 @@ TAILORED = StructuredResume(
     education=STRUCTURED.education,
     skills=[ResumeSkill(name="Backend", keywords=[
         "Java 17", "Spring Boot", "Kafka", "Kubernetes", "PostgreSQL", "AWS",
-        "Docker", "Distributed systems", "Observability"])],
+        "Docker", "Distributed systems", "REST"])],
     projects=PROJECTS, certificates=CERTIFICATES,
 )
 
@@ -187,7 +190,7 @@ CHANGES = [
     ResumeChange(kind="added-keyword", where="work[0].highlights[0]",
                  what="Named Kubernetes, which the original mentioned only in the tech stack line."),
     ResumeChange(kind="reordered", where="skills",
-                 what="Moved observability up; the req calls it out by name."),
+                 what="Moved distributed systems ahead of REST; the req names it."),
     ResumeChange(kind="rephrased", where="work[1].highlights[0]",
                  what="Named Spring Boot explicitly rather than leaving it implied."),
 ]
@@ -207,6 +210,16 @@ def main() -> int:
         print("usage: python scripts/demo_resume.py <output-dir>")
         return 2
     out = Path(sys.argv[1]).expanduser().resolve() / "resumes" / f"{DEMO_ID}.json"
+    checked = validate_model_output(
+        STRUCTURED,
+        TailoredResume(resume=TAILORED.model_copy(deep=True), changes=[], warnings=[]),
+        jd_text=JD,
+    )
+    if checked.warnings:
+        print("The demo's tailored resume fails the fact guard:")
+        for warning in checked.warnings:
+            print("  -", warning)
+        return 1
     report = run_ats_checks(render_markdown(STRUCTURED), JD, STRUCTURED)
     tailored_report = run_ats_checks(render_markdown(TAILORED), JD, TAILORED)
     now = datetime.now().isoformat(timespec="seconds")

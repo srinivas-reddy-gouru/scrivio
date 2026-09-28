@@ -1663,7 +1663,7 @@ class MockAnthropicMessages:
         [METRIC] placeholder, one cannot-honestly-claim warning."""
         structured = self._mock_resume_extraction()
         structured["work"][0]["highlights"] = [
-            "Built Kafka event pipelines processing 2M events/day across 3 services",
+            "Built Kafka event pipelines processing 2M events/day",
             "Cut p99 latency 40% by rewriting the consumer group logic",
             "Mentored two junior engineers, reducing onboarding time by [METRIC]%",
         ]
