@@ -491,8 +491,21 @@ class ClaudeCLIOpenAIFacade:
         )
 
 
+# One run of the assistant has _CALL_TIMEOUT_S. One CALL can be more than
+# one run: when the answer has to be JSON and is not, the assistant is
+# asked again. This is the limit on the call, and the runs are inside it.
+CALL_DEADLINE_S = 300
+
+
 class _CLIMessages:
     async def create(self, **kwargs):
+        from pipeline.providers.clients import within_deadline
+
+        return await within_deadline(
+            self._create(**kwargs), f"The {active_cli_name()} command-line assistant",
+            CALL_DEADLINE_S)
+
+    async def _create(self, **kwargs):
         model = _model_alias(kwargs.get("model", ""))
         system_text = _extract_system_text(kwargs.get("system"))
         user_content = "\n\n".join(

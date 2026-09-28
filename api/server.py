@@ -26,7 +26,7 @@ from pipeline import local_settings
 # too, so that they cannot disagree with the server about it.
 _ENV_FILE = local_settings.load()
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -163,6 +163,29 @@ app.add_middleware(boundary.LocalBoundary)
 # How much of each kind of paid work runs at once on this install.
 ARTICLE_GATE = limits.Gate("article generation", 2)
 RESUME_GATE = limits.Gate("resume analysis or tailoring", 3)
+# Every request that can reach a provider, for as long as it is being
+# answered. The two gates above cover work that goes on after the request
+# has returned. Until this one existed they were the only gates, and nine
+# routes that call a model, fetch a page, or send audio had none: a
+# question put to the interviewer, an instructed edit, a job target. The
+# topic classifier behind POST /generate ran before the article gate was
+# reached, so the limit on articles did not limit it.
+CALL_GATE = limits.Gate("request(s) that call a provider", 4)
+
+
+async def calls_a_provider():
+    """A dependency, so that a route declares it where it is declared and
+    a test can check that every route that needs it has it. The slot is
+    given back when the request ends, however it ends: answered, failed,
+    or abandoned by a client that went away."""
+    slot = CALL_GATE.enter()
+    try:
+        yield
+    finally:
+        slot.leave()
+
+
+PROVIDER = [Depends(calls_a_provider)]
 
 
 @app.exception_handler(limits.Busy)
@@ -584,6 +607,7 @@ async def diagnostics() -> dict:
                      "recently_finished": recent[-10:]},
         "resumes": {"in_progress": len(_RESUME_WORK), "limit": RESUME_GATE.limit,
                     "running_now": RESUME_GATE.running},
+        "provider_calls": {"running": CALL_GATE.running, "limit": CALL_GATE.limit},
         "stall_threshold_seconds": observability.STALL_SECONDS,
         "usage": {
             "measured": False,
@@ -681,7 +705,7 @@ def _require_providers(request: ArticleRequest) -> None:
     _openai_client(request)
 
 
-@app.post("/generate", response_model=GenerateResponse)
+@app.post("/generate", response_model=GenerateResponse, dependencies=PROVIDER)
 async def generate(request: ArticleRequest) -> GenerateResponse:
     if request.include_gifs:
         from render.vhs_worker import DISABLED_REASON
@@ -729,7 +753,7 @@ async def generate(request: ArticleRequest) -> GenerateResponse:
     return GenerateResponse(job_id=job.job_id)
 
 
-@app.post("/clarify", response_model=ClarificationQuestions)
+@app.post("/clarify", response_model=ClarificationQuestions, dependencies=PROVIDER)
 async def clarify(request: ArticleRequest) -> ClarificationQuestions:
     """Return clarification questions for a topic without starting a job.
 
@@ -1709,7 +1733,7 @@ class InterviewAnswerResponse(BaseModel):
     summary: InterviewSummary | None
 
 
-@app.post("/interviews", response_model=InterviewSessionPublic)
+@app.post("/interviews", response_model=InterviewSessionPublic, dependencies=PROVIDER)
 async def create_interview(body: InterviewCreateRequest) -> InterviewSessionPublic:
     if body.mode == "job":
         if not body.job_profile_id:
@@ -2136,6 +2160,7 @@ def _article_markdown_for(session: InterviewSession) -> str | None:
 @app.post(
     "/interviews/{session_id}/answers",
     response_model=InterviewAnswerResponse,
+    dependencies=PROVIDER,
 )
 async def submit_interview_answer(
     session_id: str, body: InterviewAnswerRequest
@@ -2465,7 +2490,7 @@ async def _resolve_resume_text(body: JobProfileCreateRequest) -> str:
     raise HTTPException(status_code=422, detail="Provide a resume (file upload or pasted text)")
 
 
-@app.post("/job-profiles", response_model=JobProfileResponse)
+@app.post("/job-profiles", response_model=JobProfileResponse, dependencies=PROVIDER)
 async def create_job_profile(body: JobProfileCreateRequest) -> JobProfileResponse:
     if not body.role_title.strip():
         raise HTTPException(status_code=422, detail="role_title is required")
@@ -2844,7 +2869,7 @@ async def _finish_resume_analysis(resume_id: str) -> None:
     _merge_background_result(resume_id, apply)
 
 
-@app.post("/resumes", response_model=ResumeDoc)
+@app.post("/resumes", response_model=ResumeDoc, dependencies=PROVIDER)
 async def create_resume(
     body: ResumeCreateRequest, background_tasks: BackgroundTasks
 ) -> ResumeDoc:
@@ -2885,7 +2910,7 @@ async def _gated(slot, work, resume_id: str) -> None:
         slot.leave()
 
 
-@app.post("/resumes/{resume_id}/analyze", response_model=ResumeDoc)
+@app.post("/resumes/{resume_id}/analyze", response_model=ResumeDoc, dependencies=PROVIDER)
 async def analyze_resume_again(
     resume_id: str, background_tasks: BackgroundTasks
 ) -> ResumeDoc:
@@ -2987,7 +3012,7 @@ async def _finish_resume_tailor(resume_id: str) -> None:
     _merge_background_result(resume_id, apply)
 
 
-@app.post("/resumes/{resume_id}/tailor", response_model=ResumeDoc)
+@app.post("/resumes/{resume_id}/tailor", response_model=ResumeDoc, dependencies=PROVIDER)
 async def tailor_resume_endpoint(
     resume_id: str, background_tasks: BackgroundTasks
 ) -> ResumeDoc:
@@ -3302,7 +3327,7 @@ class ResumeAdviceRequest(BaseModel):
     history: list[dict] = []
 
 
-@app.post("/resumes/{resume_id}/advise")
+@app.post("/resumes/{resume_id}/advise", dependencies=PROVIDER)
 async def advise_resume_endpoint(
     resume_id: str, body: ResumeAdviceRequest
 ) -> dict:
@@ -3335,7 +3360,7 @@ class ResumeInstructionRequest(BaseModel):
     history: list[dict] = []
 
 
-@app.post("/resumes/{resume_id}/request-edit", response_model=ResumeDoc)
+@app.post("/resumes/{resume_id}/request-edit", response_model=ResumeDoc, dependencies=PROVIDER)
 async def request_tailored_edit(
     resume_id: str, body: ResumeInstructionRequest
 ) -> ResumeDoc:
@@ -3612,7 +3637,7 @@ async def _openai_transcribe(client, audio: bytes, mime_type: str) -> str:
     return (result.text or "").strip()
 
 
-@app.post("/transcribe", response_model=TranscribeResponse)
+@app.post("/transcribe", response_model=TranscribeResponse, dependencies=PROVIDER)
 async def transcribe_audio(body: TranscribeRequest) -> TranscribeResponse:
     try:
         audio = base64.b64decode(body.audio_b64, validate=True)
@@ -3716,7 +3741,7 @@ def list_speak_voices() -> dict:
     }
 
 
-@app.post("/speak")
+@app.post("/speak", dependencies=PROVIDER)
 async def speak(body: SpeakRequest) -> Response:
     text = body.text.strip()
     if not text:

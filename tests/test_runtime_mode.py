@@ -39,6 +39,12 @@ def _is_mock(client) -> bool:
     return "Mock" in type(client).__name__
 
 
+def _kind(client) -> str:
+    """Which client this is. The SDK clients are handed out behind a
+    deadline (F06), so the name asked for is the one behind it."""
+    return type(getattr(client, "_target", client)).__name__
+
+
 # ── Real mode ────────────────────────────────────────────────────────
 
 def test_with_nothing_configured_writing_fails_instead_of_faking(real):
@@ -72,15 +78,15 @@ def test_an_openai_only_setup_runs_both_on_openai(real):
     writer, verifier = REAL_WRITER(REQUEST), REAL_VERIFIER(REQUEST)
 
     assert type(writer).__name__ == "OpenAIAnthropicAdapter"
-    assert type(verifier).__name__ == "AsyncOpenAI"
+    assert _kind(verifier) == "AsyncOpenAI"
 
 
 def test_both_keys_keep_writing_on_anthropic_and_checking_on_openai(real):
     real.setenv("ANTHROPIC_API_KEY", "sk-ant-test-not-a-real-key")
     real.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
 
-    assert type(REAL_WRITER(REQUEST)).__name__ == "AsyncAnthropic"
-    assert type(REAL_VERIFIER(REQUEST)).__name__ == "AsyncOpenAI"
+    assert _kind(REAL_WRITER(REQUEST)) == "AsyncAnthropic"
+    assert _kind(REAL_VERIFIER(REQUEST)) == "AsyncOpenAI"
 
 
 def test_a_subscription_cli_runs_both_without_touching_a_key(real):
