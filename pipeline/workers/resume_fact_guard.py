@@ -105,15 +105,47 @@ _NUMBER_WORDS = {
 # digit 1 is allowed to mean, never introduce a figure into the output.
 _SOURCE_ONLY_NUMBER_WORDS = {"a": 1, "an": 1, "one": 1}
 
+# A figure is one token however its country writes it. The first version
+# knew only 1,234.5, so "12,5 %" was read as 12 and 5, and the 5, being
+# nowhere in the original, was replaced: a true figure came back as
+# "12,[METRIC] %". Each line below is one way of writing a number, most
+# specific first.
+_NBSP = "\u00a0\u202f"
+_NUM_BODY = (
+    r"(?:"
+    r"\d{1,3}(?:\.\d{3}){2,}(?:,\d+)?"            # 2.000.000   2.000.000,5
+    rf"|\d{{1,3}}(?:[{_NBSP}]\d{{3}})+(?:[.,]\d+)?"  # 2 000 000, no-break spaces
+    r"|\d{1,3}(?:,\d{3})+(?:\.\d+)?"              # 1,234       1,234,567.8
+    r"|\d{1,3}(?:\.\d{3})+,\d+"                   # 1.234,56
+    r"|(?<!\d,)\d+,\d{1,2}(?![\d,])"              # 12,5  but not the list 8,11,17
+    r"|\d+(?:\.\d+)?"                            # 12.5        12
+    r")"
+)
 _TOKEN_RE = re.compile(
     r"(?P<metric>\[METRIC\])"
-    r"|(?P<num>(?<![A-Za-z0-9_])[$€£₹]?\d+(?:,\d{3})*(?:\.\d+)?(?:%|[A-Za-z]{1,3}\b)?)"
+    rf"|(?P<num>(?<![A-Za-z0-9_])[$€£₹]?{_NUM_BODY}(?:[ {_NBSP}]?%|[A-Za-z]{{1,3}}\b)?)"
     r"|(?P<word>[A-Za-z][A-Za-z0-9+#'’]*)"
     r"|(?P<sep>[,;:.!?()])"
 )
 _NUM_PARTS_RE = re.compile(
-    r"^(?P<prefix>[$€£₹]?)(?P<value>\d+(?:,\d{3})*(?:\.\d+)?)(?P<suffix>%|[A-Za-z]{1,3})?$"
+    rf"^(?P<prefix>[$€£₹]?)(?P<value>{_NUM_BODY})(?P<suffix>[ {_NBSP}]?%|[A-Za-z]{{1,3}})?$"
 )
+
+
+def _number_value(body: str) -> float:
+    """The value of a figure as written. Where the two conventions
+    disagree about a single separator, the reading is the English one,
+    and it is the same reading on both sides of every comparison."""
+    body = re.sub(f"[{_NBSP}]", "", body)
+    if "," in body and "." in body:
+        decimal = "," if body.rfind(",") > body.rfind(".") else "."
+        body = body.replace("." if decimal == "," else ",", "").replace(decimal, ".")
+    elif "," in body:
+        grouped = re.fullmatch(r"\d{1,3}(?:,\d{3})+", body)
+        body = body.replace(",", "") if grouped else body.replace(",", ".")
+    elif body.count(".") >= 2:
+        body = body.replace(".", "")
+    return float(body)
 
 
 def _stem(word: str) -> str:
@@ -165,10 +197,10 @@ def _parse_number(raw: str) -> tuple[str, float, str] | None:
     if not m:
         return None
     try:
-        value = float(m.group("value").replace(",", ""))
+        value = _number_value(m.group("value"))
     except ValueError:
         return None
-    suffix = (m.group("suffix") or "")
+    suffix = (m.group("suffix") or "").strip(" " + _NBSP)
     unit = suffix.lower() if suffix != "%" else "%"
     if unit in _MULTIPLIERS:
         value *= _MULTIPLIERS[unit]

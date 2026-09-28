@@ -46,6 +46,8 @@ jobs:
       - run: pip install -r requirements-dev.txt -c constraints.txt
       - name: Tests (the browser and restart tests run in their own job)
         run: python -m pytest tests/ -q --ignore=tests/browser --ignore=tests/live
+      - name: Resume fact preservation (deterministic, calls no model)
+        run: python -m evals.resume_guard_eval
 
   frontend:
     name: Interface, Node ${{ matrix.node }}
