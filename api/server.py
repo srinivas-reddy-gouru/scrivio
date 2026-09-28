@@ -18,18 +18,13 @@ from typing import Literal
 # somewhere other than the repository root. It is also what lets a
 # verification server run with NO provider keys at all: point it at a
 # file that does not exist and nothing is loaded.
-_ENV_FILE = Path(
-    os.environ.get("SCRIVIO_ENV_FILE")
-    or Path(__file__).resolve().parent.parent / ".env"
-)
-try:
-    from dotenv import load_dotenv
+from pipeline import local_settings
 
-    # interpolate=False: a key that happens to contain "${" is a key, not a
-    # reference to another variable.
-    load_dotenv(_ENV_FILE, override=True, interpolate=False)
-except ModuleNotFoundError:
-    pass
+# Read here, before anything below looks at the environment. Where the
+# file is and how it is read are decided in pipeline/local_settings.py,
+# which the backup tool, the setup check, and the article command use
+# too, so that they cannot disagree with the server about it.
+_ENV_FILE = local_settings.load()
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -135,8 +130,7 @@ def output_root_for(demo: bool) -> Path:
     """Demo work lives in its own directory, so a canned resume review can
     never turn up in the history of someone's real job search, and real
     work is never shown under a demo banner."""
-    root = Path(os.environ.get("ARTICLE_OUTPUT_DIR", "./output"))
-    return root / "demo-mode" if demo else root
+    return local_settings.output_root(demo)
 
 
 OUTPUT_ROOT = output_root_for(demo_mode())

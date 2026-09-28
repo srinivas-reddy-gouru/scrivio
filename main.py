@@ -2034,11 +2034,11 @@ async def async_main() -> None:
 
 
 if __name__ == "__main__":
-    try:
-        from dotenv import load_dotenv
+    # The same settings file, read the same way, as the server. This used
+    # to look for a .env upward from the working directory, which ignored
+    # SCRIVIO_ENV_FILE and expanded "${...}" inside values.
+    from pipeline import local_settings
 
-        load_dotenv(override=True)
-    except ModuleNotFoundError:
-        pass
+    local_settings.load()
 
     asyncio.run(async_main())

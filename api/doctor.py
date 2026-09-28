@@ -150,15 +150,17 @@ def check_extras(report: Report) -> None:
 def check_storage(report: Report) -> None:
     from api import boundary
 
-    output = Path(os.environ.get("ARTICLE_OUTPUT_DIR", "./output"))
+    from pipeline import local_settings
+
+    output = local_settings.output_root(demo=False)
     try:
         output.mkdir(parents=True, exist_ok=True)
         probe = output / ".doctor-write-test"
         probe.write_text("ok")
         probe.unlink()
-        report.add(OK, "Output folder", f"{output} is writable")
+        report.add(OK, "Output folder", f"{output.resolve()} is writable")
     except OSError:
-        report.add(FAIL, "Output folder", f"{output} cannot be written to",
+        report.add(FAIL, "Output folder", f"{output.resolve()} cannot be written to",
                    "set ARTICLE_OUTPUT_DIR to a folder you own")
     key = boundary.state_dir() / "session.key"
     if key.is_file():
@@ -169,7 +171,7 @@ def check_storage(report: Report) -> None:
                    f"chmod 600 {key}")
     else:
         report.add(OK, "Session key", "will be created on first start")
-    settings = Path(os.environ.get("SCRIVIO_ENV_FILE") or REPO / ".env")
+    settings = local_settings.settings_file()
     if settings.is_file():
         mode = stat.S_IMODE(settings.stat().st_mode)
         report.add(OK if not mode & 0o077 else WARN, "Settings file",
@@ -179,12 +181,9 @@ def check_storage(report: Report) -> None:
 
 
 def main() -> int:
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(os.environ.get("SCRIVIO_ENV_FILE") or REPO / ".env",
-                    override=True, interpolate=False)
-    except Exception:
-        pass
+    from pipeline import local_settings
+
+    local_settings.load()
     report = Report()
     check_python(report)
     check_packages(report)
