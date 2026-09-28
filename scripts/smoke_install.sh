@@ -140,7 +140,10 @@ grep -q "\.smoke-output/demo-mode" "${TARGET}/.smoke-where.txt" \
 .venv/bin/python -m api.data backup "${TARGET}/.smoke-backup.zip"
 RECORDS="$(ls "${TARGET}/.smoke-output/demo-mode/resumes"/*.json | wc -l | tr -d ' ')"
 test "${RECORDS}" -ge 1 || { echo "the server left no resume to back up"; exit 1; }
-unzip -l "${TARGET}/.smoke-backup.zip" | grep -q "resumes/.*\.json" \
+# Listed into a variable first. With pipefail, `unzip | grep -q` fails when
+# grep finds what it is looking for and stops reading.
+LISTED="$(unzip -l "${TARGET}/.smoke-backup.zip")"
+echo "${LISTED}" | grep "resumes/.*\.json" > /dev/null \
   || { echo "the backup does not hold the resume the server saved"; exit 1; }
 find "${TARGET}/.smoke-output/demo-mode/resumes" -name '*.json' -delete
 .venv/bin/python -m api.data restore "${TARGET}/.smoke-backup.zip"

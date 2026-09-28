@@ -188,5 +188,11 @@ def test_a_request_the_server_refuses_is_shown_not_swallowed(browser, demo_serve
     page.get_by_role("button", name="Read my resume").click()
 
     page.locator(".errbox").first.wait_for(timeout=10000)
-    assert "was not fetched" in page.locator(".errbox").first.inner_text()
+    shown = page.locator(".errbox").first.inner_text()
+    # What is tested is that the server's own words reach the page. Which
+    # words they are changed with F01: this is a demo server, and in demo
+    # mode no address is fetched, internal or otherwise. The refusal of an
+    # internal address in particular is tested against the API, in
+    # tests/test_net_guard.py, where there is a server that would fetch.
+    assert "Demo mode does not fetch pages" in shown and "Paste the text" in shown
     context.close()
