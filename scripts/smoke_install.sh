@@ -41,9 +41,17 @@ if SCRIVIO_ENV_FILE=/nonexistent LLM_CLI=qwen .venv/bin/python -m api.doctor; th
 fi
 SCRIVIO_DEMO=1 SCRIVIO_ENV_FILE=/nonexistent .venv/bin/python -m api.doctor
 
-step "Start it, in demo mode"
-export SCRIVIO_DEMO=1 SCRIVIO_ENV_FILE=/nonexistent
-export ARTICLE_OUTPUT_DIR="${TARGET}/.smoke-output" SCRIVIO_STATE_DIR="${TARGET}/.smoke-state"
+step "The fact evaluation, in the environment just installed"
+.venv/bin/python -m evals.resume_guard_eval | tail -1
+
+step "Start it, in demo mode, told where its data is by its settings file alone"
+# The data folder is named in the settings file and nowhere else, which
+# is how Settings in the interface leaves it. The server and the backup
+# tool once disagreed about exactly this arrangement.
+printf "ARTICLE_OUTPUT_DIR='%s'\n" "${TARGET}/.smoke-output" > "${TARGET}/.smoke-settings.env"
+unset ARTICLE_OUTPUT_DIR
+export SCRIVIO_DEMO=1 SCRIVIO_ENV_FILE="${TARGET}/.smoke-settings.env"
+export SCRIVIO_STATE_DIR="${TARGET}/.smoke-state"
 PORT="${PORT}" .venv/bin/python -m api > "${TARGET}/.smoke-server.log" 2>&1 &
 SERVER=$!
 trap 'kill ${SERVER} 2>/dev/null || true' EXIT
@@ -122,5 +130,21 @@ answer = json.loads(call("POST", f"/interviews/{session['session_id']}/answers",
 assert answer["evaluation"]["score"] > 0
 print("resume imported, tailored, completed, and exported; an interview answered and graded")
 PY
+
+step "Back it up with the tool, lose it, and put it back"
+kill ${SERVER} 2>/dev/null || true
+wait ${SERVER} 2>/dev/null || true
+.venv/bin/python -m api.data where | tee "${TARGET}/.smoke-where.txt"
+grep -q "\.smoke-output/demo-mode" "${TARGET}/.smoke-where.txt" \
+  || { echo "the backup tool is not looking where the server kept its records"; exit 1; }
+.venv/bin/python -m api.data backup "${TARGET}/.smoke-backup.zip"
+RECORDS="$(ls "${TARGET}/.smoke-output/demo-mode/resumes"/*.json | wc -l | tr -d ' ')"
+test "${RECORDS}" -ge 1 || { echo "the server left no resume to back up"; exit 1; }
+unzip -l "${TARGET}/.smoke-backup.zip" | grep -q "resumes/.*\.json" \
+  || { echo "the backup does not hold the resume the server saved"; exit 1; }
+find "${TARGET}/.smoke-output/demo-mode/resumes" -name '*.json' -delete
+.venv/bin/python -m api.data restore "${TARGET}/.smoke-backup.zip"
+test "$(ls "${TARGET}/.smoke-output/demo-mode/resumes"/*.json | wc -l | tr -d ' ')" = "${RECORDS}" \
+  || { echo "the restore did not put the resume back"; exit 1; }
 
 step "Passed"
