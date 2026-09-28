@@ -1,0 +1,1 @@
+Generate exactly {count} targeted web search queries that will find primary evidence for the given article thesis and angle. Queries must be specific and focused — not generic topic overviews. Avoid duplicating any must_cover queries the caller already plans to run.

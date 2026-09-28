@@ -166,6 +166,9 @@ async def tailor_resume(
     return tailored
 
 
+_CONDENSER_PROMPT = load_prompt("resume_summary_condenser_v1.txt").strip()
+
+
 async def _condense_summary(
     tailored: TailoredResume, jd_text: str, client, preset: str,
     *, original: StructuredResume | None = None,
@@ -183,13 +186,7 @@ async def _condense_summary(
         response = await client.messages.create(
             model=get_model("resume_tailor", preset),
             max_tokens=400,
-            system=(
-                "Condense the resume summary you are given to 55 words or "
-                "fewer. Keep the claims most relevant to the job description; "
-                "cut the weakest ones entirely. Never add a skill, title, or "
-                "claim that is not already in the summary. No em or en "
-                "dashes. Reply with the condensed summary text only."
-            ),
+            system=_CONDENSER_PROMPT,
             messages=[{
                 "role": "user",
                 "content": (

@@ -61,12 +61,18 @@ class LiveServer:
 
     def start(self) -> "LiveServer":
         argv = [sys.executable, self.launcher] if self.launcher else [sys.executable, "-m", "api"]
-        self.process = subprocess.Popen(
-            argv, cwd=REPO, env=self._environment(),
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # What it says on the way down is the only account of why it went
+        # down. It is kept beside the server's own records, which are
+        # synthetic, and quoted when startup fails.
+        self.log = self.root / "server.log"
+        with open(self.log, "ab") as log:
+            self.process = subprocess.Popen(
+                argv, cwd=REPO, env=self._environment(),
+                stdout=subprocess.DEVNULL, stderr=log)
         for _ in range(150):
             if self.process.poll() is not None:
-                raise RuntimeError("the server exited during startup")
+                raise RuntimeError(
+                    "the server exited during startup:\n" + self._last_words())
             try:
                 urllib.request.urlopen(f"{self.base}/health", timeout=1).read()
                 return self
@@ -74,6 +80,13 @@ class LiveServer:
                 time.sleep(0.1)
         self.stop()
         raise RuntimeError("the server did not start")
+
+    def _last_words(self, lines: int = 15) -> str:
+        try:
+            text = self.log.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return "(it left no log)"
+        return "\n".join(text.splitlines()[-lines:]) or "(it said nothing)"
 
     def kill(self) -> None:
         """SIGKILL: no shutdown handlers, no chance to tidy up. What is on

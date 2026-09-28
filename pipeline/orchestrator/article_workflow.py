@@ -8,6 +8,7 @@ import anthropic
 import openai
 from pydantic import BaseModel
 
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
     ArticlePlan,
     ArticleRequest,
@@ -109,11 +110,7 @@ async def search_activity(
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "Generate exactly three targeted web search queries that will find "
-                    "primary evidence for the given article thesis and angle. "
-                    "Queries must be specific and focused — not generic topic overviews."
-                ),
+                "content": load_prompt("workflow_search_queries_v1.txt").strip(),
             },
             {"role": "user", "content": user_content},
         ],

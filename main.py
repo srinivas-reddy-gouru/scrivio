@@ -52,6 +52,7 @@ from pipeline.workers.relevance_worker import (
     check_relevance,
 )
 from pipeline.model_config import get_model
+from pipeline.prompt_loader import load_prompt
 from pipeline.providers.claude_cli_adapter import (
     ClaudeCLIAdapter,
     ClaudeCLIOpenAIFacade,
@@ -942,13 +943,8 @@ async def _generate_search_queries(
         messages=[
             {
                 "role": "system",
-                "content": (
-                    f"Generate exactly {llm_query_count} targeted web search queries "
-                    "that will find primary evidence for the given article thesis "
-                    "and angle. Queries must be specific and focused — not generic "
-                    "topic overviews. Avoid duplicating any must_cover queries "
-                    "the caller already plans to run."
-                ),
+                "content": load_prompt("search_queries_v1.txt").strip().format(
+                    count=llm_query_count),
             },
             {"role": "user", "content": user_content},
         ],

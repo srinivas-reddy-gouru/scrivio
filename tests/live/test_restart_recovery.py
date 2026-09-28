@@ -155,3 +155,12 @@ def test_health_and_listings_work_straight_after_a_crash(crashed):
     status, listing = server.json("GET", "/resumes")
     assert status == 200
     assert {r["resume_id"] for r in listing} == {analysing, tailoring}
+
+
+def test_a_server_that_dies_on_startup_says_why(tmp_path):
+    """The helper used to discard what the server wrote, so a startup
+    failure in the suite read only as "exited during startup"."""
+    launcher = tmp_path / "broken.py"
+    launcher.write_text("raise SystemExit('the reason it could not start')\n")
+    with pytest.raises(RuntimeError, match="the reason it could not start"):
+        LiveServer(tmp_path / "root", launcher=str(launcher)).start()
