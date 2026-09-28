@@ -30,9 +30,18 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
-        "ARTICLE_OUTPUT_DIR=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/demo SCRIVIO_ENV_FILE=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/none.env SCRIVIO_STATE_DIR=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/state PORT=8896 python3 -m api"
+        "env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u TAVILY_API_KEY -u LLM_PROVIDER LLM_CLI=qwen SCRIVIO_ENV_FILE=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/none.env ARTICLE_OUTPUT_DIR=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/demo SCRIVIO_STATE_DIR=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/state PORT=8896 python3 -m api"
       ],
       "port": 8896
+    },
+    {
+      "name": "scrivio-review-demo",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "env -u ANTHROPIC_API_KEY -u OPENAI_API_KEY -u TAVILY_API_KEY -u LLM_PROVIDER LLM_CLI=qwen SCRIVIO_ENV_FILE=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/none.env ARTICLE_OUTPUT_DIR=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/demo SCRIVIO_STATE_DIR=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/state SCRIVIO_DEMO=1 PORT=8895 python3 -m api"
+      ],
+      "port": 8895
     }
   ]
 }

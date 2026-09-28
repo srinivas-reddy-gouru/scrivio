@@ -134,10 +134,23 @@ def test_tool_path_fails_after_retry(monkeypatch) -> None:
 
 def test_nonzero_exit_raises(monkeypatch) -> None:
     _patch_cli(monkeypatch, [
+        _FakeProcess(b"", returncode=1, stderr=b"model overloaded, try later"),
+    ])
+    adapter = ClaudeCLIAdapter()
+    with pytest.raises(ClaudeCLIError, match="model overloaded"):
+        asyncio.run(adapter.messages.create(
+            model="m", messages=[{"role": "user", "content": "hi"}],
+        ))
+
+
+def test_a_signed_out_cli_is_reported_as_that_and_not_as_a_crash(monkeypatch) -> None:
+    """Still a ClaudeCLIError, so existing handlers catch it, but with a
+    message a person can act on instead of the tool's raw stderr."""
+    _patch_cli(monkeypatch, [
         _FakeProcess(b"", returncode=1, stderr=b"not logged in"),
     ])
     adapter = ClaudeCLIAdapter()
-    with pytest.raises(ClaudeCLIError, match="not logged in"):
+    with pytest.raises(ClaudeCLIError, match="installed but not signed in"):
         asyncio.run(adapter.messages.create(
             model="m", messages=[{"role": "user", "content": "hi"}],
         ))

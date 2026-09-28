@@ -108,6 +108,14 @@ export interface InterviewStats {
   recent_scores: number[]; streak_days: number;
 }
 
+/** What will actually run, from GET /mode. Never carries a credential. */
+export interface ModeStatus {
+  demo: boolean; ready: boolean;
+  writing: string; fact_checking: string;
+  cli: { state: string; cli: string; checked_at: string | null };
+  problem: string; notice: string;
+}
+
 export interface SettingsInfo {
   resolved_provider: string; provider_auto: boolean; active_cli: string;
   has_search: boolean;

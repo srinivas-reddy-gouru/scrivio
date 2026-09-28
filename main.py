@@ -39,6 +39,10 @@ from pipeline.workers.single_draft_worker import (
 )
 from pipeline.cache import StageCache
 from pipeline.workers.extraction_worker import process_search_result, score_url
+from pipeline.providers.anthropic_facade import AnthropicOpenAIFacade
+from pipeline.runtime_mode import (
+    DEMO_LABEL, NO_PROVIDER, ProviderUnavailable, demo_mode,
+)
 from pipeline.workers.critic_worker import critique_article
 from pipeline.workers.humanization_worker import humanize_article, polish_draft_to_article
 from pipeline.workers.planning_worker import find_evidence_gaps, run_planner
@@ -1044,26 +1048,46 @@ async def _review_diagram_assets(
     return reviewed, revised_count
 
 
-def _openai_client(request: ArticleRequest):
-    """Client for the OpenAI-interface stages (claim verification,
-    corrective search). Priority:
-      1. Provider resolved to claude-cli → the CLI facade, ALWAYS — the
-         user explicitly chose their subscription, so no stage may silently
-         bill an API key that happens to be configured.
-      2. Real OpenAI when its key exists.
-      3. Claude CLI facade when the CLI is installed — verification runs on
-         the subscription instead of silently degrading to the mock. This
-         also covers anthropic-key-only users: a mocked fact-check is a
-         disabled fact-check.
-      4. Mock (placeholder output, keyless dev only)."""
+def verification_provider(request: ArticleRequest | None = None) -> str:
+    """Which provider the OpenAI-interface stages (claim verification,
+    search queries) will run on. One function, so the client that is
+    built, the roadmap the user is shown, and the status endpoint cannot
+    disagree about it.
+
+      1. Provider resolved to the subscription CLI: the CLI, ALWAYS. The
+         user chose their subscription, so no stage may bill a key that
+         happens to be configured.
+      2. OpenAI, when its key exists.
+      3. The CLI, when it is installed.
+      4. Anthropic, when its key exists: real fact-checking for an
+         Anthropic-only install, which used to get the mock.
+      5. Nothing. In real mode that is an error, not a mock."""
+    if demo_mode():
+        return "demo"
     provider = _resolve_provider(getattr(request, "llm_provider", "auto"))
     if provider == "claude-cli":
-        return ClaudeCLIOpenAIFacade()
+        return "claude-cli"
     if os.environ.get("OPENAI_API_KEY"):
-        return openai.AsyncOpenAI()
+        return "openai"
     if claude_cli_available():
+        return "claude-cli"
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    return "none"
+
+
+def _openai_client(request: ArticleRequest):
+    """Client for the OpenAI-interface stages. See verification_provider()."""
+    provider = verification_provider(request)
+    if provider == "demo":
+        return MockOpenAIClient(request)
+    if provider == "claude-cli":
         return ClaudeCLIOpenAIFacade()
-    return MockOpenAIClient(request)
+    if provider == "openai":
+        return openai.AsyncOpenAI()
+    if provider == "anthropic":
+        return AnthropicOpenAIFacade()
+    raise ProviderUnavailable(NO_PROVIDER)
 
 
 def _pipeline_models(request: ArticleRequest) -> dict:
@@ -1076,9 +1100,13 @@ def _pipeline_models(request: ArticleRequest) -> dict:
     """
     provider = _resolve_provider(getattr(request, "llm_provider", "auto"))
 
+    demo = demo_mode()
+
     def writing_model(role: str) -> str:
+        if demo:
+            return "demo (canned, no model)"
         if provider == "none":
-            return "mock"
+            return "unavailable"
         model = get_model(role, request.model_preset)
         if provider == "openai":
             return _map_model(model)
@@ -1092,16 +1120,17 @@ def _pipeline_models(request: ArticleRequest) -> dict:
     # Claim verification mirrors _openai_client's priority exactly, so the
     # roadmap never shows a model that won't actually run: subscription
     # provider → subscription; else OpenAI key; else CLI; else mock.
-    if provider == "claude-cli":
-        aux = "haiku (subscription)"
-    elif os.environ.get("OPENAI_API_KEY"):
-        aux = "gpt-4o-mini"
-    elif claude_cli_available():
-        aux = "haiku (subscription)"
-    else:
-        aux = "mock"
+    checker = verification_provider(request)
+    aux = {
+        "demo": "demo (canned, no model)",
+        "claude-cli": "haiku (subscription)",
+        "openai": "gpt-4o-mini",
+        "anthropic": get_model("relevance", "balanced"),
+        "none": "unavailable",
+    }[checker]
     return {
-        "provider": provider,
+        "provider": "demo" if demo else provider,
+        "verification_provider": checker,
         "preset": request.model_preset,
         "stages": {
             "brief": writing_model("brief"),
@@ -1175,13 +1204,17 @@ def _resolve_provider(requested: str = "auto") -> str:
 def _anthropic_client(request: ArticleRequest):
     """Return the writing-stage client for this request.
 
-    Provider priority:
-      • request.llm_provider pin (when its key is present) — per-run choice
-      • Only OpenAI key present  → OpenAIAnthropicAdapter (no Claude credits needed)
+    Real mode, by provider:
+      • request.llm_provider pin (when its key is present): per-run choice
+      • Only OpenAI key present  → OpenAIAnthropicAdapter
       • Only Anthropic key       → anthropic.AsyncAnthropic
-      • Both keys present        → use LLM_PROVIDER preference (default: Anthropic)
-      • Neither key              → MockAnthropicClient (generates placeholder text)
-    """
+      • Both keys present        → the LLM_PROVIDER preference
+      • The subscription CLI     → ClaudeCLIAdapter
+      • None of those            → ProviderUnavailable. Never a mock.
+
+    Demo mode returns the canned client whatever is configured."""
+    if demo_mode():
+        return MockAnthropicClient(request)
     provider = _resolve_provider(getattr(request, "llm_provider", "auto"))
     if provider == "openai":
         return OpenAIAnthropicAdapter(openai.AsyncOpenAI())
@@ -1189,11 +1222,7 @@ def _anthropic_client(request: ArticleRequest):
         return anthropic.AsyncAnthropic()
     if provider == "claude-cli":
         return ClaudeCLIAdapter()
-    logging.warning(
-        "No LLM API key found (ANTHROPIC_API_KEY or OPENAI_API_KEY). "
-        "Using mock client — add a key in Settings to generate real articles."
-    )
-    return MockAnthropicClient(request)
+    raise ProviderUnavailable(NO_PROVIDER)
 
 
 def _has_search_key() -> bool:
@@ -1652,9 +1681,10 @@ class MockAnthropicMessages:
                 "fix": "Add the result: 'Mentored two junior engineers to independent on-call rotation in 3 months.'",
             }],
             "missing_keywords": ["Kubernetes"] if has_jd else [],
-            "summary": "Solid backend resume with real quantified wins; the "
-                       "mentoring and infra bullets need outcomes to earn a "
-                       "senior screen.",
+            "summary": (f"{DEMO_LABEL} " if demo_mode() else "") + (
+                "Solid backend resume with real quantified wins; the "
+                "mentoring and infra bullets need outcomes to earn a "
+                "senior screen."),
         }
 
     def _mock_tailored_resume(self) -> dict:
@@ -1675,7 +1705,7 @@ class MockAnthropicMessages:
                 {"kind": "placeholder", "where": "work[0].highlights[2]",
                  "what": "Added a [METRIC] placeholder for the mentoring outcome."},
             ],
-            "warnings": [
+            "warnings": ([DEMO_LABEL] if demo_mode() else []) + [
                 "Cannot honestly claim Kubernetes — no supporting experience on the resume.",
                 "[METRIC] in work[0].highlights[2] needs your real onboarding figure.",
             ],
@@ -1690,7 +1720,8 @@ class MockAnthropicMessages:
             "strengths": ["You correctly identified the core concept."],
             "gaps": ["The failure-mode discussion is missing."],
             "misconceptions": [],
-            "suggestions": ["Add a concrete example from a production system."],
+            "suggestions": ([DEMO_LABEL] if demo_mode() else []) + [
+                "Add a concrete example from a production system."],
             "section_pointers": ["Why it matters"],
         }
         if "followup_answer:" in user_content:

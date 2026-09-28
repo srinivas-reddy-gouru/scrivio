@@ -147,6 +147,17 @@ the whole sign-in: your resumes and interview answers are on this machine, and
 only a browser you have paired can read them. The code is single use, and a
 paired browser stays paired for 30 days.
 
+**No provider yet?** Scrivio will tell you so and refuse to run, rather than
+show you made-up results. To look around first, start it in demo mode:
+
+```bash
+SCRIVIO_DEMO=1 python -m api
+```
+
+Demo mode runs on canned examples and never calls a model, even if keys are
+configured. Everything it shows is labelled as a demo, and demo work is stored
+in its own directory so it never mixes with your real job search.
+
 This protects one person's local install. It is not multi-user isolation:
 everyone who pairs sees the same data. Do not host this for several people
 as it stands.

@@ -1370,3 +1370,21 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 .pair-card input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(32, 184, 205, 0.22); }
 .pair-card input[aria-invalid="true"] { border-color: var(--redpen); }
 .pair-problem { color: var(--redpen); font-size: 0.85rem; min-height: 1.4em; margin-top: 0.8rem; }
+
+/* Mode banners: demo and not-ready are states the whole app is in, so they
+   sit above everything and do not scroll away. */
+.mode-banner {
+  position: sticky; top: 0; z-index: 60; grid-column: 1 / -1;
+  padding: 0.55rem 1.2rem; font-size: 0.84rem; line-height: 1.45; text-align: center;
+}
+.mode-banner.demo { background: #E5B04C; color: #2A1E05; }
+.mode-banner.blocked { background: #E06A55; color: #2A0B06; }
+.mode-banner b { font-weight: 700; }
+.link-btn {
+  background: none; border: none; padding: 0; font: inherit; font-weight: 700;
+  color: inherit; text-decoration: underline; cursor: pointer;
+}
+.what-runs { margin-bottom: 1.2rem; }
+.what-runs dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.2rem; margin: 0.4rem 0 0.7rem; }
+.what-runs dt { color: var(--text-dim); font-size: 0.82rem; }
+.what-runs dd { color: var(--text); font-size: 0.86rem; margin: 0; }

@@ -1,8 +1,17 @@
 /** The Back Office: the utility room. Engines, model tiers, keys.
  * No metaphor theatrics; honest states and one save per edit batch. */
 import { useEffect, useState } from "react";
-import { settingsApi } from "../api";
-import type { SettingsFull } from "../types";
+import { api, settingsApi } from "../api";
+import type { ModeStatus, SettingsFull } from "../types";
+
+const PROVIDER_NAMES: Record<string, string> = {
+  anthropic: "Anthropic API", openai: "OpenAI API", demo: "Canned demo output (no model)",
+  none: "Nothing configured",
+};
+const describe = (provider: string, mode: ModeStatus): string =>
+  provider === "claude-cli"
+    ? `${mode.cli.cli} subscription (command line)`
+    : PROVIDER_NAMES[provider] ?? provider;
 
 const ENGINES: Array<{ id: string; name: string; blurb: string }> = [
   { id: "", name: "Auto", blurb: "Whatever is available wins: single key uses that provider; subscription CLI fills the gap." },
@@ -32,8 +41,12 @@ export function BackOffice() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState<ModeStatus | null>(null);
 
-  const load = () => settingsApi.full().then(setS).catch(() => setStatus({ msg: "The office is unreachable; is the backend up?", ok: false }));
+  const load = () => {
+    api.mode().then(setMode).catch(() => setMode(null));
+    return settingsApi.full().then(setS).catch(() => setStatus({ msg: "Settings could not be loaded. Is the server still running?", ok: false }));
+  };
   useEffect(() => { load(); }, []);
 
   const stage = (key: string, value: string) => {
@@ -75,9 +88,28 @@ export function BackOffice() {
     <div className="room-wrap">
       <h1 className="room-title bar-tick-left">Settings</h1>
       <p className="room-sub">
-        Running on {s.resolved_provider === "claude-cli" ? `the ${s.active_cli || "claude"} subscription CLI` : `the ${s.resolved_provider} API`}
-        {s.provider_auto ? " (auto-resolved)" : " (pinned)"}.
+        {mode?.demo ? "Demo mode: canned examples, no model is called."
+          : mode && !mode.ready ? "No provider is configured yet, so nothing can run."
+          : <>Running on {s.resolved_provider === "claude-cli" ? `the ${s.active_cli || "claude"} subscription CLI` : `the ${s.resolved_provider} API`}
+            {s.provider_auto ? " (auto-resolved)" : " (pinned)"}.</>}
       </p>
+      {mode && (
+        <div className="panel what-runs" aria-label="What will run">
+          <p className="eyebrow">What will run</p>
+          <dl>
+            <dt>Writing, grading, tailoring</dt><dd>{describe(mode.writing, mode)}</dd>
+            <dt>Fact-checking claims</dt><dd>{describe(mode.fact_checking, mode)}</dd>
+            <dt>Command-line assistant</dt>
+            <dd>{mode.cli.cli}: {mode.cli.state}
+              {mode.cli.checked_at ? ` (as of ${mode.cli.checked_at.replace("T", " ")})` : ""}</dd>
+          </dl>
+          {mode.problem && <p className="office-note" role="alert">{mode.problem}</p>}
+          <p className="office-note">
+            An installed command-line assistant is not the same as a signed-in one. Whether it
+            is signed in is learned from the last real call, never by spending one to check.
+          </p>
+        </div>
+      )}
       <div className="office-grid">
         <div className="panel">
           <p className="eyebrow">The engine</p>

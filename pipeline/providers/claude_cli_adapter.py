@@ -33,8 +33,11 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from types import SimpleNamespace
+
+from pipeline.runtime_mode import ProviderUnavailable
 
 
 # ── CLI registry ─────────────────────────────────────────────────────
@@ -193,6 +196,46 @@ def claude_cli_available() -> bool:
 
 class ClaudeCLIError(RuntimeError):
     pass
+
+
+class CLINotSignedIn(ProviderUnavailable, ClaudeCLIError):
+    """The binary is there and the account behind it is not.
+
+    Finding an executable says nothing about whether it can be used. That
+    is only learned by calling it, and asking it on every status check
+    would spend the user's quota to tell them what they already know. So
+    the state is recorded when a real call discovers it."""
+
+
+# What the last real call to the CLI found. "unknown" until one is made.
+_last_call = {"state": "unknown", "at": None}
+
+_SIGN_IN_MARKERS = (
+    "not logged in", "please run /login", "run /login", "login required",
+    "claude login", "not authenticated", "authentication required",
+    "unauthorized", "invalid api key", "sign in", "oauth token", "401",
+)
+
+
+def _looks_signed_out(detail: str) -> bool:
+    lowered = detail.lower()
+    return any(marker in lowered for marker in _SIGN_IN_MARKERS)
+
+
+def cli_status() -> dict:
+    """Installed, and separately, usable as far as is known."""
+    if _find_cli() is None:
+        return {"state": "not installed", "cli": active_cli_name(), "checked_at": None}
+    state = {
+        "ok": "installed, signed in",
+        "signed_out": "installed, not signed in",
+    }.get(_last_call["state"], "installed, not yet used")
+    return {"state": state, "cli": active_cli_name(), "checked_at": _last_call["at"]}
+
+
+def _record(state: str) -> None:
+    _last_call["state"] = state
+    _last_call["at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 # CLI processes are heavyweight; cap concurrency so the article pipeline's
@@ -481,9 +524,18 @@ class _CLIMessages:
                 )
         if process.returncode != 0:
             detail = (stderr or stdout or b"").decode(errors="replace")[:500]
+            if _looks_signed_out(detail):
+                _record("signed_out")
+                raise CLINotSignedIn(
+                    f"The {name} command-line assistant is installed but not "
+                    f"signed in, so it cannot be used. Run `{spec['binary']}` "
+                    "in a terminal, sign in, and try again. Or configure an "
+                    "API key in Settings instead."
+                )
             raise ClaudeCLIError(
                 f"{name} CLI exited with {process.returncode}: {detail}"
             )
+        _record("ok")
         return _parse_cli_output(
             name, spec["output"], stdout.decode(errors="replace")
         )

@@ -131,3 +131,15 @@ def _never_the_real_settings_file(tmp_path, monkeypatch):
     except Exception:
         return
     monkeypatch.setattr(server, "_ENV_FILE", tmp_path / "test-settings.env")
+
+
+@pytest.fixture(autouse=True)
+def _a_stage_cache_of_its_own(tmp_path, monkeypatch):
+    """The article pipeline caches each stage by its inputs, in
+    .cache/article_pipeline under the repository. The suite runs that
+    pipeline on canned clients, with topics a person might really use.
+    Sharing the directory meant a test could be served the developer's
+    real cached work, and a real run could be served a canned plan."""
+    from pipeline import cache
+
+    monkeypatch.setattr(cache, "_DEFAULT_CACHE_DIR", tmp_path / ".stage-cache")

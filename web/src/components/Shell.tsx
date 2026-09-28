@@ -2,7 +2,7 @@
  * Hash-routed (#/floor, #/desk, …) with no router dependency. */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, openSession } from "../api";
-import type { ArticleSummary, InterviewSessionItem, ResumeSummaryItem } from "../types";
+import type { ArticleSummary, InterviewSessionItem, ModeStatus, ResumeSummaryItem } from "../types";
 
 export type RoomId = "floor" | "newsroom" | "interview" | "job" | "desk" | "office";
 
@@ -58,6 +58,7 @@ export function Shell({ room, go, children }: {
   children: React.ReactNode;
 }) {
   const [health, setHealth] = useState<{ label: string; up: boolean } | null>(null);
+  const [mode, setMode] = useState<ModeStatus | null>(null);
   const [palOpen, setPalOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">(() =>
     (localStorage.getItem("studio-theme") as "dark" | "light" | null)
@@ -76,14 +77,21 @@ export function Shell({ room, go, children }: {
     announce(`${label} page`);
   }, [room]);
 
+  // What the header says has to be what will happen. It used to read the
+  // resolved provider name and show "none api" with a green light when
+  // nothing was configured.
   useEffect(() => {
-    api.settings()
-      .then((s) => setHealth({
-        up: true,
-        label: s.resolved_provider === "claude-cli"
-          ? `subscription (${s.active_cli || "claude"})`
-          : `${s.resolved_provider} api`,
-      }))
+    api.mode()
+      .then((m) => {
+        setMode(m);
+        setHealth({
+          up: m.ready,
+          label: m.demo ? "demo mode"
+            : !m.ready ? "no provider configured"
+            : m.writing === "claude-cli" ? `subscription (${m.cli.cli || "claude"})`
+            : `${m.writing} api`,
+        });
+      })
       .catch(() => setHealth({ up: false, label: "backend unreachable" }));
   }, []);
 
@@ -102,6 +110,18 @@ export function Shell({ room, go, children }: {
     <div className="studio">
       <a className="skip-link" href="#studio-main">Skip to content</a>
       <Announcer />
+      {mode?.demo && (
+        <div className="mode-banner demo" role="status">
+          <b>Demo mode.</b> Everything here is a canned example. Nothing is sent to a model, and
+          nothing shown is an analysis of your resume, your answers, or your topic.
+        </div>
+      )}
+      {mode && !mode.demo && !mode.ready && (
+        <div className="mode-banner blocked" role="alert">
+          <b>Not ready to run.</b> {mode.problem}{" "}
+          <button className="link-btn" onClick={() => go("office")}>Open Settings</button>
+        </div>
+      )}
       <nav className="side" aria-label="Studio navigation">
         <div className="brand-block">
           <div className="brand-name">

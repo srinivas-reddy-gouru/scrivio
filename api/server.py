@@ -34,8 +34,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from uuid import uuid4
 
 from api import boundary
+from pipeline.providers.claude_cli_adapter import cli_status
+from pipeline.runtime_mode import (
+    DEMO_LABEL, NO_PROVIDER, ProviderUnavailable, demo_mode,
+)
 from api.jobs import Job, create_job, get_job
-from main import _anthropic_client, generate_article
+from main import (
+    _anthropic_client, _openai_client, _resolve_provider, generate_article,
+    verification_provider,
+)
 from pipeline.schemas.models import (
     AnswerEvaluation,
     ArticleRequest,
@@ -113,7 +120,15 @@ from pipeline.workers.topic_classifier import classify_topic_breadth
 # Where finished articles are written to disk. Each job creates a
 # timestamped subdirectory containing one markdown file per explanation
 # level plus a meta.json with the request and verification reports.
-OUTPUT_ROOT = Path(os.environ.get("ARTICLE_OUTPUT_DIR", "./output"))
+def output_root_for(demo: bool) -> Path:
+    """Demo work lives in its own directory, so a canned resume review can
+    never turn up in the history of someone's real job search, and real
+    work is never shown under a demo banner."""
+    root = Path(os.environ.get("ARTICLE_OUTPUT_DIR", "./output"))
+    return root / "demo-mode" if demo else root
+
+
+OUTPUT_ROOT = output_root_for(demo_mode())
 
 
 app = FastAPI(title="Article Generator API", version="0.1.0")
@@ -137,6 +152,60 @@ if _extra_origins:
 # passing the host, origin, and session checks first.
 app.add_middleware(boundary.LocalBoundary)
 app.router.on_startup.append(boundary.announce_pairing_code)
+
+
+@app.exception_handler(ProviderUnavailable)
+async def _provider_unavailable(request: Request, exc: ProviderUnavailable) -> Response:
+    """A request that needs a model and has none is a 503 with the reason,
+    not a 500 and not a canned answer."""
+    return Response(
+        content=json.dumps({"detail": str(exc)}),
+        status_code=503, media_type="application/json",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.middleware("http")
+async def _say_which_mode(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Scrivio-Mode"] = "demo" if demo_mode() else "real"
+    return response
+
+
+class ModeStatus(BaseModel):
+    """What will actually run. No keys, no masked keys, no paths."""
+    demo: bool
+    ready: bool
+    writing: str          # anthropic | openai | claude-cli | demo | none
+    fact_checking: str    # the same set; may differ from writing
+    cli: dict
+    problem: str = ""
+    notice: str = ""
+
+
+@app.get("/mode", response_model=ModeStatus)
+async def mode_status() -> ModeStatus:
+    """Answers "if I press the button, what happens?" without pressing it.
+    Nothing here calls a model: whether a CLI is signed in is reported
+    from the last real call that was made, not by spending one to ask."""
+    demo = demo_mode()
+    writing = "demo" if demo else _resolve_provider("auto")
+    checking = verification_provider(None)
+    cli = cli_status()
+    problem = ""
+    if not demo:
+        if writing == "none":
+            problem = str(ProviderUnavailable(NO_PROVIDER))
+        elif "claude-cli" in (writing, checking) and cli["state"] == "installed, not signed in":
+            problem = (
+                f"The {cli['cli']} command-line assistant is installed but the "
+                "last call found it signed out. Sign in from a terminal, or "
+                "add an API key in Settings.")
+    return ModeStatus(
+        demo=demo, ready=demo or not problem, writing=writing,
+        fact_checking=checking, cli=cli, problem=problem,
+        notice=DEMO_LABEL if demo else "",
+    )
 
 
 class PairRequest(BaseModel):
@@ -363,8 +432,17 @@ async def _maybe_request_clarification(
     return await generate_clarification_questions(request.topic, breadth, client)
 
 
+def _require_providers(request: ArticleRequest) -> None:
+    """Both halves of the pipeline, checked before a job exists. Finding
+    out ten minutes into a run that the fact-checker has nothing to run
+    on is the expensive way to learn it."""
+    _anthropic_client(request)
+    _openai_client(request)
+
+
 @app.post("/generate", response_model=GenerateResponse)
 async def generate(request: ArticleRequest) -> GenerateResponse:
+    _require_providers(request)
     # Step 1: if the topic is broad and the user hasn't given us steering,
     # ask clarifying questions instead of starting a job.
     clarification = await _maybe_request_clarification(request)
@@ -499,7 +577,10 @@ def _persist_job(
 
     # Write one markdown file per explanation level.
     for level, article in result.items():
-        (job_dir / f"{level}.md").write_text(article.markdown, encoding="utf-8")
+        markdown = article.markdown
+        if demo_mode():
+            markdown = f"> {DEMO_LABEL}\n\n{markdown}"
+        (job_dir / f"{level}.md").write_text(markdown, encoding="utf-8")
 
     # Write a meta.json with the request and the verification reports
     # (sources, claim support status, etc.) — useful for traceability.
@@ -508,6 +589,14 @@ def _persist_job(
         "job_id": job_id,
         "generated_at": datetime.now().isoformat(),
         "request": request.model_dump(mode="json"),
+        # Which providers produced this, recorded at the time, so an article
+        # can always be told apart from a demo and its fact-check traced.
+        "provenance": {
+            "mode": "demo" if demo_mode() else "real",
+            "writing_provider": "demo" if demo_mode() else _resolve_provider(
+                getattr(request, "llm_provider", "auto")),
+            "fact_checking_provider": verification_provider(request),
+        },
         "verification_reports": [
             r.model_dump(mode="json") for r in first_article.verification_reports
         ],
@@ -2276,7 +2365,16 @@ async def _finish_resume_analysis(resume_id: str) -> None:
         doc = _load_resume_doc(resume_id)
     except HTTPException:
         return  # deleted before the task ran
-    client, preset = _client_for_session({}, "resume")
+    try:
+        client, preset = _client_for_session({}, "resume")
+    except ProviderUnavailable as exc:
+        # Raised outside any handler, this would leave the document saying
+        # "analyzing" for ever. The checklist that already shipped is real;
+        # the review is simply not available, and the reason is shown.
+        doc.status, doc.error = "error", str(exc)
+        if _resume_path(resume_id).is_file():
+            _save_resume_doc(doc)
+        return
 
     async def _extract() -> StructuredResume | None:
         try:
@@ -2305,10 +2403,12 @@ async def _finish_resume_analysis(resume_id: str) -> None:
         )
         _report_extraction_audit(doc)
         doc.status, doc.error = "ready", ""
+    except ProviderUnavailable as exc:
+        doc.status, doc.error = "error", str(exc)
     except Exception:
         logging.exception("Resume review failed")
         doc.status = "error"
-        doc.error = ("The recruiter review failed — check your provider in "
+        doc.error = ("The recruiter review failed. Check your provider in "
                      "Settings and re-analyze. The checklist above is still valid.")
     if _resume_path(resume_id).is_file():  # deleted mid-analysis → discard
         _save_resume_doc(doc)
@@ -2381,8 +2481,8 @@ async def _finish_resume_tailor(resume_id: str) -> None:
         doc = _load_resume_doc(resume_id)
     except HTTPException:
         return
-    client, preset = _client_for_session({}, "resume")
     try:
+        client, preset = _client_for_session({}, "resume")
         previous = doc.tailored.model_copy(deep=True) if doc.tailored else None
         doc.tailored = await tailor_resume(
             structured=doc.structured,
@@ -2400,10 +2500,12 @@ async def _finish_resume_tailor(resume_id: str) -> None:
             render_markdown(doc.tailored.resume), doc.jd_text, doc.tailored.resume
         )
         doc.tailor_status, doc.tailor_error = "idle", ""
+    except ProviderUnavailable as exc:
+        doc.tailor_status, doc.tailor_error = "error", str(exc)
     except Exception:
         logging.exception("Resume tailoring failed")
         doc.tailor_status = "error"
-        doc.tailor_error = ("Tailoring failed — check your provider in Settings "
+        doc.tailor_error = ("Tailoring failed. Check your provider in Settings "
                             "and try again.")
     if _resume_path(resume_id).is_file():
         _save_resume_doc(doc)

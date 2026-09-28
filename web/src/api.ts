@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   ArticleSummary, InterviewDetail, InterviewSessionItem, InterviewStats,
-  JobProfileDetail, JobProfileSummary, ResumeDoc, ResumeSummaryItem, SettingsInfo,
+  JobProfileDetail, JobProfileSummary, ModeStatus, ResumeDoc, ResumeSummaryItem, SettingsInfo,
 } from "./types";
 
 async function json<T>(res: Response): Promise<T> {
@@ -100,6 +100,7 @@ export const api = {
   interviewStats: () =>
     fetch("/interviews/stats").then((r) => json<InterviewStats>(r)),
   settings: () => fetch("/settings").then((r) => json<SettingsInfo>(r)),
+  mode: () => fetch("/mode").then((r) => json<ModeStatus>(r)),
   getJobProfile: (id: string) =>
     fetch(`/job-profiles/${id}`).then((r) => json<JobProfileDetail>(r)),
   createJobProfile: (body: {

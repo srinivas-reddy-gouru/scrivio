@@ -21,6 +21,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from pipeline.runtime_mode import demo_mode
+
 
 # Bump this whenever prompt content or schema shapes change in a way that
 # should invalidate all previously-cached outputs.
@@ -78,6 +80,11 @@ class StageCache:
     def __init__(self, cache_dir: Path | None = None) -> None:
         self.cache_dir = cache_dir or _DEFAULT_CACHE_DIR
         self.enabled = os.environ.get("ARTICLE_CACHE", "1") != "0"
+        # Demo mode runs on canned clients. Their output is keyed by the
+        # same inputs a real run would use, so caching it would hand a
+        # canned plan to the next real article on the same topic.
+        if cache_dir is None and demo_mode():
+            self.enabled = False
         if self.enabled:
             try:
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
