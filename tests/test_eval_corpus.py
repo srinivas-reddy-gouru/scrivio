@@ -423,3 +423,21 @@ def test_the_template_for_human_scores_lists_every_case_and_no_scores(answers):
 
     assert [r["case_id"] for r in rows] == [c.id for c in answers.cases]
     assert all(r["score"] == "" and r["judged_by"] == "" for r in rows)
+
+
+def test_the_documentation_states_the_counts_the_corpus_has(corpus):
+    """The numbers in the evaluation's own documentation were wrong by
+    two within an hour of being written. They are checked now."""
+    import re
+    from collections import Counter
+    from pathlib import Path
+
+    text = (Path(resume_guard_eval.__file__).parent / "README.md").read_text(encoding="utf-8")
+    stated = {name.lower().replace(" ", "_"): int(count) for name, count in
+              re.findall(r"^\| ([A-Z][a-z]+(?: [a-z]+)?) \| (\d+) \|", text, re.M)}
+    counted = Counter(c.category for c in corpus.cases)
+    report = resume_guard_eval.evaluate(corpus)
+
+    assert stated == dict(counted)
+    assert (f"{report.cases} cases, {report.held} held, {report.gaps} known gaps, "
+            f"{report.failed} failed") in text

@@ -22,19 +22,21 @@ is a procedure and not a result.
 python -m evals.resume_guard_eval
 ```
 
-`corpus/v1/resume_cases.json` holds 38 cases. Each is a resume and what a
-model is imagined to have returned for it, written by hand to be wrong in one
-specific way, or right, to check that good work is left alone:
+`corpus/v2/resume_cases.json` holds 56 cases: the 38 of v1, and 18 about an
+edit to a resume that has already been tailored, which v1 had none of. Each is
+a resume and what a model is imagined to have returned for it, written by
+hand to be wrong in one specific way, or right, to check that good work is
+left alone:
 
 | Category | Cases | For example |
 | --- | --- | --- |
-| Unsupported fact | 11 | An invented figure. A figure moved from one employer to another. A raised title. |
+| Unsupported fact | 23 | An invented figure. A figure moved from one employer to another. A raised title. A figure that stays on its line and counts something else. A number the candidate was refusing. |
 | Missing information | 3 | The original has no end date, and the model supplies one. |
 | Promotion | 4 | Two roles at one employer, with the senior title written onto the earlier role. |
 | Reordered entries | 3 | Jobs returned in another order with a figure swapped under cover of it. |
 | Format variation | 9 | `2M` written as `2 million`. 287 rounded to 300. A percentage worked out from two real figures. |
 | Language variation | 6 | Spanish, German, and Japanese resumes, including `12,5 %` and `2.000.000`. |
-| Legitimate edit | 2 | An honest rewording. A figure the candidate typed themselves. |
+| Legitimate edit | 8 | An honest rewording. A figure the candidate typed themselves. The same claim turned round, figure in place. |
 
 It measures one thing: whether facts survive. It does not look at the
 checklist score or at how the prose reads, and those must not be folded into
@@ -44,13 +46,26 @@ number, which is the case this exists to catch.
 It does not run a model, so it does not say how often a real model makes
 these mistakes. It says what happens when one does.
 
-**Known gaps.** Three cases are recorded as things the guard does not catch:
+**Reading the result.** Today: 56 cases, 52 held, 4 known gaps, 0 failed.
+
+**Exit status 0 does not mean 56 of 56.** It means nothing has changed since
+the result was recorded. The known gaps are inventions the guard does not
+catch, and the last line of the output counts them. `--strict` exits 1 while
+any remain.
+
+**Known gaps.** Four cases are recorded as things the guard does not catch:
 the top of a range stated as the figure, an approximation restated as a
-minimum, and a stronger verb. All three are changes of wording around a
+minimum, a stronger verb, and a sentence of the candidate's own that gives a
+figure without meaning it. The first three are changes of wording around a
 figure that is itself unchanged. They are in the corpus so that the list is
 written down and cannot quietly grow. A known gap is required to keep
 failing: if one starts passing, the run fails until it is promoted to an
 ordinary case.
+
+**These are the gaps that have been found.** The follow-up review found a
+fifth kind that was in neither the corpus nor the list: a figure that stayed
+on its line and changed what it counted. It is fixed and is now eighteen
+cases. There is no reason to think it was the last.
 
 **That the cases mean something** is checked by running them with the guard
 removed (`tests/test_eval_corpus.py`). Every adversarial case then fails. A
@@ -122,11 +137,23 @@ and levels, and more than one person scoring.
 
 ## Versions
 
-A corpus is a folder: `corpus/v1`. Once results have been recorded against
-it, it does not change. New cases, or corrections to old ones, go into
-`corpus/v2`, so that a result always names cases that still exist as they
-were when it was run. Until a result has been recorded against v1, v1 may
-still be corrected.
+A corpus is a folder. Once results have been recorded against it, it does not
+change. New cases, or corrections to old ones, go into the next, so that a
+result always names cases that still exist as they were when it was run.
+
+| Corpus | Cases | State |
+| --- | --- | --- |
+| `corpus/v1` | 38 resume, 12 interview | Closed. Results were reported against it on 28 September 2026 |
+| `corpus/v2` | 56 resume | Current. `python -m evals.resume_guard_eval` and CI run this one |
+
+One v1 case, `new-technology-in-a-sentence`, recorded that a name the model
+added was kept with a note beside it. The follow-up review showed that the
+note did not have to be answered, the guard was changed to put the line back,
+and **that case now fails against v1**: `--corpus v1` reports 34 held, 1
+failed, 3 gaps. That is the right result for a closed corpus and a changed
+guard, and v1 has not been edited to hide it. v2 records the new behaviour.
+
+The interview cases are still v1. No result has been recorded against them.
 
 ## Comparing against a simple baseline
 

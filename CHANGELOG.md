@@ -19,7 +19,8 @@ merged, not pushed, not released.
   configure. Before, an unconfigured install produced canned output that
   looked like real output.
 - **Demo mode is a choice**: `SCRIVIO_DEMO=1`. It is labelled on every page
-  and keeps its work in a folder of its own.
+  and keeps its work in a folder of its own. In demo mode the server makes no
+  outbound request, whatever keys are configured, and voice is off.
 - **A tailored resume with a `[METRIC]` still in it cannot be downloaded as
   finished.** A copy marked DRAFT can.
 - **Terminal recordings are off.** They ran commands written by a model on
@@ -36,6 +37,10 @@ merged, not pushed, not released.
   keep their own titles and dates.
 - Figures written as `12,5 %`, `2.000.000`, or with no-break spaces are read
   whole. They were being split and half replaced.
+- A figure that stays on its line has to go on counting the same thing.
+- A number in your instruction that you were refusing is not taken as yours.
+- A line in which the model names something new is put back as it was. It
+  used to be kept with a note that did not have to be answered.
 - A sample resume and posting, both invented, for a first look.
 
 ### Security
@@ -47,7 +52,11 @@ merged, not pushed, not released.
   follows redirects one at a time with the same check, and stops at 3 MB.
 - Text from web search is filtered before any model sees it.
 - Settings are validated and written atomically with owner-only permissions.
-- Uploads, request bodies, archives, and provider calls have limits.
+- Uploads, request bodies, archives, and provider calls have limits. Every
+  request that reaches a provider is admitted through one gate, and a provider
+  call ends within 300 seconds counting retries.
+- A renderer or assistant that is stopped, or that exits leaving something
+  running, takes what it started with it.
 
 ### Reliability
 
@@ -63,7 +72,8 @@ merged, not pushed, not released.
 ### Your data
 
 - Settings has a count of what is stored, an export, and a delete.
-- `python -m api.data` backs up and restores from the command line.
+- `python -m api.data` backs up and restores from the command line. It reads
+  the same settings file as the server and prints the folder it resolved.
 
 ### Operating it
 
@@ -84,7 +94,12 @@ merged, not pushed, not released.
 ### Known limits
 
 - One person per install. Everyone who pairs sees the same data.
-- The guard checks facts and does not judge wording.
+- The guard checks facts and does not judge wording. It matches a number by
+  the words beside it. Its evaluation lists four kinds of invention it does
+  not catch.
+- There is nowhere to record that you confirmed a claim, so a name the model
+  adds is removed for you to add, not kept for you to approve.
+- Nothing here has been run against a real model provider.
 - Interview grading has not been measured against human interviewers.
 - The article pipeline loses to a single prompt on prose in its own
   evaluation.

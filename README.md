@@ -23,9 +23,11 @@ Open **http://localhost:8899**, enter the pairing code printed in the terminal,
 and choose **Try it with a sample resume**. The sample person and posting are
 invented.
 
-Demo mode calls no model and needs no key. What it shows are fixed examples,
-labelled as such on every page, so it tells you how the workflow goes and what
-the interface looks like. It does not tell you what a model would write about
+Demo mode calls no model and needs no key. The server makes no outbound request
+in demo mode, whatever keys are configured: no model, no search, no speech, no
+fetching a posting from an address. Voice is off. What it shows are fixed
+examples, labelled as such on every page, so it tells you how the workflow
+goes and what the interface looks like. It does not tell you what a model would write about
 your resume. For that, configure a provider ([Installation](#installation)) and
 start it without `SCRIVIO_DEMO`. The same sample is offered there, and what
 comes back is a real reading of an invented resume.
@@ -40,18 +42,27 @@ original, and:
 | --- | --- |
 | A number your original does not support for that claim | Replaced with `[METRIC]` on first tailoring, reverted on later edits |
 | A number moved from one claim or employer to another | Treated as unsupported, as above |
+| A number that stays on its line and is made to count something else | The line is put back as it was |
+| A number in your instruction that you were refusing ("do not say 25") | Not taken as yours |
 | An employer, job title, date, school, or degree that differs from the original record | Reverted to the original |
 | A job, degree, or certificate that is not in the original | Removed, and reported |
 | A job or degree the model left out | Put back |
 | A skill in the skills list with no basis in the original | Removed, and reported |
 | Changed contact details | Reverted |
-| A named technology in a sentence that appears nowhere in your original | Kept, and flagged for you to confirm or remove |
+| A named technology in a sentence that appears nowhere in your original or in what you typed | The line is put back as it was, and you are told how to add the name yourself |
 | A `[METRIC]` still unfilled | The finished download is refused. A draft marked DRAFT is offered instead |
 
 These run on every path by which a model writes to a resume, and
-`tests/test_resume_fact_guards.py`, `tests/test_resume_studio.py`, and
-`tests/test_resume_export_gate.py` hold them there. Each row above is a test
-in one of those files.
+`tests/test_resume_fact_guards.py`, `tests/test_resume_studio.py`,
+`tests/test_resume_review_gate.py`, and `tests/test_resume_export_gate.py`
+hold them there. Each row above is a test in one of those files.
+
+A number is matched by the words beside it, which is a good deal less than
+understanding the sentence. A true figure reworded so that it shares none of
+those words is refused, and you are asked for it. A false one that happens to
+share a word gets through. `python -m evals.resume_guard_eval` runs 56 such
+cases and ends by saying how many the guard does **not** catch, which today is
+four.
 
 What this does **not** do:
 
@@ -63,6 +74,10 @@ What this does **not** do:
   is audited against the text of the file, and what cannot be found there is
   flagged, but a PDF that parses badly gives a poor starting point.
 - What you type yourself is yours. The guards bind the model, not you.
+- It has nowhere to record that you confirmed a particular claim. So a name
+  the model adds is not kept for you to approve. It is taken out, and you put
+  it in. And a figure you typed onto the tailored copy is lost if you tailor
+  again from the original.
 
 The scores are a checklist. They measure things like standard section
 headings, dates that parse, and how many of the posting's terms appear. They
@@ -229,9 +244,18 @@ show you made-up results. To look around first, start it in demo mode:
 SCRIVIO_DEMO=1 python -m api
 ```
 
-Demo mode runs on canned examples and never calls a model, even if keys are
-configured. Everything it shows is labelled as a demo, and demo work is stored
-in its own directory so it never mixes with your real job search.
+Demo mode runs on canned examples. The server makes no outbound request of any
+kind in demo mode, even if keys are configured and a command-line assistant is
+signed in: it calls no model, runs no search, sends no audio, and does not
+fetch a posting you give it an address for (paste the text). Voice and
+dictation are off, because a browser's own may go to a speech service.
+Everything it shows is labelled as a demo, and demo work is stored in its own
+directory so it never mixes with your real job search.
+
+One thing does leave your browser in any mode: the pages load their fonts from
+Google Fonts, and the older interface at `/classic` loads three scripts from
+public CDNs. Those requests carry nothing you typed. They do tell those
+services that the page was opened, and from where.
 
 This protects one person's local install. It is not multi-user isolation:
 everyone who pairs sees the same data. Do not host this for several people
@@ -271,6 +295,8 @@ provider you chose is one.
 | Spoken answers and the interviewer's voice | To OpenAI, only if an OpenAI key is set. Otherwise your browser does both |
 | Search queries | To your search provider. For job prep these include the role and company |
 | Keys | In the settings file on your machine. Each is sent only to the provider it belongs to |
+| Nothing you typed, but the fact that the page was opened | To Google Fonts, for the fonts. The older interface also loads scripts from two public CDNs |
+| In demo mode | Nothing from the server. See above for the fonts |
 
 What your provider keeps from those requests is governed by your agreement
 with them, not by this application.

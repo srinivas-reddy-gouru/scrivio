@@ -24,6 +24,33 @@ None of these calls a model. A check that did would be a charge on every poll.
 - `capacity`: `ok` or `full`. Full does not make it unready: it will answer
   `429` to new article runs until one finishes.
 
+## What is limited, and what is not
+
+All of these are held by one process. With two worker processes each limit
+doubles, and none of them knows who is asking.
+
+| Limit | Value | What it covers |
+| --- | --- | --- |
+| Article runs at once | 2 | A run, from start to finish |
+| Resume analyses and tailoring at once | 3 | The work that goes on after the request returns |
+| Requests that reach a provider, at once | 4 | Every request that calls a model, fetches a posting, or sends audio, for as long as it is being answered. Includes the topic classifier behind `POST /generate` |
+| One provider call | 300 seconds | From when it is made to when it returns, counting every retry |
+| One wait inside a provider call | 180 seconds, 10 to connect | To connect, to send, and between one piece of a response and the next |
+| Retries of a provider call | 2 | The SDK's own. They are inside the 300 seconds, not added to it |
+| One run of a command-line assistant | 180 seconds | One call can be two runs. The call has 300 seconds |
+| Fetching one page | 25 seconds, 3 MB | After decompression |
+
+Past a limit the answer is `429` with `Retry-After`. Nothing is queued.
+`/diagnostics` shows how many of each are running.
+
+**Not limited:** how much is spent. There is no budget, and no count of
+tokens or of calls over time. Once an article run has been admitted, the calls
+it makes are bounded by the pipeline and by the limits on a single call, not
+by the limit of four. A person who starts article after article, two at a
+time, all day, is not stopped.
+
+None of these limits was measured against a real provider.
+
 Only `storage` and `provider` decide the status code.
 
 ## Reading the log
@@ -55,8 +82,10 @@ run** on the progress screen, or:
 curl -X DELETE http://localhost:8899/jobs/<job id> -b "scrivio_session=<your session>"
 ```
 
-Provider calls time out after 180 seconds and are retried at most twice.
-A subscription command-line assistant is killed after 180 seconds.
+A provider call ends within 300 seconds, counting retries. A run of a
+command-line assistant is stopped after 180 seconds, together with whatever
+it started. See "What is limited, and what is not" above for exactly what
+each of those means.
 
 ## Stopping and starting
 

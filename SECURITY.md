@@ -48,6 +48,11 @@ response time and no bounty.
 - Plain HTTP. Acceptable on loopback, and not anywhere else.
 - Resume text and answers are sent to the model provider you configure. That
   is how it works, and the interface says so before anything is sent.
+- Both interfaces load fonts from Google Fonts, and the older one loads
+  scripts from two public CDNs without integrity hashes. A compromised CDN
+  could run script in the older interface.
+- Stopping a renderer stops its process group. A program that starts a
+  session of its own has left the group and is not reached.
 - The injection filter reads the start of each statement. It is one layer:
   external text is also fenced and labelled as data in the prompt.
 - The older interface at `/classic` builds pages from strings. Its rendering

@@ -1,7 +1,9 @@
 # Demonstration, three minutes
 
-Runs in demo mode, so it needs no key, no resume, and no network, and it
-cannot spend anything. The person and the posting are invented.
+Runs in demo mode, so it needs no key and no resume, the server makes no
+outbound request, and it cannot spend anything. The browser does load the
+fonts from Google Fonts, so without a network the pages work and look plainer.
+The person and the posting are invented.
 
 Everything on screen in demo mode is a fixed example and the banner at the top
 says so. **Say that out loud at the start.** The demonstration shows how the
