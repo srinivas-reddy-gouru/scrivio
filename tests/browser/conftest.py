@@ -11,27 +11,18 @@ directory, and a settings file that does not exist.
 Skipped, not failed, when there is no browser to drive or no built
 interface to load. CI installs both (see .github/workflows).
 """
-import os
-import socket
-import subprocess
 import sys
-import time
-import urllib.request
 from pathlib import Path
 
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 DIST = REPO / "web" / "dist" / "index.html"
+sys.path.insert(0, str(REPO / "tests"))
+from live_server import LiveServer  # noqa: E402
 
 playwright_api = pytest.importorskip(
     "playwright.sync_api", reason="browser tests need the playwright package")
-
-
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 @pytest.fixture(scope="session")
@@ -50,66 +41,15 @@ def browser():
         launched.close()
 
 
-class Server:
-    def __init__(self, base: str, output: Path, state: Path):
-        self.base, self.output, self.state = base, output, state
-
-    def session_cookie(self) -> dict:
-        """A session minted with the server's own key: the test is a
-        paired browser, by the same mechanism as any other."""
-        from api import boundary
-        previous = os.environ.get("SCRIVIO_STATE_DIR")
-        os.environ["SCRIVIO_STATE_DIR"] = str(self.state)
-        try:
-            value = boundary.mint_session()
-        finally:
-            if previous is None:
-                os.environ.pop("SCRIVIO_STATE_DIR", None)
-            else:
-                os.environ["SCRIVIO_STATE_DIR"] = previous
-        return {"name": boundary.COOKIE_NAME, "value": value, "url": self.base}
-
-
 @pytest.fixture(scope="session")
 def server(tmp_path_factory):
     if not DIST.is_file():
         pytest.skip("web/dist is not built: run `npm ci && npm run build` in web/")
-    root = tmp_path_factory.mktemp("scrivio-browser")
-    output, state = root / "output", root / "state"
-    output.mkdir()
-    port = _free_port()
-    env = {
-        k: v for k, v in os.environ.items()
-        if not k.endswith("_API_KEY") and k not in ("LLM_PROVIDER", "LLM_CLI")
-    }
-    env.update({
-        "PORT": str(port), "SCRIVIO_HOST": "127.0.0.1",
-        "ARTICLE_OUTPUT_DIR": str(output), "SCRIVIO_STATE_DIR": str(state),
-        "SCRIVIO_ENV_FILE": str(root / "no-such.env"),
-        "PYTHONPATH": str(REPO),
-    })
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "api"], cwd=REPO, env=env,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    base = f"http://127.0.0.1:{port}"
+    live = LiveServer(tmp_path_factory.mktemp("scrivio-browser")).start()
     try:
-        for _ in range(100):
-            if proc.poll() is not None:
-                pytest.fail("the server exited during startup")
-            try:
-                urllib.request.urlopen(f"{base}/health", timeout=1).read()
-                break
-            except Exception:
-                time.sleep(0.1)
-        else:
-            pytest.fail("the server did not start")
-        yield Server(base, output, state)
+        yield live
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        live.stop()
 
 
 @pytest.fixture
@@ -123,3 +63,83 @@ def page(browser, server):
     page.on("pageerror", lambda e: page.console_errors.append(str(e)))
     yield page
     context.close()
+
+
+@pytest.fixture(scope="session")
+def demo_server(tmp_path_factory):
+    """Demo mode: the whole interface works, on canned model output, so
+    the workflows can be driven end to end without a provider."""
+    if not DIST.is_file():
+        pytest.skip("web/dist is not built: run `npm ci && npm run build` in web/")
+    live = LiveServer(tmp_path_factory.mktemp("scrivio-demo"), demo=True).start()
+    try:
+        yield live
+    finally:
+        live.stop()
+
+
+@pytest.fixture(scope="session")
+def dev_server(demo_server):
+    """The Vite development server, proxying to the demo backend: the
+    setup the README tells a contributor to use."""
+    import os
+    import shutil
+    import subprocess
+    import time
+    import urllib.request
+
+    from live_server import free_port
+
+    web = REPO / "web"
+    npx = shutil.which("npx")
+    if npx is None or not (web / "node_modules" / "vite").is_dir():
+        pytest.skip("the frontend dependencies are not installed: run `npm ci` in web/")
+    port = free_port()
+    process = subprocess.Popen(
+        [npx, "vite", "--port", str(port), "--strictPort", "--host", "127.0.0.1"],
+        cwd=web, env={**os.environ, "SCRIVIO_BACKEND": demo_server.base},
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    base = f"http://127.0.0.1:{port}"
+    try:
+        for _ in range(200):
+            if process.poll() is not None:
+                pytest.fail("the Vite dev server exited during startup")
+            try:
+                urllib.request.urlopen(base, timeout=1).read()
+                break
+            except Exception:
+                time.sleep(0.1)
+        else:
+            pytest.fail("the Vite dev server did not start")
+        yield base
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+
+
+def paired_page(browser, server, base=None):
+    context = browser.new_context(accept_downloads=True)
+    cookie = server.session_cookie()
+    if base:
+        cookie["url"] = base
+    context.add_cookies([cookie])
+    page = context.new_page()
+    page.requested, page.dialogs, page.console_errors = [], [], []
+    page.html_instead_of_data = []
+    page.on("dialog", lambda d: (page.dialogs.append(d.message), d.accept()))
+    page.on("pageerror", lambda e: page.console_errors.append(str(e)))
+
+    def note(response):
+        page.requested.append(response.url)
+        kind = response.headers.get("content-type", "")
+        path = "/" + response.url.split("/", 3)[3].split("?")[0] if response.url.count("/") > 2 else "/"
+        api_like = path.split("/")[1] in (
+            "auth", "mode", "settings", "generate", "clarify", "jobs", "articles",
+            "interviews", "job-profiles", "resumes", "transcribe", "speak")
+        if api_like and "text/html" in kind:
+            page.html_instead_of_data.append(path)
+    page.on("response", note)
+    return context, page

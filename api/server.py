@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from pathlib import Path
@@ -40,6 +41,7 @@ from pipeline.providers.claude_cli_adapter import cli_status
 from pipeline.runtime_mode import (
     DEMO_LABEL, NO_PROVIDER, ProviderUnavailable, demo_mode,
 )
+from api import jobs
 from api.jobs import Job, create_job, get_job
 from main import (
     _anthropic_client, _openai_client, _resolve_provider, generate_article,
@@ -171,6 +173,29 @@ async def _busy(request: Request, exc: limits.Busy) -> Response:
         headers={"Retry-After": str(exc.retry_after), "Cache-Control": "no-store"},
     )
 app.router.on_startup.append(boundary.announce_pairing_code)
+
+
+def _recover_after_restart() -> None:
+    """What a stopped server left half done is marked as such. Nothing is
+    started: every one of these is a run of paid model calls."""
+    jobs.configure(lambda: OUTPUT_ROOT / "_jobs")
+    found = jobs.recover()
+    resumes = 0
+    root = OUTPUT_ROOT / "resumes"
+    if root.is_dir():
+        for path in root.glob("*.json"):
+            try:
+                _load_resume_doc(path.stem)      # recovers as it loads
+                resumes += 1
+            except HTTPException:
+                continue
+    if found["interrupted"]:
+        logging.warning("%d article job(s) were interrupted by the last shutdown",
+                        found["interrupted"])
+
+
+jobs.configure(lambda: OUTPUT_ROOT / "_jobs")
+app.router.on_startup.append(_recover_after_restart)
 
 
 @app.exception_handler(ProviderUnavailable)
@@ -481,9 +506,15 @@ async def generate(request: ArticleRequest) -> GenerateResponse:
     # every downstream agent sees the user's steering.
     effective_request = _apply_clarification_answers(request)
 
-    # Step 3: start the job, if there is room for one.
+    # Step 3: start the job, if it is not already running and there is
+    # room for one. The same request arriving twice (a double click, a
+    # client retrying after its own timeout) joins the run in progress
+    # instead of starting a second paid one.
+    already = jobs.running_job_for(jobs.request_key(effective_request))
+    if already is not None:
+        return GenerateResponse(job_id=already.job_id)
     slot = ARTICLE_GATE.enter()
-    job = create_job()
+    job = create_job(effective_request)
 
     async def callback(event: ProgressEvent) -> None:
         await job.publish(event)
@@ -531,6 +562,8 @@ async def _run_job(
 ) -> None:
     try:
         result = await generate_article(request, progress_callback=callback)
+        if job.closed:
+            return           # cancelled while the last stage was finishing
         job.result = result
 
         # Persist to disk so the article survives a server restart and so
@@ -538,40 +571,29 @@ async def _run_job(
         output_dir = _persist_job(job.job_id, request, result)
         logging.info("Job %s articles saved to %s", job.job_id, output_dir)
 
-        await job.publish(
-            ProgressEvent(
-                type="complete",
-                stage="complete",
-                data={
-                    "output_dir": str(output_dir),
-                    "articles": {
-                        level: article.model_dump(mode="json")
-                        for level, article in result.items()
-                    },
+        await job.finish(jobs.COMPLETE, ProgressEvent(
+            type="complete",
+            stage="complete",
+            data={
+                "output_dir": str(output_dir),
+                "articles": {
+                    level: article.model_dump(mode="json")
+                    for level, article in result.items()
                 },
-            )
-        )
+            },
+        ))
     except asyncio.CancelledError:
-        # Explicit cancellation via the /jobs/{id} DELETE endpoint. We
-        # publish a terminal `cancelled` event so the SSE client knows to
-        # stop and update the UI accordingly. Don't re-raise — the task
-        # has done its cleanup and ending here is the intended outcome.
+        # Job.cancel() already made the state terminal and logged the
+        # event. Nothing to add, and nothing to re-raise: ending here is
+        # the intended outcome.
         logging.info("Job %s cancelled by user", job.job_id)
-        job.error = "Cancelled by user"
-        await job.publish(
-            ProgressEvent(
-                type="cancelled", stage="cancelled",
-                message="Cancelled by user",
-            )
-        )
     except Exception as exc:
         logging.exception("Job %s failed", job.job_id)
-        job.error = str(exc)
-        await job.publish(
-            ProgressEvent(type="error", stage="error", message=str(exc))
+        await job.finish(
+            jobs.FAILED,
+            ProgressEvent(type="error", stage="error", message=str(exc)),
+            error=str(exc),
         )
-    finally:
-        await job.close()
 
 
 @app.delete("/jobs/{job_id}")
@@ -645,18 +667,36 @@ def _slug(text: str) -> str:
     return "-".join(part for part in slug.split("-") if part) or "article"
 
 
+def _sse(seq: int, event: ProgressEvent) -> str:
+    return f"id: {seq}\ndata: {event.model_dump_json()}\n\n"
+
+
 @app.get("/jobs/{job_id}/stream")
-async def stream(job_id: str) -> StreamingResponse:
+async def stream(job_id: str, request: Request, after: int = 0) -> StreamingResponse:
+    """The job's events, in order, from wherever the client left off.
+
+    A browser's EventSource reconnects by itself and sends the id of the
+    last event it received in Last-Event-ID. Honouring it is what makes a
+    dropped connection invisible: nothing is missed and nothing repeats.
+    `after` does the same for a client that cannot set that header. A
+    connection made after the job ended is sent the record and closed."""
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    resumed = request.headers.get("last-event-id", "")
+    cursor = int(resumed) if resumed.isdigit() else max(0, after)
 
     async def event_source() -> AsyncGenerator[str, None]:
-        while True:
-            event = await job.queue.get()
-            if event is None:
-                break
-            yield f"data: {event.model_dump_json()}\n\n"
+        # How long to wait before the browser reconnects, if it has to.
+        yield "retry: 2000\n\n"
+        async for item in job.subscribe(cursor):
+            if isinstance(item, jobs.Heartbeat):
+                yield ": keepalive\n\n"
+            elif isinstance(item, jobs.Gap):
+                yield ("event: gap\ndata: " + json.dumps({
+                    "after": item.after, "resumes_at": item.resumes_at}) + "\n\n")
+            else:
+                yield _sse(*item)
 
     return StreamingResponse(
         event_source(),
@@ -670,18 +710,26 @@ async def stream(job_id: str) -> StreamingResponse:
 
 @app.get("/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(job_id: str) -> JobStatusResponse:
+    """Where a job stands, for a client that would rather ask than listen,
+    or that needs to reconcile after a stream went quiet."""
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job.cancelled:
+    if job.state == jobs.CANCELLED:
         return JobStatusResponse(status="cancelled", error=job.error or "Cancelled by user")
-    if job.error:
+    if job.state == jobs.INTERRUPTED:
+        return JobStatusResponse(status="interrupted", error=job.error)
+    if job.state == jobs.FAILED:
         return JobStatusResponse(status="error", error=job.error)
-    if job.result is not None:
-        articles = {
-            level: article.model_dump(mode="json")
-            for level, article in job.result.items()
-        }
+    if job.state == jobs.COMPLETE:
+        if job.result is not None:
+            articles = {
+                level: article.model_dump(mode="json")
+                for level, article in job.result.items()
+            }
+        else:                   # finished under an earlier run of the server
+            final = [e for _, e in job.events_after(0) if e.type == "complete"]
+            articles = final[-1].data.get("articles") if final else None
         return JobStatusResponse(status="complete", articles=articles)
     return JobStatusResponse(status="pending")
 
@@ -2279,6 +2327,52 @@ def _resume_path(resume_id: str) -> Path:
     return _resumes_root() / f"{resume_id}.json"
 
 
+# Resume work running in THIS process, by resume id. A document that says
+# it is being analysed or tailored, and is not in here, was left that way
+# by a server that stopped.
+_RESUME_WORK: set[str] = set()
+_resume_locks: dict[str, asyncio.Lock] = {}
+
+ANALYSIS_INTERRUPTED = (
+    "Reading this resume was cut short when the server stopped. Your upload "
+    "and the checklist are intact. Press Analyze again to finish it."
+)
+TAILOR_INTERRUPTED = (
+    "Tailoring was cut short when the server stopped. Your resume and any "
+    "earlier tailored version are intact. Press Tailor to run it again."
+)
+
+
+def _resume_lock(resume_id: str) -> asyncio.Lock:
+    return _resume_locks.setdefault(resume_id, asyncio.Lock())
+
+
+def _refuse_if_busy(resume_id: str) -> None:
+    """A change that takes a model call holds the document for its length.
+    A second change arriving meanwhile would be built on the version the
+    first is about to replace, and one of the two would be lost."""
+    if _resume_lock(resume_id).locked():
+        raise HTTPException(
+            status_code=409,
+            detail="Another change to this resume is still being applied. "
+                   "Wait for it to finish, then try again.")
+
+
+def _recover_interrupted(doc: ResumeDoc) -> bool:
+    """Turn a status left behind by a restart into one that says so.
+    Nothing is re-run: that is a paid call, and the user's to ask for."""
+    if doc.resume_id in _RESUME_WORK:
+        return False
+    changed = False
+    if doc.status == "analyzing":
+        doc.status, doc.error = "error", ANALYSIS_INTERRUPTED
+        changed = True
+    if doc.tailor_status == "tailoring":
+        doc.tailor_status, doc.tailor_error = "error", TAILOR_INTERRUPTED
+        changed = True
+    return changed
+
+
 def _load_resume_doc(resume_id: str) -> ResumeDoc:
     if not _SESSION_ID_PATTERN.match(resume_id):
         raise HTTPException(status_code=404, detail="Resume not found")
@@ -2286,9 +2380,25 @@ def _load_resume_doc(resume_id: str) -> ResumeDoc:
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Resume not found")
     try:
-        return ResumeDoc.model_validate_json(path.read_text(encoding="utf-8"))
+        doc = ResumeDoc.model_validate_json(path.read_text(encoding="utf-8"))
     except Exception:
-        raise HTTPException(status_code=410, detail="Resume document unreadable")
+        # Set aside under a name that says what it is. Deleting it would
+        # destroy the only copy; leaving it would fail every list and
+        # every open, for ever.
+        aside = path.with_suffix(".json.corrupt")
+        try:
+            os.replace(path, aside)
+        except OSError:
+            pass
+        logging.error("Resume %s could not be read and was set aside", resume_id)
+        raise HTTPException(
+            status_code=410,
+            detail="This resume's saved file is damaged and could not be "
+                   f"opened. It was kept as {aside.name} in the resumes "
+                   "folder. Upload the resume again to continue.")
+    if _recover_interrupted(doc):
+        _save_resume_doc(doc)
+    return doc
 
 
 def _save_resume_doc(doc: ResumeDoc) -> None:
@@ -2296,9 +2406,40 @@ def _save_resume_doc(doc: ResumeDoc) -> None:
     root.mkdir(parents=True, exist_ok=True)
     doc.updated_at = datetime.utcnow()
     path = _resume_path(doc.resume_id)
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(doc.model_dump_json(indent=2), encoding="utf-8")
-    os.replace(tmp, path)
+    # A name of its own: two saves of one document used to share a single
+    # ".json.tmp" and could write into each other's file.
+    fd, temp = tempfile.mkstemp(dir=root, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(doc.model_dump_json(indent=2))
+        os.replace(temp, path)
+    except BaseException:
+        try:
+            os.unlink(temp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _merge_background_result(resume_id: str, apply) -> None:
+    """Save what a background task produced, onto the document as it is
+    NOW rather than as it was when the task started.
+
+    The task loaded the document, spent a minute with a model, and used
+    to save its own copy back, replacing whatever had happened meanwhile.
+    Here the current document is read again and `apply` sets only the
+    fields the task owns. If the document was deleted in the meantime it
+    stays deleted: a finished task does not bring it back."""
+    path = _resume_path(resume_id)
+    if not path.is_file():
+        return
+    try:
+        current = ResumeDoc.model_validate_json(path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    apply(current)
+    if path.is_file():
+        _save_resume_doc(current)
 
 
 class ResumeCreateRequest(BaseModel):
@@ -2391,15 +2532,19 @@ async def _finish_resume_analysis(resume_id: str) -> None:
         doc = _load_resume_doc(resume_id)
     except HTTPException:
         return  # deleted before the task ran
+
+    def failed(message: str):
+        def apply(current: ResumeDoc) -> None:
+            current.status, current.error = "error", message
+        return apply
+
     try:
         client, preset = _client_for_session({}, "resume")
     except ProviderUnavailable as exc:
         # Raised outside any handler, this would leave the document saying
         # "analyzing" for ever. The checklist that already shipped is real;
         # the review is simply not available, and the reason is shown.
-        doc.status, doc.error = "error", str(exc)
-        if _resume_path(resume_id).is_file():
-            _save_resume_doc(doc)
+        _merge_background_result(resume_id, failed(str(exc)))
         return
 
     async def _extract() -> StructuredResume | None:
@@ -2428,16 +2573,22 @@ async def _finish_resume_analysis(resume_id: str) -> None:
             doc.original_text, doc.jd_text or None, doc.structured
         )
         _report_extraction_audit(doc)
-        doc.status, doc.error = "ready", ""
     except ProviderUnavailable as exc:
-        doc.status, doc.error = "error", str(exc)
+        _merge_background_result(resume_id, failed(str(exc)))
+        return
     except Exception:
         logging.exception("Resume review failed")
-        doc.status = "error"
-        doc.error = ("The recruiter review failed. Check your provider in "
-                     "Settings and re-analyze. The checklist above is still valid.")
-    if _resume_path(resume_id).is_file():  # deleted mid-analysis → discard
-        _save_resume_doc(doc)
+        _merge_background_result(resume_id, failed(
+            "The recruiter review failed. Check your provider in Settings "
+            "and analyze again. The checklist above is still valid."))
+        return
+
+    def apply(current: ResumeDoc) -> None:
+        current.structured, current.review = doc.structured, doc.review
+        current.report = doc.report
+        current.status, current.error = "ready", ""
+
+    _merge_background_result(resume_id, apply)
 
 
 @app.post("/resumes", response_model=ResumeDoc)
@@ -2463,17 +2614,41 @@ async def create_resume(
         jd_label=jd_label,
         report=run_ats_checks(resume_text, jd_text or None, structured),
     )
+    _RESUME_WORK.add(doc.resume_id)
     _save_resume_doc(doc)
     background_tasks.add_task(_gated, slot, _finish_resume_analysis, doc.resume_id)
     return doc
 
 
-async def _gated(slot, work, *args) -> None:
-    """Run background work and give its slot back however it ends."""
+async def _gated(slot, work, resume_id: str) -> None:
+    """Run background work on one resume, and give its slot back however
+    it ends. While it runs the resume is listed as being worked on, which
+    is how a status left by a dead server is told from a live one."""
+    _RESUME_WORK.add(resume_id)
     try:
-        await work(*args)
+        await work(resume_id)
     finally:
+        _RESUME_WORK.discard(resume_id)
         slot.leave()
+
+
+@app.post("/resumes/{resume_id}/analyze", response_model=ResumeDoc)
+async def analyze_resume_again(
+    resume_id: str, background_tasks: BackgroundTasks
+) -> ResumeDoc:
+    """Run the analysis again on a resume whose analysis failed or was
+    interrupted. Only ever started by the user: it is two paid calls."""
+    doc = _load_resume_doc(resume_id)
+    if doc.status == "analyzing":
+        raise HTTPException(status_code=409, detail="Analysis is already running.")
+    if doc.tailor_status == "tailoring":
+        raise HTTPException(status_code=409, detail="Tailoring is still running.")
+    slot = RESUME_GATE.enter()
+    doc.status, doc.error = "analyzing", ""
+    _RESUME_WORK.add(resume_id)          # before the save, so the load in the
+    _save_resume_doc(doc)                # task does not read it as interrupted
+    background_tasks.add_task(_gated, slot, _finish_resume_analysis, resume_id)
+    return doc
 
 
 @app.get("/resumes", response_model=list[ResumeSummaryItem])
@@ -2520,10 +2695,15 @@ async def _finish_resume_tailor(resume_id: str) -> None:
         doc = _load_resume_doc(resume_id)
     except HTTPException:
         return
+
+    def failed(message: str):
+        def apply(current: ResumeDoc) -> None:
+            current.tailor_status, current.tailor_error = "error", message
+        return apply
+
     try:
         client, preset = _client_for_session({}, "resume")
-        previous = doc.tailored.model_copy(deep=True) if doc.tailored else None
-        doc.tailored = await tailor_resume(
+        tailored = await tailor_resume(
             structured=doc.structured,
             jd_text=doc.jd_text,
             review=doc.review,
@@ -2531,23 +2711,27 @@ async def _finish_resume_tailor(resume_id: str) -> None:
             client=client,
             preset=preset,
         )
-        if previous is not None:
-            _push_tailored_history(doc, previous)
         # Before/after on identical footing: re-run the same deterministic
         # checks on the tailored structure's canonical rendering.
-        doc.tailored_report = run_ats_checks(
-            render_markdown(doc.tailored.resume), doc.jd_text, doc.tailored.resume
+        tailored_report = run_ats_checks(
+            render_markdown(tailored.resume), doc.jd_text, tailored.resume
         )
-        doc.tailor_status, doc.tailor_error = "idle", ""
     except ProviderUnavailable as exc:
-        doc.tailor_status, doc.tailor_error = "error", str(exc)
+        _merge_background_result(resume_id, failed(str(exc)))
+        return
     except Exception:
         logging.exception("Resume tailoring failed")
-        doc.tailor_status = "error"
-        doc.tailor_error = ("Tailoring failed. Check your provider in Settings "
-                            "and try again.")
-    if _resume_path(resume_id).is_file():
-        _save_resume_doc(doc)
+        _merge_background_result(resume_id, failed(
+            "Tailoring failed. Check your provider in Settings and try again."))
+        return
+
+    def apply(current: ResumeDoc) -> None:
+        if current.tailored is not None:
+            _push_tailored_history(current, current.tailored.model_copy(deep=True))
+        current.tailored, current.tailored_report = tailored, tailored_report
+        current.tailor_status, current.tailor_error = "idle", ""
+
+    _merge_background_result(resume_id, apply)
 
 
 @app.post("/resumes/{resume_id}/tailor", response_model=ResumeDoc)
@@ -2574,6 +2758,7 @@ async def tailor_resume_endpoint(
         raise HTTPException(status_code=409, detail="Tailoring is already running.")
     slot = RESUME_GATE.enter()
     doc.tailor_status, doc.tailor_error = "tailoring", ""
+    _RESUME_WORK.add(resume_id)
     _save_resume_doc(doc)
     background_tasks.add_task(_gated, slot, _finish_resume_tailor, resume_id)
     return doc
@@ -2587,6 +2772,7 @@ class MetricFillRequest(BaseModel):
 
 @app.post("/resumes/{resume_id}/fill-metrics", response_model=ResumeDoc)
 async def fill_resume_metrics(resume_id: str, body: MetricFillRequest) -> ResumeDoc:
+    _refuse_if_busy(resume_id)
     doc = _load_resume_doc(resume_id)
     if doc.tailored is None:
         raise HTTPException(status_code=422, detail="No tailored version to fill yet.")
@@ -2675,6 +2861,7 @@ async def edit_tailored_endpoint(
     resume_id: str, body: TailoredEditRequest
 ) -> ResumeDoc:
     """The user's own text edits to the tailored resume, by where-path."""
+    _refuse_if_busy(resume_id)
     doc = _load_resume_doc(resume_id)
     if doc.tailored is None:
         raise HTTPException(status_code=422, detail="No tailored version to edit yet.")
@@ -2757,6 +2944,7 @@ def _bullet_path(parent: str) -> str:
 @app.post("/resumes/{resume_id}/add", response_model=ResumeDoc)
 async def add_to_resume(resume_id: str, body: ResumeAddRequest) -> ResumeDoc:
     """Add a bullet, an entry, or a whole section. The user's own words."""
+    _refuse_if_busy(resume_id)
     doc = _load_resume_doc(resume_id)
     if doc.tailor_status == "tailoring":
         raise HTTPException(status_code=409, detail="Tailoring is still running.")
@@ -2819,6 +3007,7 @@ class ResumeRemoveRequest(BaseModel):
 async def remove_from_resume(resume_id: str, body: ResumeRemoveRequest) -> ResumeDoc:
     """Drop a whole entry from both copies. Anything addable is removable,
     or a mistyped section would be permanent."""
+    _refuse_if_busy(resume_id)
     doc = _load_resume_doc(resume_id)
     if doc.tailor_status == "tailoring":
         raise HTTPException(status_code=409, detail="Tailoring is still running.")
@@ -2900,7 +3089,19 @@ async def request_tailored_edit(
     """Apply one natural-language instruction to the tailored resume via
     the LLM, behind the same honesty guard as tailoring. The prior
     version lands on the undo stack."""
+    _refuse_if_busy(resume_id)
+    # Held for the whole edit, model call included. It is the only change
+    # to a resume that waits on a model between reading the document and
+    # writing it back, which is exactly the gap a second change falls into.
+    async with _resume_lock(resume_id):
+        return await _apply_instructed_edit(resume_id, body)
+
+
+async def _apply_instructed_edit(
+    resume_id: str, body: ResumeInstructionRequest
+) -> ResumeDoc:
     doc = _load_resume_doc(resume_id)
+    loaded_at = doc.updated_at
     if doc.tailored is None or doc.structured is None:
         raise HTTPException(status_code=422, detail="No tailored version to edit yet.")
     if doc.tailor_status == "tailoring":
@@ -2958,6 +3159,19 @@ async def request_tailored_edit(
     # The change log is the document's full history: a pass appends its
     # entries, it never replaces what earlier passes recorded.
     edited.changes = snapshot.changes + edited.changes
+    # The lock covers this process. This covers anything it does not: if
+    # the saved document is not the one this edit was computed from, the
+    # edit is thrown away rather than written over someone's newer work.
+    try:
+        now = _load_resume_doc(resume_id)
+    except HTTPException:
+        raise HTTPException(status_code=409, detail="This resume was deleted "
+                            "while the edit was being made.")
+    if now.updated_at != loaded_at:
+        raise HTTPException(
+            status_code=409,
+            detail="This resume changed while the edit was being made, so the "
+                   "edit was not applied. Nothing was lost. Try it again.")
     _push_tailored_history(doc, snapshot)
     doc.tailored = edited
     _refresh_tailored_report(doc)
@@ -2969,6 +3183,7 @@ async def request_tailored_edit(
 async def undo_tailored_endpoint(resume_id: str) -> ResumeDoc:
     """Step the tailored resume back to the version before the last
     mutation (metric fill, manual edit, instructed edit, or re-tailor)."""
+    _refuse_if_busy(resume_id)
     doc = _load_resume_doc(resume_id)
     if doc.tailor_status == "tailoring":
         raise HTTPException(status_code=409, detail="Tailoring is still running.")

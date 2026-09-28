@@ -301,13 +301,15 @@ def test_review_failure_keeps_checks_and_reports_error(monkeypatch):
     assert doc["review"] is None
 
 
-def test_tailor_conflicts_are_guarded():
+def test_tailor_conflicts_are_guarded(monkeypatch):
     client = TestClient(server.app)
     doc = _create(client, jd_text=JD)
     rid = doc["resume_id"]
     # Simulate a tailor already in flight (in prod the background task
     # is still running; under TestClient it finishes instantly, so set
-    # the persisted state directly).
+    # the persisted state directly). It is registered as live work too:
+    # the status alone would be read as left behind by a stopped server.
+    monkeypatch.setattr(server, "_RESUME_WORK", {rid})
     from pipeline.schemas.models import ResumeDoc
     stored = ResumeDoc.model_validate_json(
         server._resume_path(rid).read_text(encoding="utf-8"))

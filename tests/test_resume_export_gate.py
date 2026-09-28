@@ -114,8 +114,11 @@ def test_an_export_of_a_page_that_has_gone_stale_is_refused(desk):
     assert fresh.status_code == 200
 
 
-def test_an_export_is_refused_while_tailoring_is_still_running(desk):
+def test_an_export_is_refused_while_tailoring_is_still_running(desk, monkeypatch):
     client, rid = desk
+    # Running in this process. Without this the status alone would be read
+    # as left over from a server that stopped.
+    monkeypatch.setattr(server, "_RESUME_WORK", {rid})
     doc = server._load_resume_doc(rid)
     doc.tailor_status = "tailoring"
     server._save_resume_doc(doc)
