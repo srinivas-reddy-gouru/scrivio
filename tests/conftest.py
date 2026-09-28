@@ -97,3 +97,37 @@ def _isolate_output_root(tmp_path, monkeypatch):
     # Every session, resume, and job-profile path is derived from this one
     # name, so redirecting it moves the whole tree.
     monkeypatch.setattr(server, "OUTPUT_ROOT", Path(tmp_path), raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _a_paired_browser_by_default(tmp_path, monkeypatch):
+    """Tests of tailoring, interviews, and articles are not tests of the
+    front door, so they run as a browser that is already paired.
+
+    This is a seam in the TEST process, in the same style as the mock
+    provider clients above. There is no environment variable or setting
+    that turns the boundary off in a running server, and there must not
+    be: a switch like that gets left on. tests/test_local_boundary.py
+    puts the real check back and exercises it."""
+    try:
+        from api import boundary
+    except Exception:
+        return
+    monkeypatch.setenv("SCRIVIO_STATE_DIR", str(tmp_path / ".scrivio-state"))
+    monkeypatch.setenv("SCRIVIO_ALLOWED_HOSTS", "testserver")
+    monkeypatch.delenv("SCRIVIO_ALLOWED_ORIGINS", raising=False)
+    monkeypatch.setattr(boundary, "request_is_authenticated", lambda cookies: True)
+    monkeypatch.setattr(boundary, "pairing", boundary.Pairing())
+
+
+@pytest.fixture(autouse=True)
+def _never_the_real_settings_file(tmp_path, monkeypatch):
+    """PATCH /settings writes a file, and by default that file is the
+    repository's .env, which holds the developer's real provider keys.
+    Every test gets a settings file of its own, whether or not it thinks
+    it touches settings."""
+    try:
+        from api import server
+    except Exception:
+        return
+    monkeypatch.setattr(server, "_ENV_FILE", tmp_path / "test-settings.env")

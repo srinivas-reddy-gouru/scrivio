@@ -10,6 +10,7 @@ export default defineConfig({
   server: {
     port: 5180,
     proxy: {
+      "/auth": "http://localhost:8899",
       "/resumes": "http://localhost:8899",
       "/job-profiles": "http://localhost:8899",
       "/settings": "http://localhost:8899",

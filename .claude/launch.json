@@ -4,14 +4,35 @@
     {
       "name": "scrivio",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "api.server:app", "--port", "8899"],
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "api.server:app",
+        "--port",
+        "8899"
+      ],
       "port": 8899
     },
     {
       "name": "scrivio-verify",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "api.server:app", "--port", "8898"],
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "api.server:app",
+        "--port",
+        "8898"
+      ],
       "port": 8898
+    },
+    {
+      "name": "scrivio-review",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "ARTICLE_OUTPUT_DIR=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/demo SCRIVIO_ENV_FILE=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/none.env SCRIVIO_STATE_DIR=/private/tmp/claude-501/-Users-srinivasreddygouru-Documents-article-generator/b86e434b-36e9-43b0-b4a6-1f205d870a80/scratchpad/review/state PORT=8896 python3 -m api"
+      ],
+      "port": 8896
     }
   ]
 }

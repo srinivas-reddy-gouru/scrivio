@@ -28,7 +28,7 @@ function DeskRoom() {
   return (
     <div className="room-wrap">
       <h1 className="room-title bar-tick-left">Resume</h1>
-      <p className="room-sub">ATS report, honest tailoring, and downloads that pass the robots without inventing a word.</p>
+      <p className="room-sub">A checklist report you can verify, tailoring that is checked against your original, and exports in four formats.</p>
       <header style={{ position: "static", background: "none", border: "none", padding: "0 0 1rem", justifyContent: "center" }}>
         <nav className="stations" aria-label="Steps">
           {STATIONS.map((label, i) => {

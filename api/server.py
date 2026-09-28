@@ -10,14 +10,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
+# SCRIVIO_ENV_FILE names the settings file, for anyone who wants it
+# somewhere other than the repository root. It is also what lets a
+# verification server run with NO provider keys at all: point it at a
+# file that does not exist and nothing is loaded.
+_ENV_FILE = Path(
+    os.environ.get("SCRIVIO_ENV_FILE")
+    or Path(__file__).resolve().parent.parent / ".env"
+)
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(override=True)
+    load_dotenv(_ENV_FILE, override=True)
 except ModuleNotFoundError:
     pass
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,6 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from uuid import uuid4
 
+from api import boundary
 from api.jobs import Job, create_job, get_job
 from main import _anthropic_client, generate_article
 from pipeline.schemas.models import (
@@ -109,14 +118,146 @@ OUTPUT_ROOT = Path(os.environ.get("ARTICLE_OUTPUT_DIR", "./output"))
 
 app = FastAPI(title="Article Generator API", version="0.1.0")
 
-# Permissive for local dev; tighten before any public deploy.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# The interface and the API share an origin, so no cross-origin access is
+# needed and none is granted by default. SCRIVIO_ALLOWED_ORIGINS names the
+# exceptions (a dev server on another host, say). There is no wildcard:
+# with credentials in play, "*" would be an invitation.
+_extra_origins = [
+    o.strip() for o in os.environ.get("SCRIVIO_ALLOWED_ORIGINS", "").split(",") if o.strip()
+]
+if _extra_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_extra_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_headers=["Content-Type"],
+    )
+# Added last, so it is outermost: nothing reaches a route, or CORS, without
+# passing the host, origin, and session checks first.
+app.add_middleware(boundary.LocalBoundary)
+app.router.on_startup.append(boundary.announce_pairing_code)
+
+
+class PairRequest(BaseModel):
+    code: str = Field(default="", max_length=64)
+
+
+@app.get("/auth/status")
+async def auth_status(request: Request) -> dict:
+    """Whether this browser is paired. Says nothing else: not the code, not
+    whether a key exists, not who else is signed in."""
+    return {
+        "authenticated": boundary.request_is_authenticated(dict(request.cookies)),
+        "locked_for": boundary.pairing.locked_for(),
+    }
+
+
+@app.post("/auth/pair")
+async def auth_pair(body: PairRequest) -> Response:
+    wait = boundary.pairing.locked_for()
+    if wait:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many wrong codes. Try again in {wait} seconds.",
+            headers={"Retry-After": str(wait)},
+        )
+    if not boundary.pairing.attempt(body.code):
+        raise HTTPException(
+            status_code=403,
+            detail="That is not the pairing code. It is printed in the terminal "
+                   "where the Scrivio server is running.",
+        )
+    # The next browser needs a code of its own, and the person who can see
+    # the terminal is the one who should get it.
+    boundary.announce_pairing_code()
+    return Response(
+        content=json.dumps({"authenticated": True}),
+        media_type="application/json",
+        headers={"Set-Cookie": boundary.session_cookie_header(boundary.mint_session()),
+                 "Cache-Control": "no-store"},
+    )
+
+
+@app.post("/auth/logout")
+async def auth_logout() -> Response:
+    return Response(
+        content=json.dumps({"authenticated": False}),
+        media_type="application/json",
+        headers={"Set-Cookie": boundary.session_cookie_header("", clear=True)},
+    )
+
+
+@app.post("/auth/forget-all")
+async def auth_forget_all() -> Response:
+    """Sign out every browser that was ever paired, except this one."""
+    boundary.forget_every_browser()
+    return Response(
+        content=json.dumps({"authenticated": True}),
+        media_type="application/json",
+        headers={"Set-Cookie": boundary.session_cookie_header(boundary.mint_session())},
+    )
+
+
+_PAIR_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pair this browser · Scrivio</title>
+<style>
+  body{font:16px/1.5 system-ui,sans-serif;background:#0d1514;color:#e8edea;
+       display:grid;place-items:center;min-height:100vh;margin:0}
+  main{max-width:26rem;padding:2rem}
+  h1{font-size:1.4rem;margin:0 0 .6rem}
+  p{color:#93a5a2;margin:0 0 1.2rem}
+  label{display:block;font-size:.85rem;margin-bottom:.35rem}
+  input{font:inherit;font-family:ui-monospace,monospace;letter-spacing:.12em;
+        text-transform:uppercase;width:100%;box-sizing:border-box;padding:.6rem .7rem;
+        border-radius:8px;border:1px solid #2c3d3b;background:#121c1b;color:inherit}
+  button{font:inherit;font-weight:600;margin-top:.9rem;padding:.6rem 1.1rem;border:0;
+         border-radius:8px;background:#20b8cd;color:#062024;cursor:pointer}
+  input:focus,button:focus{outline:3px solid #20b8cd66;outline-offset:2px}
+  [role=alert]{color:#e06a55;min-height:1.5em;margin-top:.8rem}
+</style></head><body><main>
+<h1>Pair this browser</h1>
+<p>Scrivio keeps your resumes and interview answers on this machine, so it
+only talks to a browser you have paired. The code is in the terminal where
+the server is running.</p>
+<form id="pair">
+  <label for="code">Pairing code</label>
+  <input id="code" name="code" autocomplete="off" autocapitalize="characters"
+         spellcheck="false" placeholder="XXXX-XXXX" required autofocus>
+  <button type="submit">Pair</button>
+  <div role="alert" id="problem"></div>
+</form>
+<script>
+document.getElementById("pair").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const problem = document.getElementById("problem");
+  problem.textContent = "";
+  try {
+    const res = await fetch("/auth/pair", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({code: document.getElementById("code").value}),
+    });
+    if (res.ok) { location.replace("/"); return; }
+    problem.textContent = (await res.json()).detail || "That did not work.";
+  } catch (e) { problem.textContent = "Could not reach the server."; }
+});
+</script></main></body></html>"""
+
+
+@app.get("/auth/pair", include_in_schema=False)
+async def auth_pair_page() -> Response:
+    """A page with no dependencies, for when the interface that would
+    normally ask for the code is the thing that cannot load."""
+    return Response(
+        content=_PAIR_PAGE, media_type="text/html",
+        headers={"Cache-Control": "no-store",
+                 "Content-Security-Policy":
+                     "default-src 'none'; style-src 'unsafe-inline'; "
+                     "script-src 'unsafe-inline'; connect-src 'self'; "
+                     "form-action 'none'; base-uri 'none'; frame-ancestors 'none'"},
+    )
 
 
 class GenerateResponse(BaseModel):
@@ -651,7 +792,6 @@ async def get_article(article_id: str, level: str | None = None) -> ArticleDetai
 # Read / write API keys and toggles in the project-root .env file.
 # Keys are never returned in plaintext — only masked (last 4 chars shown).
 
-_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 # API keys the settings UI shows/edits, in display order.
 # LLM_PROVIDER is NOT here — it's a preference value, not a secret key.

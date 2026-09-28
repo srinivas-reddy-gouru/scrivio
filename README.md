@@ -80,7 +80,7 @@ The images above are captured from a running instance, so they stay honest
 about what the app currently looks like:
 
 ```bash
-python -m uvicorn api.server:app --port 8899   # in another shell
+python -m api                                  # in another shell
 python scripts/capture_screenshots.py          # --light for light theme too
 ```
 
@@ -137,8 +137,19 @@ cp .env.example .env   # optional: only needed for API keys and search keys
 Run the server and open **http://localhost:8899**:
 
 ```bash
-python -m uvicorn api.server:app --host 0.0.0.0 --port 8899
+python -m api
 ```
+
+The server listens on loopback only, so it is reachable from your machine and
+nowhere else. The first time you open it in a browser it asks for a **pairing
+code**, which is printed in the terminal where the server is running. That is
+the whole sign-in: your resumes and interview answers are on this machine, and
+only a browser you have paired can read them. The code is single use, and a
+paired browser stays paired for 30 days.
+
+This protects one person's local install. It is not multi-user isolation:
+everyone who pairs sees the same data. Do not host this for several people
+as it stands.
 
 ### Keys (all optional if a local CLI is signed in)
 

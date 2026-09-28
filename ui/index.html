@@ -15,6 +15,12 @@
     }
     document.documentElement.dataset.theme = t;
   })();
+  /* This older interface has no pairing screen of its own. If the browser
+     is not paired, every request it makes would fail with no explanation,
+     so send it to the page that can pair it. */
+  fetch('/auth/status').then(function (r) { return r.json(); }).then(function (s) {
+    if (s && s.authenticated === false) location.replace('/auth/pair');
+  }).catch(function () {});
 </script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
