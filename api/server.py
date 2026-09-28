@@ -99,6 +99,7 @@ from pipeline.workers.resume_studio_worker import (
     render_docx,
     render_markdown,
     render_pdf,
+    settle_findings,
     unanswered_additions,
     unresolved_placeholders,
     users_own_words,
@@ -2679,11 +2680,31 @@ def _load_resume_doc(resume_id: str) -> ResumeDoc:
     return doc
 
 
+def _keep_findings(doc: ResumeDoc, path: Path) -> None:
+    """What was unanswered in the saved document is unanswered in the one
+    about to replace it, unless it has been removed or confirmed.
+
+    Done here, where every save passes, and not in each place that
+    changes a resume. A finding used to last only as long as every such
+    place remembered to keep it, and the instructed edit did not."""
+    if doc.tailored is None:
+        return
+    carried: list[str] = []
+    try:
+        saved = ResumeDoc.model_validate_json(path.read_text(encoding="utf-8"))
+        if saved.tailored is not None:
+            carried = list(saved.tailored.warnings)
+    except (OSError, ValueError):
+        pass                       # nothing saved yet, or nothing readable
+    settle_findings(doc.structured, doc.tailored, carried)
+
+
 def _save_resume_doc(doc: ResumeDoc) -> None:
     root = _resumes_root()
     root.mkdir(parents=True, exist_ok=True)
     doc.updated_at = datetime.utcnow()
     path = _resume_path(doc.resume_id)
+    _keep_findings(doc, path)
     # A name of its own: two saves of one document used to share a single
     # ".json.tmp" and could write into each other's file.
     fd, temp = tempfile.mkstemp(dir=root, prefix=f".{path.name}.", suffix=".tmp")

@@ -44,14 +44,19 @@ LINES = ORIGINAL["work"][0]["highlights"]
 
 
 class ScriptedClient:
-    def __init__(self, resume):
-        self.resume, self.messages = resume, self
+    """Returns the resume it was given, and the warnings it was given.
+    What a model says about warnings is part of what is being tested:
+    it may drop them, keep them word for word, or reword them."""
+
+    def __init__(self, resume, warnings=()):
+        self.resume, self.warnings, self.messages = resume, list(warnings), self
 
     async def create(self, **kwargs):
         if kwargs.get("tools"):
             return SimpleNamespace(content=[SimpleNamespace(
                 type="tool_use",
-                input={"resume": self.resume, "changes": [], "warnings": []})])
+                input={"resume": self.resume, "changes": [],
+                       "warnings": list(self.warnings)})])
         return SimpleNamespace(content=[SimpleNamespace(type="text", text="")])
 
 
@@ -77,7 +82,8 @@ def api(tmp_path, monkeypatch):
     scripted = {}
     monkeypatch.setattr(
         server, "_client_for_session",
-        lambda *a, **k: (ScriptedClient(scripted["resume"]), "balanced"))
+        lambda *a, **k: (ScriptedClient(scripted["resume"], scripted.get("warnings", ())),
+                         "balanced"))
     original = StructuredResume.model_validate(ORIGINAL)
     doc = ResumeDoc(
         resume_id="20260101-000000-abc123", original_text=render_markdown(original),
@@ -385,3 +391,455 @@ def test_a_note_whose_line_has_moved_on_holds_nothing_up(tailored_before):
     server._save_resume_doc(doc)
 
     assert finished(client, rid).status_code == 200
+
+
+# ── Second follow-up review: F03a and F03b ────────────────────────────
+# The note that blocks the export was the model's to keep or lose, and
+# it was looked for only at the position it named. Either was enough to
+# turn a refused export into a finished one with the claim still in it,
+# and nobody had confirmed anything.
+
+CLAIM = "Consolidated build clusters on Kubernetes to reduce costs"
+FORMATS = ["md", "json", "docx", "pdf"]
+
+
+def edit(client, rid, scripted, resume: dict, *, warnings=(), instruction="tidy it up"):
+    scripted["resume"], scripted["warnings"] = resume, list(warnings)
+    done = client.post(f"/resumes/{rid}/request-edit", json={"instruction": instruction})
+    assert done.status_code == 200, done.text
+    return done.json()
+
+
+def legacy(index: int = 2, text: str = CLAIM) -> dict:
+    return with_line(index, text)
+
+
+def blocked_in_every_format(client, rid) -> None:
+    for fmt in FORMATS:
+        refused = finished(client, rid, fmt)
+        assert refused.status_code == 409, (fmt, refused.status_code)
+        assert "Kubernetes" in refused.json()["detail"], fmt
+
+
+def drafts_still_offered(client, rid) -> None:
+    for fmt in FORMATS:
+        draft = client.get(f"/resumes/{rid}/download?version=tailored&fmt={fmt}&draft=true")
+        assert draft.status_code == 200, fmt
+        assert draft.headers["x-scrivio-export"] == "draft"
+        assert "DRAFT" in draft.headers["content-disposition"]
+
+
+@pytest.fixture
+def held(tailored_before, api):
+    """The legacy document, already refused once, and the means to edit it."""
+    client, rid = tailored_before
+    _, _, scripted = api
+    assert finished(client, rid).status_code == 409
+    return client, rid, scripted
+
+
+# F03a: the model loses the note.
+
+def test_f03a_the_review_case_an_unchanged_claim_and_no_warnings(held):
+    client, rid, scripted = held
+
+    edit(client, rid, scripted, legacy(), warnings=[],
+         instruction="Put the strongest bullet first.")
+
+    blocked_in_every_format(client, rid)
+    drafts_still_offered(client, rid)
+
+
+def test_f03a_a_reworded_claim_and_no_warnings(held):
+    client, rid, scripted = held
+
+    edit(client, rid, scripted,
+         legacy(2, "Reduced costs by consolidating build clusters on Kubernetes"), warnings=[])
+
+    blocked_in_every_format(client, rid)
+
+
+def test_f03a_a_note_the_model_reworded_is_not_the_note(held):
+    client, rid, scripted = held
+
+    edit(client, rid, scripted, legacy(),
+         warnings=["Kubernetes was reviewed and is fine to keep."])
+
+    blocked_in_every_format(client, rid)
+
+
+def test_f03a_a_note_the_model_wrote_for_itself_changes_nothing(held):
+    """In the other direction: a model cannot raise a finding either.
+    The list of what is unresolved is the application's."""
+    client, rid, scripted = held
+    clean = copy.deepcopy(ORIGINAL)
+
+    after = edit(client, rid, scripted, clean, warnings=[
+        "[work[0].highlights[0]] New term: 'Maintained' appears here but nowhere in "
+        "your original resume."])
+
+    assert finished(client, rid).status_code == 200
+    assert not [w for w in after["tailored"]["warnings"] if "New term" in w]
+
+
+def test_f03a_the_model_cannot_spread_a_flagged_name_to_another_line(held):
+    """A name that was flagged is not a name the candidate gave. Being
+    in the earlier version does not make it theirs."""
+    client, rid, scripted = held
+    spread = legacy()
+    spread["work"][0]["highlights"][0] = "Maintained 12 services on Kubernetes behind the internal gateway"
+
+    after = edit(client, rid, scripted, spread, warnings=[])
+
+    lines = after["tailored"]["resume"]["work"][0]["highlights"]
+    assert lines[0] == LINES[0]
+    assert "Kubernetes" in lines[2]
+    blocked_in_every_format(client, rid)
+
+
+# F03b: the claim moves and the note does not.
+
+def test_f03b_the_review_case_bullets_reordered_and_the_note_kept_word_for_word(held):
+    client, rid, scripted = held
+    moved = legacy()
+    moved["work"][0]["highlights"] = [CLAIM, LINES[0], LINES[1]]
+
+    after = edit(client, rid, scripted, moved, warnings=[LEGACY_NOTE])
+
+    assert after["tailored"]["resume"]["work"][0]["highlights"][0] == CLAIM
+    blocked_in_every_format(client, rid)
+    drafts_still_offered(client, rid)
+
+
+def test_f03b_an_earlier_bullet_is_removed_and_the_index_shifts(held):
+    client, rid, scripted = held
+    shorter = legacy()
+    del shorter["work"][0]["highlights"][0]
+
+    edit(client, rid, scripted, shorter, warnings=[LEGACY_NOTE])
+
+    blocked_in_every_format(client, rid)
+
+
+def test_f03b_the_candidate_removes_an_earlier_bullet_themselves(held):
+    """The same shift, made by the candidate and not by a model."""
+    client, rid, _ = held
+
+    removed = client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "work[0].highlights[0]", "value": ""}]})
+
+    assert removed.status_code == 200, removed.text
+    assert CLAIM in str(removed.json()["tailored"]["resume"])
+    blocked_in_every_format(client, rid)
+
+
+def test_f03b_the_note_is_corrected_to_where_the_claim_now_is(held):
+    client, rid, scripted = held
+    moved = legacy()
+    moved["work"][0]["highlights"] = [CLAIM, LINES[0], LINES[1]]
+
+    after = edit(client, rid, scripted, moved, warnings=[LEGACY_NOTE])
+
+    notes = [w for w in after["tailored"]["warnings"] if "Kubernetes" in w]
+    assert len(notes) == 1 and notes[0].startswith("[work[0].highlights[0]]")
+    assert "the 1st bullet under Initrode" in finished(client, rid).json()["detail"]
+
+
+TWO_JOBS = copy.deepcopy(ORIGINAL)
+TWO_JOBS["work"].append({
+    "name": "Hooli", "position": "Junior Developer",
+    "startDate": "Jun 2018", "endDate": "Jan 2020", "summary": "",
+    "highlights": ["Wrote inventory reports for the warehouse team"]})
+
+
+@pytest.fixture
+def two_jobs(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "OUTPUT_ROOT", tmp_path)
+    scripted = {}
+    monkeypatch.setattr(
+        server, "_client_for_session",
+        lambda *a, **k: (ScriptedClient(scripted["resume"], scripted.get("warnings", ())),
+                         "balanced"))
+    original = StructuredResume.model_validate(TWO_JOBS)
+    kept = copy.deepcopy(TWO_JOBS)
+    kept["work"][0]["highlights"][2] = CLAIM
+    doc = ResumeDoc(
+        resume_id="20260101-000000-two222", original_text=render_markdown(original),
+        structured=original, jd_text=JD,
+        report=run_ats_checks(render_markdown(original), JD, original),
+        tailored=TailoredResume(resume=StructuredResume.model_validate(kept),
+                                changes=[], warnings=[LEGACY_NOTE]))
+    server._save_resume_doc(doc)
+    client = TestClient(server.app)
+    assert finished(client, doc.resume_id).status_code == 409
+    return client, doc.resume_id, scripted, kept
+
+
+@pytest.mark.parametrize("warnings", [[], [LEGACY_NOTE]], ids=["note-dropped", "note-kept"])
+def test_f03b_a_work_entry_moves_and_the_old_entry_index_is_stale(two_jobs, warnings):
+    client, rid, scripted, kept = two_jobs
+    swapped = copy.deepcopy(kept)
+    swapped["work"].reverse()
+
+    after = edit(client, rid, scripted, swapped, warnings=warnings)
+
+    jobs = after["tailored"]["resume"]["work"]
+    assert [j["name"] for j in jobs] == ["Hooli", "Initrode"]
+    assert CLAIM in jobs[1]["highlights"]
+    blocked_in_every_format(client, rid)
+    notes = [w for w in after["tailored"]["warnings"] if "Kubernetes" in w]
+    assert len(notes) == 1 and notes[0].startswith("[work[1].highlights[2]]")
+
+
+def test_f03b_a_claim_moved_to_another_job_is_not_kept_there(two_jobs):
+    """Moving it under a different employer would make it a claim about
+    a different job. It is not kept there, and with it gone from the
+    resume there is nothing left to confirm."""
+    client, rid, scripted, kept = two_jobs
+    moved = copy.deepcopy(kept)
+    moved["work"][0]["highlights"].remove(CLAIM)
+    moved["work"][1]["highlights"].append(CLAIM)
+
+    after = edit(client, rid, scripted, moved, warnings=[])
+
+    assert "Kubernetes" not in str(after["tailored"]["resume"]["work"][1])
+    text = str(after["tailored"]["resume"])
+    assert (finished(client, rid).status_code == 409) == ("Kubernetes" in text)
+
+
+# What does resolve it, and nothing else.
+
+def test_taking_the_name_out_through_an_edit_permits_every_format(held):
+    client, rid, scripted = held
+
+    edit(client, rid, scripted, copy.deepcopy(ORIGINAL), warnings=[])
+
+    for fmt in FORMATS:
+        sent = finished(client, rid, fmt)
+        assert sent.status_code == 200, fmt
+        assert sent.headers["x-scrivio-export"] == "final"
+    assert "Kubernetes" not in finished(client, rid).text
+
+
+def test_the_candidate_taking_the_name_out_permits_every_format(held):
+    client, rid, _ = held
+
+    client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "work[0].highlights[2]", "value": LINES[2]}]})
+
+    for fmt in FORMATS:
+        assert finished(client, rid, fmt).status_code == 200, fmt
+
+
+def test_the_documented_confirmation_permits_every_format_after_the_claim_has_moved(held):
+    """The candidate adds it to their resume themselves. That is the one
+    confirmation there is a place to record, and it has to work wherever
+    the claim has got to."""
+    client, rid, scripted = held
+    moved = legacy()
+    moved["work"][0]["highlights"] = [CLAIM, LINES[0], LINES[1]]
+    edit(client, rid, scripted, moved, warnings=[])
+    blocked_in_every_format(client, rid)
+
+    added = client.post(f"/resumes/{rid}/add", json={
+        "kind": "skill", "parent": "skills[0]", "text": "Kubernetes"})
+
+    assert added.status_code == 200, added.text
+    for fmt in FORMATS:
+        sent = finished(client, rid, fmt)
+        assert sent.status_code == 200, fmt
+    assert "on Kubernetes" in finished(client, rid).text
+
+
+def test_naming_it_in_an_instruction_does_not_confirm_a_flagged_claim(held):
+    """"Put the Kubernetes bullet first" names it and vouches for
+    nothing. For a claim that is already flagged, an instruction is not
+    the documented action, and a mention is not a confirmation."""
+    client, rid, scripted = held
+    moved = legacy()
+    moved["work"][0]["highlights"] = [CLAIM, LINES[0], LINES[1]]
+
+    edit(client, rid, scripted, moved, warnings=[],
+         instruction="Put the Kubernetes bullet first.")
+
+    blocked_in_every_format(client, rid)
+
+
+# Saved, reloaded, undone.
+
+def test_the_finding_is_in_the_saved_file_and_survives_a_reload(held):
+    client, rid, scripted = held
+    edit(client, rid, scripted, legacy(), warnings=[])
+
+    on_disk = server._resume_path(rid).read_text(encoding="utf-8")
+    again = server._load_resume_doc(rid)
+
+    assert "New term: 'Kubernetes'" in on_disk
+    assert [w for w in again.tailored.warnings if "Kubernetes" in w]
+    assert server._export_refusal(again) is not None
+    blocked_in_every_format(TestClient(server.app), rid)
+
+
+def test_undoing_an_edit_that_lost_the_note_leaves_it_blocked(held):
+    client, rid, scripted = held
+    edit(client, rid, scripted, legacy(), warnings=[])
+
+    undone = client.post(f"/resumes/{rid}/undo-tailored")
+
+    assert undone.status_code == 200, undone.text
+    blocked_in_every_format(client, rid)
+
+
+def test_undoing_the_removal_brings_the_claim_and_the_block_back(held):
+    client, rid, _ = held
+    client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "work[0].highlights[2]", "value": LINES[2]}]})
+    assert finished(client, rid).status_code == 200
+
+    undone = client.post(f"/resumes/{rid}/undo-tailored")
+
+    assert CLAIM in str(undone.json()["tailored"]["resume"])
+    blocked_in_every_format(client, rid)
+    drafts_still_offered(client, rid)
+
+
+def test_undoing_after_the_confirmation_does_not_undo_the_confirmation(held):
+    """The confirmation is the candidate's addition to their own resume.
+    Undo steps the tailored copy back. It does not take the skill off
+    the resume, so the claim stays confirmed."""
+    client, rid, _ = held
+    client.post(f"/resumes/{rid}/add", json={
+        "kind": "skill", "parent": "skills[0]", "text": "Kubernetes"})
+    assert finished(client, rid).status_code == 200
+
+    undone = client.post(f"/resumes/{rid}/undo-tailored")
+
+    assert undone.status_code == 200, undone.text
+    assert "Kubernetes" in str(server._load_resume_doc(rid).structured.skills)
+    assert finished(client, rid).status_code == 200
+
+
+def test_a_file_written_with_the_note_missing_is_put_right_when_next_saved(held):
+    """Any code that saves the document, present or future, goes through
+    one function. It is there that a finding is kept."""
+    client, rid, _ = held
+    doc = server._load_resume_doc(rid)
+    doc.tailored.warnings = []
+
+    server._save_resume_doc(doc)
+
+    blocked_in_every_format(client, rid)
+
+
+# At the guard, without the server.
+
+def test_the_guard_carries_the_finding_whatever_the_model_returns():
+    before = TailoredResume(
+        resume=StructuredResume.model_validate(legacy()), changes=[], warnings=[LEGACY_NOTE])
+    after = TailoredResume(
+        resume=StructuredResume.model_validate(legacy()), changes=[], warnings=[])
+
+    out = validate_model_output(
+        StructuredResume.model_validate(ORIGINAL), after, baseline=before, jd_text=JD)
+
+    assert [w for w in out.warnings if w.startswith("[work[0].highlights[2]] New term: 'Kubernetes'")]
+
+
+def test_a_name_that_only_looks_the_same_does_not_answer_for_it():
+    """"Go" is not confirmed by "Google" being on the resume."""
+    from pipeline.workers.resume_fact_guard import open_findings
+
+    original = copy.deepcopy(ORIGINAL)
+    original["work"][0]["highlights"][0] = "Maintained 12 services behind the Google gateway"
+    kept = copy.deepcopy(original)
+    kept["work"][0]["highlights"][2] = "Consolidated build clusters written in Go"
+    tailored = TailoredResume(
+        resume=StructuredResume.model_validate(kept), changes=[],
+        warnings=["[work[0].highlights[2]] New term: 'Go' appears here but nowhere in "
+                  "your original resume."])
+
+    found = open_findings(StructuredResume.model_validate(original), tailored)
+
+    assert [(f.term, f.path) for f in found] == [("Go", "work[0].highlights[2]")]
+
+
+# Other ways round, tried after the two in the review were closed.
+
+def test_writing_the_name_another_way_does_not_answer_for_it(held):
+    """"K8s" for "Kubernetes". The new spelling is itself a name nobody
+    gave, so the line goes back to the one that was flagged."""
+    client, rid, scripted = held
+
+    after = edit(client, rid, scripted,
+                 legacy(2, "Consolidated build clusters on K8s to reduce costs"), warnings=[])
+
+    assert after["tailored"]["resume"]["work"][0]["highlights"][2] == CLAIM
+    blocked_in_every_format(client, rid)
+
+
+@pytest.mark.parametrize("written", ["kubernetes", "KUBERNETES", "Kubernetes-based tooling"])
+def test_the_name_is_found_however_it_is_cased_or_joined(held, written):
+    client, rid, scripted = held
+
+    edit(client, rid, scripted,
+         legacy(2, f"Consolidated build clusters on {written} to reduce costs"), warnings=[])
+
+    assert finished(client, rid).status_code == 409
+
+
+def test_the_name_moved_into_the_summary_is_not_kept_there(held):
+    client, rid, scripted = held
+    moved = copy.deepcopy(ORIGINAL)
+    moved["basics"]["summary"] = "Software engineer who builds internal platforms on Kubernetes."
+
+    after = edit(client, rid, scripted, moved, warnings=[])
+
+    assert "Kubernetes" not in str(after["tailored"]["resume"])
+    assert finished(client, rid).status_code == 200
+
+
+def test_the_name_moved_into_the_skills_list_is_not_kept_there(held):
+    client, rid, scripted = held
+    moved = legacy()
+    moved["skills"][0]["keywords"] = ["Python", "Kubernetes"]
+
+    after = edit(client, rid, scripted, moved, warnings=[])
+
+    assert after["tailored"]["resume"]["skills"][0]["keywords"] == ["Python"]
+    blocked_in_every_format(client, rid)
+
+
+def test_tailoring_again_from_the_original_leaves_nothing_to_answer_for(held):
+    client, rid, scripted = held
+    scripted["resume"], scripted["warnings"] = copy.deepcopy(ORIGINAL), []
+
+    assert client.post(f"/resumes/{rid}/tailor").status_code == 200
+
+    doc = client.get(f"/resumes/{rid}").json()
+    assert "Kubernetes" not in str(doc["tailored"]["resume"])
+    assert finished(client, rid).status_code == 200
+
+
+def test_tailoring_again_cannot_bring_the_name_back(held):
+    client, rid, scripted = held
+    scripted["resume"], scripted["warnings"] = legacy(), []
+
+    assert client.post(f"/resumes/{rid}/tailor").status_code == 200
+
+    doc = client.get(f"/resumes/{rid}").json()
+    assert "Kubernetes" not in str(doc["tailored"]["resume"])
+
+
+def test_the_candidate_retyping_the_flagged_line_does_not_answer_for_it(held):
+    """A limit, written down. The candidate's own typing is theirs on a
+    resume with nothing flagged. On a flagged name there is no record of
+    who typed what, so the one action that is recorded is the one that
+    counts: adding it to the resume."""
+    client, rid, _ = held
+
+    client.post(f"/resumes/{rid}/edit-tailored", json={"edits": [
+        {"path": "work[0].highlights[2]",
+         "value": "Consolidated our build clusters on Kubernetes, cutting costs"}]})
+
+    blocked_in_every_format(client, rid)
+    drafts_still_offered(client, rid)
