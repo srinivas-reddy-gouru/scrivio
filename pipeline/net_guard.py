@@ -37,6 +37,8 @@ from urllib.parse import urljoin, urlsplit
 
 import httpx
 
+from pipeline.runtime_mode import DEMO_NO_FETCH, demo_mode
+
 MAX_BYTES = 3_000_000
 MAX_REDIRECTS = 5
 TOTAL_SECONDS = 25.0
@@ -179,6 +181,10 @@ async def guarded_get(
 
     `transport` and `resolver` exist so tests can stand in for the
     network. In normal use both are left alone."""
+    if demo_mode():
+        # Before the address is even looked up: a lookup tells a name
+        # server which site was asked for.
+        raise BlockedFetch(DEMO_NO_FETCH)
     try:
         return await asyncio.wait_for(
             _fetch(url, dict(headers or {}), transport, resolver,

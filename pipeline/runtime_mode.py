@@ -17,6 +17,31 @@ So there are two modes, and the choice is made by a person:
          keys are present, because a demonstration must not be able to
          bill anyone. Output is labelled as demo output and stored apart
          from real work.
+
+Demo mode and the way out
+-------------------------
+The first version of demo mode chose canned clients for the writer and
+the fact-checker and stopped there. Search still went to whichever
+search keys were configured, or to a signed-in command-line assistant.
+Speech and transcription still built a real client whenever an OpenAI
+key existed. A posting given as an address was still fetched. The
+interface meanwhile said that nothing was sent anywhere.
+
+So the rule is stated once, here, and enforced at every place the
+process can reach another machine or another account:
+
+  In demo mode the server makes no outbound request of any kind.
+
+It is enforced twice over. Callers ask `demo_mode()` and return a canned
+answer or an explanation. Under them, each function that would actually
+leave (building a provider client, starting the assistant, calling a
+search provider, fetching a page) calls `refuse_in_demo()` first, so a
+caller added later that forgets to ask is refused and does not get
+through.
+
+What this does not cover is the browser, which the server cannot see.
+The interface turns off the browser's own voice and dictation in demo
+mode, since some browsers send both to a speech service.
 """
 from __future__ import annotations
 
@@ -39,6 +64,29 @@ class ProviderUnavailable(RuntimeError):
 
     The message is written for the person using the application: it is
     shown to them as is, so it names the fix and never a credential."""
+
+
+class DemoRefused(ProviderUnavailable):
+    """Something tried to leave the process in demo mode."""
+
+
+def refuse_in_demo(what: str) -> None:
+    """Call first in anything that reaches another machine or account."""
+    if demo_mode():
+        raise DemoRefused(
+            f"Demo mode does not {what}. It makes no outbound requests, "
+            "whatever keys are configured. Restart without SCRIVIO_DEMO to "
+            "use a provider.")
+
+
+DEMO_NO_FETCH = (
+    "Demo mode does not fetch pages: it makes no outbound requests. "
+    "Paste the text instead."
+)
+DEMO_NO_VOICE = (
+    "Voice is off in demo mode, which makes no outbound requests. "
+    "Type your answer instead."
+)
 
 
 NO_PROVIDER = (

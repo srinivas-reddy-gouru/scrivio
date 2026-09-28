@@ -28,7 +28,13 @@ def free_port() -> int:
 
 
 class LiveServer:
-    def __init__(self, root: Path, *, demo: bool = False, launcher: str | None = None):
+    def __init__(self, root: Path, *, demo: bool = False, launcher: str | None = None,
+                 configured: dict[str, str] | None = None):
+        """`configured` is put into the server's environment last, after
+        the real keys have been taken out. It is how a test gives the
+        server invented credentials: a demo-mode promise that holds only
+        when nothing is configured has not been tested."""
+        self.configured = dict(configured or {})
         self.root = Path(root)
         self.output, self.state = self.root / "output", self.root / "state"
         self.output.mkdir(parents=True, exist_ok=True)
@@ -57,6 +63,7 @@ class LiveServer:
         })
         if self.demo:
             env["SCRIVIO_DEMO"] = "1"
+        env.update(self.configured)
         return env
 
     def start(self) -> "LiveServer":

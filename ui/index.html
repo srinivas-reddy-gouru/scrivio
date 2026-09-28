@@ -2259,6 +2259,16 @@
   }
 
   /* ── Voice input (STT) + interviewer voice (TTS) ─────────────── */
+  /* Demo mode sends nothing anywhere. The server refuses /speak and
+     /transcribe, and the fallback for a refusal was the browser's own
+     voice and dictation, which in some browsers go to a speech service.
+     So in demo mode voice is off. If the mode cannot be learned, the
+     server cannot be reached, and voice stays off. */
+  const DEMO_VOICE_OFF = 'Voice is off in demo mode, which sends nothing anywhere. Type your answer instead.';
+  let _voiceAllowed = null;
+  const _voiceMode = fetch('/mode').then(r => r.json())
+    .then(m => (_voiceAllowed = !(m && m.demo)))
+    .catch(() => (_voiceAllowed = false));
   const SR_CLS = window.SpeechRecognition || window.webkitSpeechRecognition;
   // Safari exposes webkitSpeechRecognition but drops interim results and
   // fires onend erratically — a broken live transcript is worse than a
@@ -2278,6 +2288,7 @@
     async start(cb) {
       if (this.state !== 'idle') return;
       this.cb = cb || {}; this.chunks = []; this.finalTranscript = '';
+      if (!(await _voiceMode)) { this._fail(DEMO_VOICE_OFF, true); return; }
       this.mode = sttMode();
       this._setState('requesting');
       stopSpeaking(); // never record the interviewer's own voice
@@ -2486,6 +2497,7 @@
     'Karen', 'Daniel', 'Google UK English Female', 'Google UK English Male',
   ];
   function _speakBrowser(text) {
+    if (_voiceAllowed !== true) return;
     if (!('speechSynthesis' in window)) return;
     const u = new SpeechSynthesisUtterance(text);
     const byName = PREFERRED_VOICES
@@ -2503,6 +2515,7 @@
 
   async function speakQuestion(text) {
     if (ttsMuted() || !text) return;
+    if (!(await _voiceMode)) return;
     stopSpeaking();
     const orb = $('practice-orb');
     if (!_serverTtsDown) {

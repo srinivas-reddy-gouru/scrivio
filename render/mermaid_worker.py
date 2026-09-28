@@ -6,6 +6,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
+from pipeline.runtime_mode import demo_mode
 from pipeline.model_config import get_model
 from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import RenderAsset, VisualIntent
@@ -366,6 +367,12 @@ def diagram_renderer() -> list[str] | None:
     found = shutil.which("mmdc")
     if found:
         return [found]
+    if demo_mode():
+        # Demo mode makes no outbound requests. npx is told to download
+        # nothing, and npm documents that it then does not, but that is
+        # npm's promise and not something this project can watch. The
+        # renderers above are programs already on this machine.
+        return None
     npx = shutil.which("npx")
     if npx:
         return [npx, "--no-install", "@mermaid-js/mermaid-cli"]

@@ -38,6 +38,29 @@ function loadVoiceConfig(): Promise<VoiceConfig | null> {
   return voiceProbe;
 }
 
+/* ── Demo mode ───────────────────────────────────────────────────────
+ * Demo mode sends nothing anywhere, and the server holds to that: it
+ * answers /speak and /transcribe with a refusal. The fallback for a
+ * refusal used to be the browser's own voice and dictation, and in some
+ * browsers both of those go to a speech service. So in demo mode voice
+ * is off altogether, and the page says so.
+ *
+ * If the question cannot be answered, voice stays off: the mode is only
+ * unknown when the server cannot be reached, and then nothing works. */
+const DEMO_VOICE_OFF =
+  "Voice is off in demo mode, which sends nothing anywhere. Type your answer instead.";
+let voiceAllowed: boolean | null = null;
+let modeProbe: Promise<boolean> | null = null;
+
+function mayUseVoice(): Promise<boolean> {
+  if (!modeProbe) {
+    modeProbe = api.mode()
+      .then((m) => (voiceAllowed = !m.demo))
+      .catch(() => (voiceAllowed = false));
+  }
+  return modeProbe;
+}
+
 export const chosenVoice = () => localStorage.getItem("studio-voice") || voiceConfig?.default || "sage";
 
 /* ── Answering by voice ──────────────────────────────────────────────
@@ -145,6 +168,7 @@ function useVoiceAnswer(handlers: { append: (t: string) => void; live: (t: strin
 
   const start = useCallback(async () => {
     setError("");
+    if (!(await mayUseVoice())) { fail(DEMO_VOICE_OFF); return; }
     await loadVoiceConfig();
     if (!voiceConfig?.available || !navigator.mediaDevices?.getUserMedia) {
       startDictation(); return;
@@ -196,6 +220,7 @@ let serverVoiceDown = false;
 let currentAudio: HTMLAudioElement | null = null;
 
 function browserSpeak(text: string) {
+  if (voiceAllowed !== true) return;
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -211,6 +236,7 @@ export function stopSpeaking() {
 
 const speak = async (text: string, style = "interviewer") => {
   if (localStorage.getItem("studio-tts") === "off") return;
+  if (!(await mayUseVoice())) return;
   stopSpeaking();
   if (serverVoiceDown) { browserSpeak(text); return; }
   let url = "";
@@ -489,6 +515,8 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
     live: (t) => setAnswer(typedBase.current + t),
   });
   const [voiceOn, setVoiceOn] = useState(() => localStorage.getItem("studio-tts") !== "off");
+  const [voiceOffInDemo, setVoiceOffInDemo] = useState(false);
+  useEffect(() => { void mayUseVoice().then((allowed) => setVoiceOffInDemo(!allowed)); }, []);
 
   const toggleVoice = () => {
     const next = !voiceOn;
@@ -610,7 +638,7 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
             } : undefined}
             placeholder={isCodePhase
               ? `${coding?.signature ?? ""}\n    # your implementation`
-              : mic.supported
+              : mic.supported && !voiceOffInDemo
                 ? "Tap the mic and speak, or type your answer here…"
                 : "Type your answer here…"}
           />
@@ -623,7 +651,7 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
             </div>
           )}
           <div className="mic-row">
-            {mic.supported && (
+            {mic.supported && !voiceOffInDemo && (
               <button className={"mic-btn" + (mic.state === "recording" ? " recording" : "")}
                 disabled={mic.state === "thinking"}
                 aria-label={mic.state === "recording" ? "Stop recording" : "Answer by voice"}
@@ -646,9 +674,13 @@ function Live({ session, qIndex, onNext, onDone, onQuit }: {
               {grading ? "The grader is checking the bar…" : followup ? "Answer the follow-up" : "Submit answer"}
             </button>
             <button className="btn btn-quiet" onClick={() => submit(true)} disabled={grading}>Skip</button>
-            <button className="btn btn-quiet" onClick={toggleVoice}
-              aria-pressed={voiceOn}>{voiceOn ? "Voice on" : "Voice off"}</button>
-            <VoicePicker enabled={voiceOn} sample={q.question} />
+            {voiceOffInDemo
+              ? <span className="mic-state" role="note">Voice is off in demo mode</span>
+              : <>
+                  <button className="btn btn-quiet" onClick={toggleVoice}
+                    aria-pressed={voiceOn}>{voiceOn ? "Voice on" : "Voice off"}</button>
+                  <VoicePicker enabled={voiceOn} sample={q.question} />
+                </>}
             <button className="btn btn-quiet" onClick={onQuit}>Leave the room</button>
           </div>
           {mic.error && <div className="errbox" style={{ margin: "0.6rem 0" }}>{mic.error}</div>}

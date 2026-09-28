@@ -42,7 +42,8 @@ from uuid import uuid4
 from api import boundary, data_controls, limits, observability, settings_store
 from pipeline.providers.claude_cli_adapter import cli_status
 from pipeline.runtime_mode import (
-    DEMO_LABEL, NO_PROVIDER, ProviderUnavailable, demo_mode,
+    DEMO_LABEL, DEMO_NO_FETCH, DEMO_NO_VOICE, NO_PROVIDER, ProviderUnavailable,
+    demo_mode,
 )
 from api import jobs
 from api.jobs import Job, create_job, get_job
@@ -2422,6 +2423,8 @@ async def _fetch_job_description(url: str) -> str:
     from pipeline.workers.extraction_worker import (
         BlockedFetchError, fetch_with_retry, injection_filter, remove_boilerplate,
     )
+    if demo_mode():
+        raise HTTPException(status_code=422, detail=DEMO_NO_FETCH)
     try:
         raw, _strategy = await fetch_with_retry(url)
         text = injection_filter(remove_boilerplate(raw)).strip()
@@ -3581,8 +3584,11 @@ def _openai_audio_client():
     """Factory for both transcription (/transcribe) and speech (/speak) so
     tests can monkeypatch server._openai_audio_client (same seam pattern as
     server._anthropic_client). Returns None when no key is configured — the
-    endpoints map that to 503."""
-    if not os.environ.get("OPENAI_API_KEY"):
+    endpoints map that to 503.
+
+    None in demo mode whatever is configured. A key in the settings file
+    used to be enough for a demonstration to send speech to OpenAI."""
+    if demo_mode() or not os.environ.get("OPENAI_API_KEY"):
         return None
     from pipeline.providers.clients import openai_client
     return openai_client()
@@ -3616,7 +3622,7 @@ async def transcribe_audio(body: TranscribeRequest) -> TranscribeResponse:
     if client is None:
         raise HTTPException(
             status_code=503,
-            detail=(
+            detail=DEMO_NO_VOICE if demo_mode() else (
                 "High-accuracy transcription requires OPENAI_API_KEY on the "
                 "server. Use browser dictation or type your answer."
             ),
@@ -3722,7 +3728,8 @@ async def speak(body: SpeakRequest) -> Response:
     if client is None:
         raise HTTPException(
             status_code=503,
-            detail="Natural voice requires OPENAI_API_KEY; falling back to browser voice.",
+            detail=DEMO_NO_VOICE if demo_mode() else
+            "Natural voice requires OPENAI_API_KEY; falling back to browser voice.",
         )
     model = os.environ.get("TTS_MODEL", "gpt-4o-mini-tts")
     kwargs: dict = {"model": model, "voice": voice, "input": text}

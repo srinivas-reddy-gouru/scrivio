@@ -7,6 +7,8 @@ from urllib.parse import urlparse, urlunparse, urlencode, parse_qsl
 import httpx
 from pydantic import BaseModel
 
+from pipeline.runtime_mode import demo_mode, refuse_in_demo
+
 
 # Query-string params added by ad/tracking systems that don't change the page.
 _TRACKING_PARAMS = frozenset({
@@ -195,9 +197,14 @@ def _brave_domain_query(query: str, include_domains: list[str] | None) -> str:
     return f"{query} ({sites})" if len(include_domains) > 1 else f"{query} site:{include_domains[0]}"
 
 
+def _leaving(provider: str) -> None:
+    refuse_in_demo(f"search the web ({provider})")
+
+
 async def search_brave(
     query: str, max_results: int = 8, include_domains: list[str] | None = None
 ) -> list[SearchResult]:
+    _leaving("brave")
     async with httpx.AsyncClient() as client:
         response = await client.get(
             "https://api.search.brave.com/res/v1/web/search",
@@ -226,6 +233,7 @@ async def search_brave(
 async def search_exa(
     query: str, max_results: int = 8, include_domains: list[str] | None = None
 ) -> list[SearchResult]:
+    _leaving("exa")
     payload: dict = {
         "query": query,
         "numResults": max_results,
@@ -265,6 +273,7 @@ async def search_tavily(
     """Tavily Search — free tier: 1000 queries/month, no credit card required.
     Sign up at app.tavily.com and set TAVILY_API_KEY.
     """
+    _leaving("tavily")
     payload: dict = {
         "api_key": os.environ["TAVILY_API_KEY"],
         "query": query,
@@ -308,6 +317,7 @@ async def _claude_cli_search(
 ) -> list[SearchResult]:
     """Search via the Claude CLI's WebSearch tool (subscription-powered).
     Domain restriction is expressed with site: operators, same as Brave."""
+    _leaving("command-line assistant")
     from pipeline.providers.claude_cli_adapter import cli_web_search
 
     results = await cli_web_search(_brave_domain_query(query, include_domains))
@@ -340,10 +350,15 @@ async def multi_search(
     For local testing with no paid keys, set TAVILY_API_KEY (free tier at
     app.tavily.com) or EXA_API_KEY (free credits on sign-up).
     """
+    if provider is not None and provider not in _PROVIDERS:
+        raise ValueError(f"Unsupported search provider: {provider}")
+    if demo_mode():
+        # No results, whichever keys are configured and whether or not a
+        # command-line assistant is signed in. Callers already handle an
+        # empty search: it is what an install with no search key gets.
+        return []
     if provider is not None:
         env_var, fn = _PROVIDERS.get(provider, (None, None))
-        if fn is None:
-            raise ValueError(f"Unsupported search provider: {provider}")
         if not os.environ.get(env_var):
             raise SearchError(f"{provider} requires {env_var} to be set")
         search_fns = [fn]

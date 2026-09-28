@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import httpx
 
+from pipeline.runtime_mode import refuse_in_demo
+
 PROVIDER_SECONDS = 180.0
 PROVIDER_CONNECT_SECONDS = 10.0
 PROVIDER_RETRIES = 2
@@ -20,10 +22,12 @@ def _timeout() -> httpx.Timeout:
 
 
 def anthropic_client():
+    refuse_in_demo("build a client for Anthropic")
     import anthropic
     return anthropic.AsyncAnthropic(timeout=_timeout(), max_retries=PROVIDER_RETRIES)
 
 
 def openai_client():
+    refuse_in_demo("build a client for OpenAI")
     import openai
     return openai.AsyncOpenAI(timeout=_timeout(), max_retries=PROVIDER_RETRIES)
