@@ -786,7 +786,7 @@
         </p>
         <ul class="text-xs space-y-1.5 mb-5 text-left" style="color:var(--text-faint)">
           <li>✓ Live web research with cited sources</li>
-          <li>✓ Every claim verified before it ships</li>
+          <li>✓ Claims checked against sources before drafting</li>
           <li>✓ Basic, intermediate, or advanced depth</li>
         </ul>
         <span class="btn-primary text-sm w-full justify-center">Write an article</span>
@@ -802,7 +802,7 @@
         </p>
         <ul class="text-xs space-y-1.5 mb-5 text-left" style="color:var(--text-faint)">
           <li>✓ Practice, simulation, and 60s drills</li>
-          <li>✓ Hidden rubric: feedback you can trust</li>
+          <li>✓ Rubric written before you answer</li>
           <li>✓ Mastery tracking, streaks, weak-spot drills</li>
         </ul>
         <span class="btn-primary text-sm w-full justify-center">Start practicing</span>
@@ -814,7 +814,7 @@
         </div>
         <h3 class="font-display font-bold text-lg mb-2">Job interview prep</h3>
         <p class="text-sm leading-relaxed mb-4" style="color:var(--text-dim)">
-          Upload your resume and the job description to get a realistic 30-45 minute screen and a recruiter-grade scorecard.
+          Upload your resume and the job description to get a 30-45 minute mock screen and a scorecard by competency.
         </p>
         <ul class="text-xs space-y-1.5 mb-5 text-left" style="color:var(--text-faint)">
           <li>✓ Questions real interviewers ask for the role</li>
@@ -835,7 +835,7 @@
         </p>
         <ul class="text-xs space-y-1.5 mb-5 text-left" style="color:var(--text-faint)">
           <li>✓ Explainable checks, not a magic number</li>
-          <li>✓ Tailors honestly, never invents experience</li>
+          <li>✓ Tailoring checked against your original</li>
           <li>✓ PDF, Word, Markdown &amp; JSON export</li>
         </ul>
         <span class="btn-primary text-sm w-full justify-center">Fix my resume</span>
@@ -1325,7 +1325,7 @@
         Interview for <span class="grad-text">the job</span>, not just the topic
       </h1>
       <p class="text-sm mt-3" style="color:var(--text-dim)">
-        Your resume + the JD → a realistic 30-45 minute screen → a recruiter-grade scorecard with study links.
+        Your resume + the JD → a 30-45 minute mock screen → a scorecard by competency with study links.
       </p>
     </div>
 
@@ -1983,7 +1983,7 @@
     ['planning',        'Planning',     'Sections, claims, diagram intents',
       'Turns the brief + evidence into the article skeleton: section-by-section structure, specific factual claims each anchored to a fetched source, and diagram requests where a visual genuinely helps.'],
     ['gap_fill',        'Gap fill',     'Targeted searches for unproven claims',
-      'Any planned claim without matching evidence triggers a targeted follow-up search so the drafter never writes an unsupported assertion.'],
+      'Any planned claim without matching evidence triggers a targeted follow-up search so the drafter starts from claims that have evidence.'],
     ['verification',    'Verification', 'Fact-checking claims against sources',
       'Each claim is checked against its cited evidence BEFORE drafting (a journalist fact-checks before writing). Unsupported or off-topic claims are dropped; the article is built only from what survived.'],
     ['drafting',        'Drafting',     'Writing sections + rendering diagrams',
@@ -3523,7 +3523,7 @@
       title: 'Tailoring to the job description',
       done1: 'Current resume & review loaded', done1sub: 'the rewrite starts from your real structure',
       stage2: 'Honest rewrite',
-      stage2sub: 'rephrasing and reordering, never inventing',
+      stage2sub: 'rephrasing and reordering what is already there',
     },
   };
 
@@ -3824,7 +3824,7 @@
     } else if (canTailor) {
       heroActions = `
         <button type="button" id="resume-tailor-btn" class="btn-primary text-sm">✨ Tailor to this JD</button>
-        <p id="resume-tailor-status" class="text-xs" style="color:var(--text-dim)">Rewrites honestly for the JD, never invents experience.</p>`;
+        <p id="resume-tailor-status" class="text-xs" style="color:var(--text-dim)">Rewrites for the JD. Every number, employer, title, and date is checked against your original.</p>`;
     } else {
       heroActions = `
         <p class="text-xs" style="color:var(--text-dim)">No job description was given, so your deliverable is the cleaned-up, ATS-safe re-render:</p>
@@ -4008,7 +4008,7 @@
       ${occ.length ? `
       <div class="p-4 sm:p-5 rounded-xl mb-5" style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.35)">
         <p class="text-sm font-bold mb-1" style="color:#fbbf24">Finish it: ${occ.length} number${occ.length > 1 ? 's' : ''} to fill</p>
-        <p class="text-xs mb-3" style="color:var(--text-dim)">The tailor never invents your metrics. Type the real figures below (leave blanks for later) and every download comes out finished.</p>
+        <p class="text-xs mb-3" style="color:var(--text-dim)">A number that is not in your original is not written for you. Type the real figures below (leave blanks for later) and every download comes out finished.</p>
         ${occ.map((o, i) => `
           <div class="flex items-center gap-2 mb-2 flex-wrap">
             <span class="text-xs text-right flex-1 min-w-0 truncate" style="color:var(--text-faint);direction:rtl">…${escapeHtml(o.before)}</span>

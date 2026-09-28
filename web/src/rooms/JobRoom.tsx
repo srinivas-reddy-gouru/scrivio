@@ -345,16 +345,16 @@ function NewDossier({ onDone, onCancel }: {
       <p className="room-sub">The role, the JD, and your resume. Scrivio derives the rubric from the JD itself.</p>
       <div className="row2">
         <div><label>Role title *</label>
-          <input type="text" value={form.role_title} onChange={(e) => set("role_title", e.target.value)}
+          <input type="text" aria-label="Role title" value={form.role_title} onChange={(e) => set("role_title", e.target.value)}
             placeholder="Senior Backend Engineer" /></div>
         <div><label>Company</label>
-          <input type="text" value={form.company} onChange={(e) => set("company", e.target.value)}
-            placeholder="Stripe" /></div>
+          <input type="text" aria-label="Company" value={form.company} onChange={(e) => set("company", e.target.value)}
+            placeholder="Example Payments Inc" /></div>
         <div><label>Location</label>
-          <input type="text" value={form.location} onChange={(e) => set("location", e.target.value)}
+          <input type="text" aria-label="Location" value={form.location} onChange={(e) => set("location", e.target.value)}
             placeholder="Remote / Austin, TX" /></div>
         <div><label>Seniority</label>
-          <select value={form.seniority} onChange={(e) => set("seniority", e.target.value)}>
+          <select aria-label="Seniority" value={form.seniority} onChange={(e) => set("seniority", e.target.value)}>
             <option value="">Not specified</option>
             <option value="junior">Junior</option><option value="mid">Mid-level</option>
             <option value="senior">Senior</option><option value="staff">Staff / Principal</option>
@@ -362,12 +362,12 @@ function NewDossier({ onDone, onCancel }: {
           </select></div>
       </div>
       <label>Job description * (paste, or a posting URL)</label>
-      <input type="text" value={form.jd_url} onChange={(e) => set("jd_url", e.target.value)}
+      <input type="text" aria-label="Job posting URL" value={form.jd_url} onChange={(e) => set("jd_url", e.target.value)}
         placeholder="https://… (fetches the posting)" />
-      <textarea value={form.job_description} onChange={(e) => set("job_description", e.target.value)}
+      <textarea aria-label="Job description text" value={form.job_description} onChange={(e) => set("job_description", e.target.value)}
         placeholder="…or paste the job description" />
       <label>Resume * (paste, or attach)</label>
-      <input type="file" accept=".pdf,.docx,.txt,.md"
+      <input type="file" aria-label="Resume file" accept=".pdf,.docx,.txt,.md"
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (!f) return;
@@ -377,10 +377,10 @@ function NewDossier({ onDone, onCancel }: {
         }} />
       {file
         ? <p className="classic-note">{file.name} attached ✓</p>
-        : <textarea value={form.resume_text} onChange={(e) => set("resume_text", e.target.value)}
+        : <textarea aria-label="Your resume text" value={form.resume_text} onChange={(e) => set("resume_text", e.target.value)}
             placeholder="…or paste your resume text" />}
       <label>Anything else? (recruiter hints, round focus)</label>
-      <input type="text" value={form.extra_notes} onChange={(e) => set("extra_notes", e.target.value)} />
+      <input type="text" aria-label="Anything else" value={form.extra_notes} onChange={(e) => set("extra_notes", e.target.value)} />
       {error && <div className="errbox" style={{ marginBottom: "0.8rem" }}>{error}</div>}
       <div style={{ display: "flex", gap: "0.7rem" }}>
         <button className="btn" onClick={submit}

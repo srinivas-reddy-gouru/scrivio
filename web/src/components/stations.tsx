@@ -10,6 +10,7 @@ import { countMetrics, displayNote, noteHeadline, noteIndex } from "../marks";
 import type { PaperNote } from "../marks";
 import type { ChatTurn, JobProfileSummary, ResumeDoc, ResumeSummaryItem } from "../types";
 import { Paper } from "./Paper";
+import { SAMPLE_JD, SAMPLE_NAME, SAMPLE_RESUME, takeSampleRequest } from "../sample";
 
 /* ── Shared bits ── */
 
@@ -173,6 +174,15 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
       .catch(() => setSentTo(""));
   }, []);
 
+  // An invented resume and posting, so that a first look does not cost
+  // anyone their own. Said on the page for as long as it is what is there.
+  const useSample = () => {
+    setFile(null); setProfileId(""); setJdUrl(""); setError("");
+    setResumeText(SAMPLE_RESUME); setJdText(SAMPLE_JD);
+  };
+  useEffect(() => { if (takeSampleRequest()) useSample(); }, []);
+  const sampleLoaded = !file && resumeText === SAMPLE_RESUME;
+
   const refreshLists = () => {
     api.listJobProfiles().then(setProfiles).catch(() => {});
     api.listResumes().then(setPast).catch(() => {});
@@ -216,7 +226,7 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
     <div>
       <div className="trays">
         <h1 className="bar-tick">Put your resume <em>on the desk</em></h1>
-        <p className="sub">Scrivio reads it like a recruiter, marks it like an editor, and never writes a word that is not true.</p>
+        <p className="sub">You get a checklist score with the reason for each row, then a rewrite in which every number, employer, title, and date is checked against your original.</p>
         <div className="tray-grid">
           <div
             className={"tray" + (dragging ? " dragging" : "")}
@@ -316,6 +326,14 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
           </div>
         </div>
         {error && <div className="errbox" style={{ marginTop: "1rem" }}>{error}</div>}
+        {sampleLoaded && (
+          <p className="sample-note" role="status">
+            <b>Sample loaded.</b> {SAMPLE_NAME} and this posting are invented.
+            {sentTo === "demo"
+              ? " In demo mode the results are canned examples too."
+              : sentTo ? " What comes back is a real reading of an invented resume." : ""}
+          </p>
+        )}
         {sentTo && (
           <p className="sent-note">
             {sentTo === "demo"
@@ -329,6 +347,11 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
             disabled={!resumeText.trim() && !file && !profileId}>
             Read my resume
           </button>
+          {!sampleLoaded && (
+            <button className="btn btn-quiet" onClick={useSample}>
+              Use a sample resume and posting
+            </button>
+          )}
         </div>
       </div>
 
@@ -853,7 +876,7 @@ export function TailorStation({ doc, onDoc, onSend }: {
               <summary>{remaining} number{remaining > 1 ? "s" : ""} still to type on the paper</summary>
               <p>
                 The amber chips are your numbers, right where they will print.
-                Scrivio never invents metrics; blanks ship as [METRIC] until you fill them.
+                A number that is not in your original is not written for you. It stays as [METRIC] until you fill it in.
               </p>
               <button className="btn" onClick={save} disabled={saving || typed === 0}>
                 {saving ? "Saving…" : `Save ${typed || ""} number${typed === 1 ? "" : "s"}`}
