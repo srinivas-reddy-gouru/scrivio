@@ -37,6 +37,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+from pipeline.process_group import kill_group, reap
 from pipeline.runtime_mode import ProviderUnavailable, refuse_in_demo
 
 
@@ -257,14 +258,22 @@ class _TooMuchOutput(Exception):
 
 
 async def _stop(process) -> None:
+    """Stop the assistant and whatever it started. It is started in a
+    process group of its own, and the group's number is its pid.
+
+    Used when a call is abandoned: a timeout, too much output, or a
+    cancelled job. Not after a call that succeeded. An assistant may
+    leave a helper running between calls on purpose, a local model
+    server for instance, and stopping that after every answer would make
+    the next one start from nothing."""
+    pid = getattr(process, "pid", None)
+    if isinstance(pid, int):
+        kill_group(pid)
     try:
-        process.kill()
-    except ProcessLookupError:
-        return
-    try:
-        await asyncio.wait_for(process.wait(), timeout=5)
-    except Exception:
+        process.kill()                   # a stand-in, or a group that could not be signalled
+    except (ProcessLookupError, OSError):
         pass
+    await reap(process)
 
 
 async def _drain(stream, limit: int) -> bytes:
@@ -560,6 +569,11 @@ class _CLIMessages:
                 # Neutral cwd: never let a CLI pick up a project context
                 # (CLAUDE.md, AGENTS.md, settings) from the server's dir.
                 cwd=tempfile.gettempdir(),
+                # A group of its own, so that an abandoned call can be
+                # stopped together with what it started. A group and not
+                # a session: the assistant keeps the session it would
+                # have had, and with it whatever its sign-in relies on.
+                process_group=0,
             )
             try:
                 stdout, stderr = await asyncio.wait_for(

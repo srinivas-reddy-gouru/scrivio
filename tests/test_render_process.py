@@ -131,3 +131,111 @@ def test_other_work_continues_while_a_render_runs() -> None:
         return ticks
 
     assert asyncio.run(scenario()) > 10
+
+
+# ── F05: the parent finishes first ────────────────────────────────────
+# Every test above keeps the renderer alive until it is stopped. A
+# renderer that starts a browser and exits cleanly, leaving the browser
+# behind, was not covered, and was not cleaned up: the group was looked
+# up from the parent's pid, and the parent was gone.
+
+# A parent that starts a child, says who the child is, and exits with
+# success. `{pipes}` decides whether the child holds the parent's output
+# pipes open or lets go of them.
+LEAVES_A_CHILD = (
+    "import subprocess, sys, os;"
+    "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)']{pipes});"
+    "open(sys.argv[1], 'w').write(str(child.pid));"
+    "print('drawn')"
+)
+LETS_GO = LEAVES_A_CHILD.format(
+    pipes=", stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL")
+HOLDS_ON = LEAVES_A_CHILD.format(pipes="")
+
+
+@pytest.fixture
+def left_behind(tmp_path):
+    """Whatever a test leaves running is stopped here, pass or fail."""
+    record = tmp_path / "child"
+    yield record
+    if record.exists() and record.read_text().strip().isdigit():
+        try:
+            os.kill(int(record.read_text()), 9)
+        except ProcessLookupError:
+            pass
+
+
+def test_the_case_from_the_follow_up_review(left_behind) -> None:
+    code, out, _err = asyncio.run(run_bounded([PY, "-c", LETS_GO, str(left_behind)], timeout=20))
+
+    assert code == 0 and out.strip() == b"drawn"
+    assert wait_gone(int(left_behind.read_text())), \
+        "the renderer finished, and what it started is still running"
+
+
+def test_a_child_that_holds_the_pipes_open_does_not_hold_up_the_result(left_behind) -> None:
+    """The output pipes do not close until the last process holding them
+    exits. Waiting for them to close meant waiting for the child, up to
+    the full timeout, and then reporting a timeout for a render that had
+    finished."""
+    started = time.monotonic()
+
+    code, out, _err = asyncio.run(run_bounded([PY, "-c", HOLDS_ON, str(left_behind)], timeout=30))
+
+    assert code == 0 and out.strip() == b"drawn"
+    assert time.monotonic() - started < 10
+    assert wait_gone(int(left_behind.read_text()))
+
+
+def test_a_parent_that_fails_after_starting_a_child_leaves_nothing(left_behind) -> None:
+    failing = LETS_GO.replace("print('drawn')", "sys.exit(4)")
+
+    code, _out, _err = asyncio.run(run_bounded([PY, "-c", failing, str(left_behind)], timeout=20))
+
+    assert code == 4
+    assert wait_gone(int(left_behind.read_text()))
+
+
+def test_output_beyond_the_limit_leaves_nothing_either(left_behind) -> None:
+    noisy = LETS_GO.replace(
+        "print('drawn')", "\nwhile True: sys.stdout.write('x' * 65536)")
+
+    with pytest.raises(ProcessFailed, match="more output"):
+        asyncio.run(run_bounded([PY, "-c", noisy, str(left_behind)],
+                                timeout=20, max_output=200_000))
+
+    assert wait_gone(int(left_behind.read_text()))
+
+
+@pytest.mark.parametrize("program", [LETS_GO, HOLDS_ON], ids=["lets-go", "holds-on"])
+def test_no_task_is_left_waiting_on_a_pipe(left_behind, program) -> None:
+    async def scenario():
+        before = len(asyncio.all_tasks())
+        await run_bounded([PY, "-c", program, str(left_behind)], timeout=20)
+        await asyncio.sleep(0)
+        return before, len(asyncio.all_tasks())
+
+    before, after = asyncio.run(scenario())
+
+    assert after == before
+
+
+def test_a_child_that_leaves_the_group_on_purpose_is_out_of_reach(left_behind) -> None:
+    """The limit, written down as a test so that it stays true to what
+    the documentation says. A process that starts a session of its own
+    has left the group, and killing the group does not reach it. The
+    renderers used here do not do this. Containing one that did needs
+    the operating system: a container, a job object, or a cgroup."""
+    escapes = (
+        "import subprocess, sys;"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'],"
+        " stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,"
+        " start_new_session=True);"
+        "open(sys.argv[1], 'w').write(str(child.pid));"
+        "print('drawn')"
+    )
+
+    code, _out, _err = asyncio.run(run_bounded([PY, "-c", escapes, str(left_behind)], timeout=20))
+
+    assert code == 0
+    assert alive(int(left_behind.read_text()))

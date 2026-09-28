@@ -13,6 +13,9 @@ run_bounded() is the replacement:
   a deadline     and the whole process GROUP is killed when it passes,
                  so nothing the renderer started outlives it
   cancellable    cancelling the caller kills the group too
+  after success  the group is killed then as well: a renderer that
+                 finishes and leaves a browser running has not cleaned
+                 up, and nothing else will
   bounded output read with a ceiling, not buffered whole
   a clean env    the child gets a short list of variables. It does not
                  inherit the server's environment, which holds provider
@@ -22,7 +25,8 @@ from __future__ import annotations
 
 import asyncio
 import os
-import signal
+
+from pipeline.process_group import exit_code, kill_group, reap, settle
 
 MAX_OUTPUT_BYTES = 2_000_000
 _PASSED_THROUGH = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TERM",
@@ -43,14 +47,11 @@ def clean_environment() -> dict[str, str]:
     return {k: os.environ[k] for k in _PASSED_THROUGH if k in os.environ}
 
 
-def _kill_group(process) -> None:
-    try:
-        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-    except (ProcessLookupError, PermissionError, OSError):
-        try:
-            process.kill()
-        except ProcessLookupError:
-            pass
+# How long output may go on arriving after the program has exited. The
+# pipes close when the LAST process holding them exits, so a child the
+# program left running keeps them open. Waiting for that is waiting for
+# the child.
+DRAIN_SECONDS = 0.5
 
 
 class _Overrun(Exception):
@@ -88,14 +89,37 @@ async def run_bounded(
     except FileNotFoundError as exc:
         raise ToolMissing(f"{argv[0]} is not installed") from exc
 
+    # The group's number is the child's pid, from the moment it starts,
+    # because it starts a session of its own. Kept here: by the time it
+    # is needed the child may be gone, and there is nobody left to ask.
+    group = process.pid
+    reading = asyncio.ensure_future(asyncio.gather(
+        _read(process.stdout, max_output), _read(process.stderr, max_output)))
+    exiting = asyncio.ensure_future(exit_code(process))
     try:
-        stdout, stderr = await asyncio.wait_for(
-            asyncio.gather(_read(process.stdout, max_output),
-                           _read(process.stderr, max_output)),
-            timeout=timeout,
-        )
-        code = await asyncio.wait_for(process.wait(), timeout=timeout)
-        return code, stdout, stderr
+        done, _ = await asyncio.wait(
+            {reading, exiting}, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
+        if not done:
+            raise asyncio.TimeoutError
+        if reading in done and reading.exception() is not None:
+            raise reading.exception()
+        if exiting not in done:
+            # Output has ended and the program has not. It gets what is
+            # left of the time.
+            await asyncio.wait({exiting}, timeout=timeout)
+            if not exiting.done():
+                raise asyncio.TimeoutError
+        if not reading.done():
+            await asyncio.wait({reading}, timeout=DRAIN_SECONDS)
+        if not reading.done():
+            # Something the program started is holding the pipes. Stopping
+            # it closes them, and what was written before then is kept.
+            kill_group(group)
+            await asyncio.wait({reading}, timeout=DRAIN_SECONDS)
+        if not reading.done():
+            raise asyncio.TimeoutError
+        stdout, stderr = reading.result()
+        return exiting.result(), stdout, stderr
     except _Overrun:
         raise ProcessFailed(
             f"{argv[0]} produced more output than the limit and was stopped"
@@ -105,13 +129,8 @@ async def run_bounded(
             f"{argv[0]} did not finish within {timeout:g} seconds and was stopped",
             timed_out=True) from None
     finally:
-        # Reached on success too, where it finds nothing left to kill. On a
-        # timeout, an overrun, or a cancelled caller it is the point.
-        if process.returncode is None:
-            _kill_group(process)
-            try:
-                await asyncio.wait_for(process.wait(), timeout=5)
-            except Exception:
-                pass
-        else:
-            _kill_group(process)             # children of a finished parent
+        # Every way out comes through here: success, failure, a timeout,
+        # too much output, and a cancelled caller.
+        kill_group(group)
+        await settle(reading, exiting)
+        await reap(process)
