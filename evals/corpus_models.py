@@ -72,6 +72,28 @@ class ResumeCorpus(BaseModel):
     cases: list[ResumeCase]
 
 
+class EditCase(ResumeCase):
+    """A case about an EDIT: there is an earlier tailored version, and
+    the model has been asked to change it. Added in corpus v2.
+
+    A separate model, and not a new field on ResumeCase, so that the
+    shape of a v1 file stays what it was when results were recorded
+    against it."""
+    baseline: TailoredResume | None = Field(
+        default=None,
+        description="The tailored resume as it stood before this edit. "
+                    "None means a first tailoring, as in v1.")
+
+
+class ResumeCorpusV2(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: str
+    written_by: str
+    changed_from_v1: str
+    cases: list[EditCase]
+
+
 AnswerKind = Literal[
     "complete", "partial", "wrong", "empty", "long_and_empty", "short_and_complete",
     "confident_and_wrong", "instructs_the_grader", "buzzwords", "hedged_and_correct",

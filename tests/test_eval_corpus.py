@@ -91,6 +91,67 @@ def test_the_runner_exits_zero_and_writes_a_report(tmp_path, capsys):
     assert "known gap" in capsys.readouterr().out
 
 
+def test_a_clean_exit_is_not_allowed_to_read_as_everything_passing(capsys):
+    """The follow-up review pointed out that it could be read that way."""
+    assert resume_guard_eval.main([]) == 0
+    said = capsys.readouterr().out.strip().splitlines()[-1]
+
+    assert said.startswith("Result: the guard does what is expected of it in ")
+    assert "It does NOT catch the other" in said
+
+
+def test_strict_is_red_while_any_gap_remains():
+    assert resume_guard_eval.main(["--strict"]) == 1
+
+
+def test_the_first_corpus_is_as_it_was_when_results_were_recorded_against_it():
+    v1 = resume_guard_eval.evaluate(resume_guard_eval.load("v1"))
+
+    assert (v1.cases, v1.held, v1.failed, v1.gaps) == (38, 35, 0, 3)
+
+
+def test_the_second_corpus_keeps_every_case_of_the_first_unchanged():
+    v1, v2 = resume_guard_eval.load("v1"), resume_guard_eval.load("v2")
+    carried = {c.id: c for c in v2.cases}
+
+    for case in v1.cases:
+        kept = carried[case.id]
+        assert kept.baseline is None
+        assert kept.model_dump(exclude={"baseline"}) == case.model_dump(), case.id
+
+
+def test_the_second_corpus_has_the_cases_the_follow_up_review_asked_for(corpus):
+    ids = {c.id for c in corpus.cases}
+
+    assert {"edit-count-changes-what-it-counts", "edit-percentage-moved-in-place",
+            "edit-amount-moved-in-place", "edit-percentage-reworded",
+            "edit-amount-reworded", "user-rejected-the-number"} <= ids
+    assert sum(c.baseline is not None for c in corpus.cases) == 15
+
+
+def test_without_the_fix_the_edit_cases_fail(corpus, monkeypatch):
+    """The guard as it was: a figure already on the line was accepted
+    whatever it now counted."""
+    from pipeline.workers import resume_fact_guard as guard
+
+    real_quantities = guard.quantities_in
+
+    def as_it_was(text, claims, *, original, prior_text="", allowance=None):
+        prior = {q.key for q in real_quantities(prior_text, source=True)}
+        return [q for q in guard.__dict__["_unsupported_now"](
+                    text, claims, original=original, prior_text="", allowance=allowance)
+                if q.key not in prior]
+
+    monkeypatch.setitem(guard.__dict__, "_unsupported_now", guard.unsupported_quantities)
+    monkeypatch.setattr(guard, "unsupported_quantities", as_it_was)
+
+    report = resume_guard_eval.evaluate(corpus)
+
+    failed = {r.id for r in report.results if r.outcome == "failed"}
+    assert {"edit-count-changes-what-it-counts", "edit-percentage-moved-in-place",
+            "edit-amount-moved-in-place", "edit-figure-the-user-filled-in-is-moved"} <= failed
+
+
 def test_every_category_the_review_asked_for_has_cases(corpus):
     found = {c.category for c in corpus.cases}
 

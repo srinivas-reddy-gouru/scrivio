@@ -18,6 +18,7 @@ from pipeline.schemas.models import (
     ResumeDoc, StructuredResume, TailoredResume,
 )
 from pipeline.workers import resume_studio_worker as worker
+from pipeline.workers.resume_fact_guard import validate_model_output
 from pipeline.workers.resume_studio_worker import (
     METRIC_TOKEN, edit_resume_by_instruction, enforce_honesty,
     guard_edited_numbers_and_log, render_markdown, run_ats_checks,
@@ -469,3 +470,223 @@ def test_what_the_user_added_survives_the_guard_on_the_next_edit(api):
 
     highlights = r.json()["tailored"]["resume"]["work"][0]["highlights"]
     assert "Cut build time by 35% across 40 repositories" in highlights
+
+
+# ── F02: a figure that stays on its line and changes what it counts ───
+# The follow-up review's reproduction, exactly. The line had a 12 in it,
+# so any 12 on that line was accepted without asking what it measured.
+
+def test_a_figure_kept_on_its_line_cannot_change_what_it_counts():
+    after = copy.deepcopy(ORIGINAL)
+    after["work"][0]["highlights"][0] = "Mentored 12 engineers"
+
+    out = _edit(ORIGINAL, after)
+
+    assert out.resume.work[0].highlights[0] == "Maintained 12 services behind the internal gateway"
+    assert any("12" in w for w in out.warnings)
+
+
+def test_the_exact_case_from_the_follow_up_review():
+    original = StructuredResume.model_validate({
+        "basics": {"name": "Sam Okafor"},
+        "work": [{"name": "Initrode", "position": "Software Engineer",
+                  "startDate": "Feb 2020", "endDate": "Present",
+                  "highlights": ["Maintained 12 services."]}]})
+    baseline = TailoredResume(resume=original.model_copy(deep=True), changes=[], warnings=[])
+    replaced = original.model_copy(deep=True)
+    replaced.work[0].highlights[0] = "Mentored 12 engineers."
+
+    out = validate_model_output(
+        original, TailoredResume(resume=replaced, changes=[], warnings=[]),
+        baseline=baseline)
+
+    assert out.resume.work[0].highlights[0] == "Maintained 12 services."
+    assert out.warnings
+
+
+MEASURED = {
+    "basics": {"name": "Sam Okafor"},
+    "work": [{"name": "Initrode", "position": "Software Engineer",
+              "startDate": "Feb 2020", "endDate": "Present", "summary": "",
+              "highlights": [
+                  "Cut build failures by 40% after moving to hermetic builds",
+                  "Saved $30,000 a year in cloud storage",
+                  "Reduced deploy time from 45 minutes to 6 minutes",
+              ]}],
+}
+
+
+@pytest.mark.parametrize("line, replacement", [
+    (0, "Grew revenue by 40% after moving to hermetic builds"),
+    (0, "Raised test coverage 40%"),
+    (1, "Won $30,000 in new contracts"),
+    (1, "Managed a $30,000 training budget"),
+    (2, "Reduced customer churn from 45 accounts to 6 accounts"),
+])
+def test_a_percentage_or_amount_cannot_be_moved_to_another_claim_in_place(line, replacement):
+    after = copy.deepcopy(MEASURED)
+    after["work"][0]["highlights"][line] = replacement
+
+    out = _edit(MEASURED, after)
+
+    assert out.resume.work[0].highlights[line] == MEASURED["work"][0]["highlights"][line]
+    assert out.warnings
+
+
+@pytest.mark.parametrize("line, rewrite", [
+    (0, "Reduced build failures 40% by moving to hermetic builds"),
+    (0, "Moved to hermetic builds, cutting failures in the build by 40 percent"),
+    (1, "Cut cloud storage spend by $30,000 a year"),
+    (1, "Saved $30,000 annually on cloud storage"),
+    (2, "Brought deploy time down from 45 minutes to 6 minutes"),
+    (2, "Cut deploys from 45 minutes to 6 minutes"),
+])
+def test_rewording_the_same_claim_in_place_keeps_its_figure(line, rewrite):
+    """The other half. A guard that refuses every reworded figure would
+    make the editor useless, and people would stop reading its warnings."""
+    after = copy.deepcopy(MEASURED)
+    after["work"][0]["highlights"][line] = rewrite
+
+    out = _edit(MEASURED, after)
+
+    assert out.resume.work[0].highlights[line] == rewrite
+    assert not out.warnings
+
+
+def test_a_figure_the_user_filled_in_survives_a_later_rewording():
+    """It is in the earlier version of the line and nowhere in the
+    original. The earlier version has to go on counting as a source."""
+    filled = copy.deepcopy(ORIGINAL)
+    filled["work"][0]["highlights"][1] = "Mentored 9 engineers joining the platform team"
+    reworded = copy.deepcopy(filled)
+    reworded["work"][0]["highlights"][1] = "Coached 9 engineers who joined the platform team"
+
+    out = _edit(filled, reworded, original=ORIGINAL)
+
+    assert out.resume.work[0].highlights[1] == "Coached 9 engineers who joined the platform team"
+
+
+def test_a_figure_the_user_filled_in_cannot_then_be_moved():
+    filled = copy.deepcopy(ORIGINAL)
+    filled["work"][0]["highlights"][1] = "Mentored 9 engineers joining the platform team"
+    moved = copy.deepcopy(filled)
+    moved["work"][0]["highlights"][1] = "Shipped 9 products with the platform team"
+
+    out = _edit(filled, moved, original=ORIGINAL)
+
+    assert out.resume.work[0].highlights[1] == "Mentored 9 engineers joining the platform team"
+
+
+# A number in what the user typed is not the user vouching for it.
+
+@pytest.mark.parametrize("said", [
+    "Do not say 25 engineers, I never managed anyone",
+    "Remove the claim about 25 engineers",
+    "I did not mentor 25 engineers, that is wrong",
+    "It was never 25 engineers",
+    "The coach suggested 25 engineers but that is not true",
+])
+def test_a_number_the_user_rejected_is_not_a_number_the_user_supplied(said):
+    after = copy.deepcopy(ORIGINAL)
+    after["work"][0]["highlights"][1] = "Mentored 25 engineers joining the platform team"
+
+    out = _edit(ORIGINAL, after, user_text=said)
+
+    assert "25" not in out.resume.work[0].highlights[1]
+
+
+def test_a_number_the_user_gave_for_one_thing_is_not_licence_for_another():
+    after = copy.deepcopy(ORIGINAL)
+    after["work"][0]["highlights"][1] = "Mentored 9 engineers joining the platform team"
+    after["work"][0]["highlights"][2] = "Consolidated 9 build clusters to reduce costs"
+
+    out = _edit(ORIGINAL, after, user_text="I mentored 9 engineers over that time")
+
+    assert "Mentored 9 engineers" in out.resume.work[0].highlights[1]
+    assert out.resume.work[0].highlights[2] == "Consolidated build clusters to reduce costs"
+
+
+@pytest.mark.parametrize("said", [
+    "make it 9", "the number is 9", "9", "it was 9 engineers", "use 9 there",
+])
+def test_a_bare_number_from_the_user_is_still_the_users_number(said):
+    """Someone answering "how many?" types a number and nothing else."""
+    after = copy.deepcopy(ORIGINAL)
+    after["work"][0]["highlights"][1] = "Mentored 9 engineers joining the platform team"
+
+    out = _edit(ORIGINAL, after, user_text=said)
+
+    assert "Mentored 9 engineers" in out.resume.work[0].highlights[1]
+
+
+def test_the_edit_endpoint_refuses_a_figure_moved_in_place(api):
+    client, rid, scripted = api
+    scripted["resume"] = copy.deepcopy(ORIGINAL)
+    client.post(f"/resumes/{rid}/tailor")
+    moved = copy.deepcopy(ORIGINAL)
+    moved["work"][0]["highlights"][0] = "Mentored 12 engineers"
+    scripted["resume"] = moved
+
+    r = client.post(f"/resumes/{rid}/request-edit",
+                    json={"instruction": "make the first bullet about people"})
+
+    assert r.status_code == 200, r.text
+    saved = r.json()["tailored"]
+    assert saved["resume"]["work"][0]["highlights"][0] == \
+        "Maintained 12 services behind the internal gateway"
+    assert any("12" in w for w in saved["warnings"])
+
+
+def test_the_edit_endpoint_does_not_take_a_rejected_number_as_supplied(api):
+    client, rid, scripted = api
+    scripted["resume"] = copy.deepcopy(ORIGINAL)
+    client.post(f"/resumes/{rid}/tailor")
+    wrong = copy.deepcopy(ORIGINAL)
+    wrong["work"][0]["highlights"][1] = "Mentored 25 engineers joining the platform team"
+    scripted["resume"] = wrong
+
+    r = client.post(f"/resumes/{rid}/request-edit", json={
+        "instruction": "Do not say 25 engineers anywhere, I never managed anyone"})
+
+    assert r.status_code == 200, r.text
+    assert "25" not in r.json()["tailored"]["resume"]["work"][0]["highlights"][1]
+
+
+@pytest.mark.parametrize("said", [
+    "The coach suggested 25 engineers",
+    "you recommended 25 engineers earlier",
+    "It said 25 engineers",
+])
+def test_repeating_what_was_proposed_is_not_agreeing_to_it(said):
+    after = copy.deepcopy(ORIGINAL)
+    after["work"][0]["highlights"][1] = "Mentored 25 engineers joining the platform team"
+
+    out = _edit(ORIGINAL, after, user_text=said)
+
+    assert "25" not in out.resume.work[0].highlights[1]
+
+
+@pytest.mark.parametrize("said", [
+    "You suggested 9 engineers, that is right, use it",
+    "apply what you suggested: 9 engineers",
+    "yes, the coach said 9 engineers and I agree",
+])
+def test_agreeing_to_what_was_proposed_makes_it_the_users(said):
+    after = copy.deepcopy(ORIGINAL)
+    after["work"][0]["highlights"][1] = "Mentored 9 engineers joining the platform team"
+
+    out = _edit(ORIGINAL, after, user_text=said)
+
+    assert "Mentored 9 engineers" in out.resume.work[0].highlights[1]
+
+
+def test_a_bare_number_is_good_for_one_place_only():
+    """"Make it 9" does not say where. It is taken to mean one place."""
+    after = copy.deepcopy(ORIGINAL)
+    after["work"][0]["highlights"][1] = "Mentored 9 engineers joining the platform team"
+    after["work"][0]["highlights"][2] = "Consolidated 9 build clusters to reduce costs"
+
+    out = _edit(ORIGINAL, after, user_text="make it 9")
+
+    kept = [h for h in out.resume.work[0].highlights if "9" in h]
+    assert len(kept) == 1

@@ -17,6 +17,12 @@ Exit status is 0 when every case behaves as recorded, and 1 otherwise.
 "As recorded" includes the known gaps, which are required to go on
 failing: a gap that closes has to be promoted to an ordinary case, so
 that the list of gaps stays a true list.
+
+SO EXIT STATUS 0 DOES NOT MEAN EVERY CASE PASSED. It means nothing
+changed. The known gaps are inventions the guard does not catch, and
+the last line of the output counts them. With --strict the exit status
+is 1 while any remain, for anyone who wants a run that is green only
+when the guard catches everything in the corpus.
 """
 from __future__ import annotations
 
@@ -28,12 +34,13 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from evals.corpus_models import Record, ResumeCase, ResumeCorpus
+from evals.corpus_models import Record, ResumeCase, ResumeCorpus, ResumeCorpusV2
 from pipeline.schemas.models import StructuredResume, TailoredResume
 from pipeline.workers.resume_fact_guard import validate_model_output
 
 CORPORA = Path(__file__).resolve().parent / "corpus"
-CURRENT = "v1"
+CURRENT = "v2"
+SHAPES = {"v1": ResumeCorpus}           # every later version is ResumeCorpusV2
 
 Guard = Callable[..., TailoredResume]
 
@@ -61,9 +68,10 @@ class Report(BaseModel):
         return self.failed == 0 and self.gaps_closed == 0
 
 
-def load(version: str = CURRENT) -> ResumeCorpus:
+def load(version: str = CURRENT) -> ResumeCorpus | ResumeCorpusV2:
     path = CORPORA / version / "resume_cases.json"
-    return ResumeCorpus.model_validate_json(path.read_text(encoding="utf-8"))
+    shape = SHAPES.get(version, ResumeCorpusV2)
+    return shape.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def _strings(value) -> list[str]:
@@ -108,12 +116,16 @@ def problems_with(case: ResumeCase, guarded: TailoredResume) -> list[str]:
     return problems
 
 
-def evaluate(corpus: ResumeCorpus, guard: Guard = validate_model_output) -> Report:
+def evaluate(corpus: ResumeCorpus | ResumeCorpusV2,
+             guard: Guard = validate_model_output) -> Report:
     results: list[CaseResult] = []
     for case in corpus.cases:
+        earlier = getattr(case, "baseline", None)
         guarded = guard(
             StructuredResume.model_validate(case.original.model_dump()),
             TailoredResume.model_validate(case.model_output.model_dump()),
+            baseline=(TailoredResume.model_validate(earlier.model_dump())
+                      if earlier is not None else None),
             user_text=case.user_text, jd_text=case.jd_text)
         problems = problems_with(case, guarded)
         if case.known_gap:
@@ -157,6 +169,14 @@ def render(report: Report) -> str:
             lines += [f"      {p}" for p in r.problems]
             if r.known_gap:
                 lines.append(f"      why: {r.known_gap}")
+    caught = report.held
+    lines += ["", (
+        f"Result: the guard does what is expected of it in {caught} of {report.cases} cases."
+        + (f" It does NOT catch the other {report.gaps}, listed above as known gaps."
+           if report.gaps else "")
+        + (f" {report.failed} FAILED." if report.failed else "")
+        + (" Nothing has changed since this was recorded."
+           if report.as_recorded else " This differs from what was recorded."))]
     return "\n".join(lines)
 
 
@@ -164,6 +184,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--corpus", default=CURRENT)
     parser.add_argument("--json", type=Path, help="also write the report here")
+    parser.add_argument("--strict", action="store_true",
+                        help="exit 1 while any known gap remains")
     args = parser.parse_args(argv)
 
     report = evaluate(load(args.corpus))
@@ -172,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
         args.json.write_text(
             json.dumps(report.model_dump(), indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8")
+    if args.strict and report.gaps:
+        return 1
     return 0 if report.as_recorded else 1
 
 

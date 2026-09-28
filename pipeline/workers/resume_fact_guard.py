@@ -186,6 +186,7 @@ class Quantity:
     span: tuple[int, int]            # character span to replace
     before: tuple[str, ...]          # nearest content stems before it
     after: tuple[str, ...]           # nearest content stems after it
+    led_by: str = ""                 # "by", "from", or "to", when one leads it
 
     @property
     def is_bare_count(self) -> bool:
@@ -250,9 +251,11 @@ def quantities_in(text: str, *, source: bool = False) -> list[Quantity]:
             unit = _TIME_UNITS[unit]
         after = _content(tokens[j:], limit=2)
         before = _content(reversed(tokens[:i]), limit=2)
+        lead = tokens[i - 1][1].lower() if i > 0 and tokens[i - 1][0] == "word" else ""
         found.append(Quantity(
             key=(currency, magnitude, unit), text=text[start:end],
             span=(start, end), before=before, after=after,
+            led_by=lead if lead in _LEADS else "",
         ))
     return found
 
@@ -278,6 +281,13 @@ def _content(tokens, *, limit: int) -> tuple[str, ...]:
     return tuple(out)
 
 
+# In "cut build failures by 40% after moving to hermetic builds", what the
+# 40% measures is in front of it. What follows says how it was done. The
+# two were treated alike, so "grew revenue by 40% after moving to hermetic
+# builds" was supported by the words it shared about the builds.
+_LEADS = frozenset({"by", "from", "to"})
+
+
 def _supports(candidate: Quantity, source: Quantity) -> bool:
     """Same figure AND the same thing being counted or measured."""
     if candidate.key != source.key:
@@ -285,10 +295,10 @@ def _supports(candidate: Quantity, source: Quantity) -> bool:
     if candidate.is_bare_count and candidate.after and source.after:
         # A count is a count OF something: the counted thing must agree.
         return bool(set(candidate.after) & set(source.after))
-    return bool(
-        (set(candidate.before) | set(candidate.after))
-        & (set(source.before) | set(source.after))
-    )
+    about = set(source.before) | set(source.after)
+    if candidate.led_by and candidate.before:
+        return bool(set(candidate.before) & about)
+    return bool((set(candidate.before) | set(candidate.after)) & about)
 
 
 # ── Record matching ─────────────────────────────────────────────────────────
@@ -676,28 +686,125 @@ def _fields_with_sources(candidate: StructuredResume, original: StructuredResume
                    lambda v, c=c, j=j: c.items.__setitem__(j, v), claims)
 
 
-def _user_numbers(user_text: str) -> set[tuple[str, float, str]]:
-    return {q.key for q in quantities_in(user_text)}
+# ── What the user said, as evidence ─────────────────────────────────────────
+# A number in what the user typed is not the user vouching for it. "Do not
+# say 25 engineers" has a 25 in it. So what the user typed is read the way
+# the resume is: each figure with the words that say what it counts, and
+# figures the user was rejecting set aside.
+
+# Words of instruction. They say what to do with a figure and nothing
+# about what it measures, so they are not context.
+_INSTRUCTION_WORDS = frozenset(_stem(w) for w in """
+make makes made use uses used set sets put puts change changes changed
+replace replaces replaced update updates updated write writes wrote say
+says said add adds added insert fill fills filled apply applies applied
+should would could must please instead actually really exactly correct
+right there here line bullet point sentence resume summary one thing
+want wants need needs like figure number numbers value metric
+""".split())
+
+_REJECTS = re.compile(
+    r"\b(?:not|no|never|none|n't|dont|doesnt|didnt|isnt|wasnt|cannot|cant"
+    r"|remove|delete|drop|omit|without|stop|avoid"
+    r"|wrong|incorrect|untrue|false|mistake|invented|made\s+up)\b"
+    r"|n['’]t\b", re.I)
+# Repeating what someone else proposed is not agreeing to it. "The coach
+# suggested 25 engineers" gives a figure and takes no position on it.
+_REPORTS = re.compile(
+    r"\b(?:coach|assistant|scrivio|model|ai|you|it|tool|app)\s+"
+    r"(?:had\s+|has\s+|have\s+)?"
+    r"(?:suggest\w*|said|says|recommend\w*|propos\w*|wrote|writes|mention\w*|told|put|added)\b",
+    re.I)
+_ACCEPTS = re.compile(
+    r"\b(?:apply|use|accept|agree\w*|yes|keep|ok|okay|fine|go\s+with|"
+    r"is\s+(?:right|correct|true|accurate)|was\s+(?:right|correct|true|accurate))\b", re.I)
+# "... but that is not true": the rejection comes after, and points back.
+_POINTS_BACK = re.compile(r"^\W*(?:that|this|it|which|these|those)\b", re.I)
+_CLAUSE_BREAK = re.compile(r"[,;:]|\bbut\b|\bhowever\b|\bthough\b|\bexcept\b", re.I)
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+|\n+")
+
+
+@dataclass(frozen=True)
+class UserFigure:
+    """A figure the user gave. `bare` means they gave the number and did
+    not say what it counts ("make it 9"), which is how people answer the
+    question "how many?"."""
+    quantity: Quantity
+    bare: bool
+
+
+def user_figures(user_text: str) -> list[UserFigure]:
+    found: list[UserFigure] = []
+    for sentence in _SENTENCE_BREAK.split(user_text or ""):
+        clauses = [c for c in _CLAUSE_BREAK.split(sentence) if c and c.strip()]
+        rejected = [bool(_REJECTS.search(c)) for c in clauses]
+        accepted = bool(_ACCEPTS.search(sentence))
+        for i, clause in enumerate(clauses):
+            if rejected[i]:
+                continue
+            if _REPORTS.search(clause) and not accepted:
+                continue
+            later = clauses[i + 1] if i + 1 < len(clauses) else ""
+            if later and rejected[i + 1] and _POINTS_BACK.search(later):
+                continue
+            for q in quantities_in(clause):
+                before = tuple(w for w in q.before if w not in _INSTRUCTION_WORDS)
+                after = tuple(w for w in q.after if w not in _INSTRUCTION_WORDS)
+                found.append(UserFigure(
+                    quantity=Quantity(key=q.key, text=q.text, span=q.span,
+                                      before=before, after=after),
+                    bare=not before and not after))
+    return found
+
+
+class Allowance:
+    """What the user's bare figures may still be spent on.
+
+    "Make it 9" does not say where the 9 goes. It is taken to mean one
+    place, so a bare figure accounts for one new use of itself per time
+    the user gave it. A model that writes it into two lines has the
+    second refused."""
+
+    def __init__(self, figures: list[UserFigure]):
+        self.stated = [f.quantity for f in figures if not f.bare]
+        self.bare: dict[tuple, int] = {}
+        for f in figures:
+            if f.bare:
+                self.bare[f.quantity.key] = self.bare.get(f.quantity.key, 0) + 1
+
+    def covers(self, q: Quantity) -> bool:
+        if any(_supports(q, stated) for stated in self.stated):
+            return True
+        if self.bare.get(q.key, 0) > 0:
+            self.bare[q.key] -= 1
+            return True
+        return False
 
 
 def unsupported_quantities(
     text: str, claims: list[str], *, original: StructuredResume,
-    prior_text: str = "", user_keys: frozenset = frozenset(),
+    prior_text: str = "", allowance: Allowance | None = None,
 ) -> list[Quantity]:
-    """Figures in `text` that nothing the candidate provided accounts for."""
+    """Figures in `text` that nothing the candidate provided accounts for.
+
+    The earlier version of the line is a source like any other, read the
+    same way: a figure is supported by it when the figure is there AND
+    counts the same thing. It used to be enough that the figure was
+    there, so "Maintained 12 services" could become "Mentored 12
+    engineers" in place, and nothing was said."""
     sources = [q for claim in claims for q in quantities_in(claim, source=True)]
     prior = quantities_in(prior_text, source=True)
     span_years = career_years(original)
     missing: list[Quantity] = []
     for q in quantities_in(text):
-        if q.key in user_keys:
-            continue                     # the user typed it in this request
-        if any(q.key == p.key for p in prior):
-            continue                     # already in this very line
+        if any(_supports(q, p) for p in prior):
+            continue                     # in this line before, counting the same thing
         if any(_supports(q, s) for s in sources):
             continue
         if q.key[2] == "year" and not q.key[0] and 0 < q.key[1] <= span_years:
             continue                     # 'N years', within the work dates
+        if allowance is not None and allowance.covers(q):
+            continue                     # the user gave it, for this
         missing.append(q)
     return missing
 
@@ -719,7 +826,7 @@ def guard_numbers(
     sentence survives and the number becomes the candidate's to supply,
     which is the explicit confirmation an invented metric needs. On an
     edit there IS an earlier version, so the line reverts to it."""
-    user_keys = frozenset(_user_numbers(user_text))
+    allowance = Allowance(user_figures(user_text))
     before: dict[str, str] = {}
     if baseline is not None:
         before = {path: get() for path, get, _, _
@@ -732,7 +839,7 @@ def guard_numbers(
         if baseline is not None and text == prior:
             continue
         missing = unsupported_quantities(
-            text, claims, original=original, prior_text=prior, user_keys=user_keys)
+            text, claims, original=original, prior_text=prior, allowance=allowance)
         if not missing:
             continue
         figures = ", ".join(sorted({q.text for q in missing}))
@@ -763,7 +870,7 @@ def guard_numbers(
         bad = unsupported_quantities(
             label, _identity_claims(original), original=original,
             prior_text=baseline.resume.basics.label if baseline else "",
-            user_keys=user_keys)
+            allowance=allowance)
         if bad:
             candidate.resume.basics.label = (
                 baseline.resume.basics.label if baseline else original.basics.label)
