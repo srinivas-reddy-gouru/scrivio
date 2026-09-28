@@ -51,6 +51,55 @@ PUBLIC_PATHS = frozenset({
     "/health", "/auth/status", "/auth/pair", "/auth/logout",
 })
 
+# The interface renders text a model wrote after reading the open web.
+# It is sanitised before it reaches the page; this is the line behind
+# that one. With no 'unsafe-inline' in script-src, an event handler or a
+# <script> that slipped through is inert, and connect-src keeps a page
+# from sending what it can see anywhere but here.
+#   style-src 'unsafe-inline'  diagrams are SVG with their own <style>
+#   img-src http(s)            articles cite figures on other sites
+#   media-src blob:            the interviewer's voice is played from one
+MODERN_CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: blob: https: http:",
+    "media-src 'self' blob:",
+    "connect-src 'self'",
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+# The older single-file interface is built on inline scripts and CDN
+# libraries, so its policy cannot forbid inline script and does not
+# pretend to. It still cannot be framed, cannot post forms elsewhere, and
+# cannot open connections anywhere but this server.
+CLASSIC_CSP = "; ".join([
+    "default-src 'self' 'unsafe-inline' data: blob: https://cdn.tailwindcss.com "
+    "https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https: http:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+# Set by the server once it knows which interface it is serving at "/".
+modern_interface_at_root = True
+_NO_POLICY = ("/docs", "/redoc")     # FastAPI's own pages, behind the session
+
+
+def content_policy(path: str) -> str | None:
+    if path.startswith(_NO_POLICY):
+        return None
+    if path.startswith("/classic") or not modern_interface_at_root:
+        return CLASSIC_CSP
+    return MODERN_CSP
+
+
 _PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"   # no 0/O, 1/I
 _MAX_FAILED_PAIRINGS = 5
 _PAIRING_LOCKOUT_SECONDS = 60
@@ -280,7 +329,7 @@ class LocalBoundary:
                 "pairing code shown in the terminal where the server is running.")
             return
 
-        await self.app(scope, receive, self._hardened(send))
+        await self.app(scope, receive, self._hardened(send, path))
 
     def _is_protected(self, scope, path: str) -> bool:
         if path in PUBLIC_PATHS:
@@ -298,7 +347,9 @@ class LocalBoundary:
         return False
 
     @staticmethod
-    def _hardened(send):
+    def _hardened(send, path: str = ""):
+        policy = content_policy(path)
+
         async def wrapped(message) -> None:
             if message["type"] == "http.response.start":
                 names = {k.lower() for k, _ in message.get("headers", [])}
@@ -308,6 +359,8 @@ class LocalBoundary:
                     (b"x-frame-options", b"DENY"),
                     (b"cross-origin-resource-policy", b"same-origin"),
                 ]
+                if policy:
+                    extra.append((b"content-security-policy", policy.encode("ascii")))
                 message.setdefault("headers", [])
                 message["headers"] = list(message["headers"]) + [
                     (k, v) for k, v in extra if k not in names]

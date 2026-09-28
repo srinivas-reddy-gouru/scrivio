@@ -2,7 +2,7 @@
  * beside a ghost-lined manuscript), and the reading paper. The library
  * is the shelf below the slip. */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { marked } from "marked";
+import { renderMarkdown } from "../safeMarkdown";
 import { api, articleApi, fmtElapsed, interviewApi, openSession } from "../api";
 import type { ArticleSummary, ClarificationQuestion, ProgressEvent, SettingsInfo } from "../types";
 
@@ -19,13 +19,6 @@ const STAGES: Array<[string, string, string]> = [
   ["critic", "The critic", "final read before it ships"],
 ];
 
-/** Render article markdown. Our own pipeline wrote it; trusted content.
- * Mermaid fences pass through as code blocks that useMermaid() then
- * renders into real diagrams, exactly like the classic studio did. */
-function renderMarkdown(md: string): string {
-  return marked.parse(md, { async: false }) as string;
-}
-
 let mermaidReady = false;
 /** Turn `pre > code.language-mermaid` blocks inside the container into
  * live mermaid diagrams. Re-runs whenever the html changes. */
@@ -39,7 +32,10 @@ function useMermaid(ref: React.RefObject<HTMLElement | null>, html: string) {
     import("mermaid").then(({ default: mermaid }) => {
       if (cancelled) return;
       if (!mermaidReady) {
-        mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose" });
+        // "strict" is mermaid's own default: diagram text cannot carry
+        // click handlers or HTML labels. The diagram source is model
+        // output like the rest of the article, and "loose" trusted it.
+        mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "strict" });
         mermaidReady = true;
       }
       const nodes: HTMLElement[] = [];

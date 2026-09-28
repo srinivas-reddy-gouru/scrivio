@@ -23,7 +23,7 @@
   }).catch(function () {});
 </script>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@18.0.9/lib/marked.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -1537,7 +1537,45 @@
     practice: null,               // { session, idx } while a quiz is running
   };
 
-  mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+  mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
+
+  /* Markdown written by a model is not trusted HTML, and marked does not
+     sanitise. The markdown PARSER is asked which spans are raw HTML and
+     which are link targets: raw HTML is shown as text, and a link or image
+     whose scheme is not on the list loses its target and keeps its words.
+     Mirrors web/src/safeMarkdown.ts. */
+  const _mdEscape = (t) => String(t == null ? '' : t).replace(/[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function _allowedUrl(href, protocols, anchors) {
+    const compact = String(href == null ? '' : href)
+      .replace(/[\u0000-\u0020\u007f-\u009f\u200b-\u200d\ufeff]+/g, '');
+    if (!compact) return null;
+    if (anchors && compact.startsWith('#')) return compact;
+    let parsed;
+    try { parsed = new URL(compact); } catch (_) { return null; }
+    return protocols.includes(parsed.protocol) ? parsed.href : null;
+  }
+  const _safeMarked = new marked.Marked({
+    async: false, gfm: true,
+    renderer: {
+      html(token) { return _mdEscape(token.raw || token.text || ''); },
+      link(token) {
+        const text = this.parser.parseInline(token.tokens || []);
+        const href = _allowedUrl(token.href, ['http:', 'https:', 'mailto:'], true);
+        if (!href) return text;
+        const title = token.title ? ` title="${_mdEscape(token.title)}"` : '';
+        const ext = href.startsWith('#') ? '' : ' target="_blank" rel="noopener noreferrer nofollow"';
+        return `<a href="${_mdEscape(href)}"${title}${ext}>${text}</a>`;
+      },
+      image(token) {
+        const src = _allowedUrl(token.href, ['http:', 'https:'], false);
+        const alt = _mdEscape(token.text || '');
+        if (!src) return alt;
+        return `<img src="${_mdEscape(src)}" alt="${alt}" loading="lazy" referrerpolicy="no-referrer">`;
+      },
+    },
+  });
+  const safeMarkdown = (md) => _safeMarked.parse(md || '');
   function $(id) { return document.getElementById(id); }
 
   /* ── Theme toggle ────────────────────────────── */
@@ -2094,7 +2132,7 @@
 
   function renderArticleMarkdown(containerId, markdown) {
     const container = $(containerId);
-    container.innerHTML = marked.parse(markdown || '');
+    container.innerHTML = safeMarkdown(markdown);
     container.querySelectorAll('pre code.language-mermaid').forEach(code => {
       const div = document.createElement('div');
       div.className = 'mermaid'; div.textContent = code.textContent;
@@ -2990,7 +3028,7 @@
       const modelAnswer = question.model_answer
         ? `<div class="pt-3 mt-1" style="border-top:1px solid var(--stroke)">
              <p class="eyebrow mb-1">What an interviewer wants to hear</p>
-             <div class="prose-feedback text-sm leading-relaxed" style="color:var(--text-dim)">${marked.parse(question.model_answer)}</div>
+             <div class="prose-feedback text-sm leading-relaxed" style="color:var(--text-dim)">${safeMarkdown(question.model_answer)}</div>
            </div>`
         : '';
       tail = `${modelAnswer}
@@ -3922,7 +3960,7 @@
     let mdHtml = '';
     try {
       const r = await fetch(`/resumes/${doc.resume_id}/download?fmt=md&version=tailored`);
-      if (r.ok) mdHtml = marked.parse(await r.text());
+      if (r.ok) mdHtml = safeMarkdown(await r.text());
     } catch (_) {}
 
     const byKind = {};

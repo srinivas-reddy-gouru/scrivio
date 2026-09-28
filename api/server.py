@@ -3157,6 +3157,7 @@ if _UI_DIR.exists():
         return RedirectResponse("/classic/")
 
     app.mount("/classic", StaticFiles(directory=str(_UI_DIR), html=True), name="classic")
+boundary.modern_interface_at_root = _DESK_DIR.exists()
 if _DESK_DIR.exists():
     app.mount("/studio", StaticFiles(directory=str(_DESK_DIR), html=True), name="studio")
     app.mount("/desk", StaticFiles(directory=str(_DESK_DIR), html=True), name="desk")
