@@ -88,7 +88,10 @@ def test_settings_patch_sets_and_clears_model_keys(monkeypatch, tmp_path) -> Non
         json={"updates": {"ANTHROPIC_STRONG_MODEL": "claude-opus-4-7"}},
     )
     assert response.status_code == 200
-    assert "ANTHROPIC_STRONG_MODEL=claude-opus-4-7" in env_file.read_text()
+    # Asserted on what a restart would load, not on the bytes: values are
+    # written quoted so that "#" and spaces survive.
+    from dotenv import dotenv_values
+    assert dotenv_values(env_file)["ANTHROPIC_STRONG_MODEL"] == "claude-opus-4-7"
     # Hot-reloaded into the process → get_model sees it immediately.
     assert get_model("drafting", "balanced") == "claude-opus-4-7"
 

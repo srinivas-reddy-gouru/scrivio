@@ -21,7 +21,9 @@ _ENV_FILE = Path(
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(_ENV_FILE, override=True)
+    # interpolate=False: a key that happens to contain "${" is a key, not a
+    # reference to another variable.
+    load_dotenv(_ENV_FILE, override=True, interpolate=False)
 except ModuleNotFoundError:
     pass
 
@@ -33,7 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from uuid import uuid4
 
-from api import boundary
+from api import boundary, settings_store
 from pipeline.providers.claude_cli_adapter import cli_status
 from pipeline.runtime_mode import (
     DEMO_LABEL, NO_PROVIDER, ProviderUnavailable, demo_mode,
@@ -922,54 +924,25 @@ _SEARCH_KEYS = ("TAVILY_API_KEY", "BRAVE_SEARCH_API_KEY", "EXA_API_KEY")
 
 
 def _read_env_file() -> dict[str, str]:
-    """Parse the .env file into a plain dict (key → raw value, no quoting)."""
-    result: dict[str, str] = {}
-    if not _ENV_FILE.exists():
-        return result
-    for line in _ENV_FILE.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, _, v = line.partition("=")
-        result[k.strip()] = v.strip()
-    return result
+    """The settings file as a plain dict, read the way it is loaded at
+    startup: literally, with no variable expansion."""
+    return settings_store.read(_ENV_FILE)
 
 
-def _write_env_file(pairs: dict[str, str]) -> None:
-    """Write *pairs* to the .env file, preserving unmanaged lines."""
-    existing_lines: list[str] = []
-    if _ENV_FILE.exists():
-        existing_lines = _ENV_FILE.read_text(encoding="utf-8").splitlines()
-
-    # Collect keys we'll manage (update in-place, append, or drop-if-cleared).
-    managed_set = {k for k, _ in _MANAGED_KEYS} | {"LLM_PROVIDER"} | set(pairs.keys())
-    output_lines: list[str] = []
-    updated_keys: set[str] = set()
-
-    for line in existing_lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            output_lines.append(line)
-            continue
-        k = stripped.split("=", 1)[0].strip()
-        if k in pairs:
-            output_lines.append(f"{k}={pairs[k]}")
-            updated_keys.add(k)
-        elif k in managed_set:
-            # Managed key absent from pairs = cleared — drop the line.
-            # (Previously this branch was missing, so "clear" removed the
-            # value from os.environ but left the stale line in .env, and
-            # the old value came back on the next restart.)
-            continue
-        else:
-            output_lines.append(line)
-
-    # Append any new keys not already in the file.
-    for k, v in pairs.items():
-        if k not in updated_keys:
-            output_lines.append(f"{k}={v}")
-
-    _ENV_FILE.write_text("\n".join(output_lines) + "\n", encoding="utf-8")
+def _setting_kind(key: str) -> tuple[str, tuple[str, ...]]:
+    """What a setting is allowed to contain, from what it is for."""
+    if key == "LLM_PROVIDER":
+        return "choice", ("anthropic", "openai", "claude-cli")
+    if key == "LLM_CLI":
+        from pipeline.providers.claude_cli_adapter import CLI_SPECS
+        return "choice", tuple(sorted(CLI_SPECS))
+    if key == "USE_JINA_READER":
+        return "boolean", ()
+    if key.endswith("_MODEL"):
+        return "model", ()
+    if key.endswith("_API_KEY"):
+        return "secret", ()
+    return "text", ()
 
 
 def _mask_value(v: str) -> str:
@@ -1080,39 +1053,55 @@ async def get_settings() -> SettingsResponse:
 
 @app.patch("/settings")
 async def update_settings(body: SettingsPatch) -> dict:
-    """Write updated key values to the .env file and reload into os.environ.
+    """Save settings to the settings file and into the running process.
 
-    Pass an empty string for a key to clear it.
-    Only keys listed in _MANAGED_KEYS may be updated.
-    """
-    # LLM_PROVIDER is a preference value (not a secret key) — allow it here
+    Pass an empty string for a key to clear it. Only keys listed in
+    _MANAGED_KEYS (and LLM_PROVIDER) may be set. Everything is validated
+    before anything is written, so a save is applied whole or not at
+    all, and the process environment changes only after the file has."""
+    # LLM_PROVIDER is a preference value (not a secret key), allowed here
     # even though it is not listed in _MANAGED_KEYS.
     allowed = {k for k, _ in _MANAGED_KEYS} | {"LLM_PROVIDER"}
     rejected = [k for k in body.updates if k not in allowed]
     if rejected:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown keys: {rejected}. Allowed: {sorted(allowed)}",
+            detail=f"{len(rejected)} setting name(s) are not ones this "
+                   f"application manages. Allowed: {sorted(allowed)}",
         )
 
-    updates = {k: v for k, v in body.updates.items() if v}
-    clears = {k for k, v in body.updates.items() if not v}
+    try:
+        changes = {}
+        for key, value in body.updates.items():
+            kind, choices = _setting_kind(key)
+            changes[key] = settings_store.check_value(
+                key, value, kind=kind, choices=choices)
+    except settings_store.SettingsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
-    # Read current file, strip cleared keys, merge updates.
-    current = _read_env_file()
-    for k in clears:
-        current.pop(k, None)
-    current.update(updates)
-    _write_env_file(current)
+    try:
+        settings_store.update(_ENV_FILE, changes, managed=allowed)
+    except settings_store.SettingsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except OSError:
+        # The reason may contain a path; the values must not appear at all.
+        logging.error("Settings could not be written to disk")
+        raise HTTPException(
+            status_code=500,
+            detail="The settings could not be saved to disk. Nothing was changed.",
+        )
 
-    # Hot-reload into the running process so the change takes effect
-    # without a server restart.
-    for k, v in updates.items():
-        os.environ[k] = v
-    for k in clears:
-        os.environ.pop(k, None)
+    # Only now, with the file safely replaced, does the running process
+    # change: a failed save must not leave the server on settings that
+    # will be gone at the next restart.
+    updated = [k for k, v in changes.items() if v]
+    cleared = [k for k, v in changes.items() if not v]
+    for key in updated:
+        os.environ[key] = changes[key]
+    for key in cleared:
+        os.environ.pop(key, None)
 
-    return {"ok": True, "updated": list(updates), "cleared": list(clears)}
+    return {"ok": True, "updated": updated, "cleared": cleared}
 
 
 # ── Interview practice ───────────────────────────────────────────────
