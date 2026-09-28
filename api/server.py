@@ -35,7 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from uuid import uuid4
 
-from api import boundary, settings_store
+from api import boundary, limits, settings_store
 from pipeline.providers.claude_cli_adapter import cli_status
 from pipeline.runtime_mode import (
     DEMO_LABEL, NO_PROVIDER, ProviderUnavailable, demo_mode,
@@ -78,7 +78,9 @@ from pipeline.workers.job_interviewer_worker import (
     generate_job_scorecard,
     research_job_questions,
 )
-from pipeline.workers.resume_parser import ResumeParseError, parse_resume
+from pipeline.workers.resume_parser import (
+    ResumeParseError, parse_resume, parse_resume_bounded,
+)
 from pipeline.workers.resume_studio_worker import (
     add_resume_entry,
     advise_resume,
@@ -150,9 +152,24 @@ if _extra_origins:
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
     )
+app.add_middleware(limits.BodyLimit)
 # Added last, so it is outermost: nothing reaches a route, or CORS, without
-# passing the host, origin, and session checks first.
+# passing the host, origin, and session checks first. A body is not read,
+# let alone measured, for a caller who is not allowed in.
 app.add_middleware(boundary.LocalBoundary)
+
+# How much of each kind of paid work runs at once on this install.
+ARTICLE_GATE = limits.Gate("article generation", 2)
+RESUME_GATE = limits.Gate("resume analysis or tailoring", 3)
+
+
+@app.exception_handler(limits.Busy)
+async def _busy(request: Request, exc: limits.Busy) -> Response:
+    return Response(
+        content=json.dumps({"detail": str(exc)}), status_code=429,
+        media_type="application/json",
+        headers={"Retry-After": str(exc.retry_after), "Cache-Control": "no-store"},
+    )
 app.router.on_startup.append(boundary.announce_pairing_code)
 
 
@@ -459,16 +476,23 @@ async def generate(request: ArticleRequest) -> GenerateResponse:
     # every downstream agent sees the user's steering.
     effective_request = _apply_clarification_answers(request)
 
-    # Step 3: start the job exactly as before.
+    # Step 3: start the job, if there is room for one.
+    slot = ARTICLE_GATE.enter()
     job = create_job()
 
     async def callback(event: ProgressEvent) -> None:
         await job.publish(event)
 
+    async def run() -> None:
+        try:
+            await _run_job(job, effective_request, callback)
+        finally:
+            slot.leave()         # finished, failed, or cancelled: all free it
+
     # Keep a handle on the asyncio.Task so the cancel endpoint can stop it.
     # Without this the running pipeline can't be interrupted — closing the
     # SSE stream from the client side wouldn't help.
-    job.task = asyncio.create_task(_run_job(job, effective_request, callback))
+    job.task = asyncio.create_task(run())
     return GenerateResponse(job_id=job.job_id)
 
 
@@ -2135,7 +2159,17 @@ async def _fetch_job_description(url: str) -> str:
     return text[:30_000]
 
 
-def _resolve_resume_text(body: JobProfileCreateRequest) -> str:
+async def _parse_upload(data: bytes, filename: str) -> str:
+    """An uploaded document, parsed under limits and off the event loop.
+    The parse runs in a child process that can be stopped; this thread
+    only waits for it, so the rest of the application keeps answering."""
+    try:
+        return await asyncio.to_thread(parse_resume_bounded, data, filename)
+    except ResumeParseError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+async def _resolve_resume_text(body: JobProfileCreateRequest) -> str:
     if body.resume_text.strip():
         return body.resume_text.strip()[:30_000]
     if body.resume_file_b64:
@@ -2143,10 +2177,7 @@ def _resolve_resume_text(body: JobProfileCreateRequest) -> str:
             data = base64.b64decode(body.resume_file_b64, validate=True)
         except (binascii.Error, ValueError):
             raise HTTPException(status_code=422, detail="resume_file_b64 is not valid base64")
-        try:
-            return parse_resume(data, body.resume_filename)
-        except ResumeParseError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
+        return await _parse_upload(data, body.resume_filename)
     raise HTTPException(status_code=422, detail="Provide a resume (file upload or pasted text)")
 
 
@@ -2155,7 +2186,7 @@ async def create_job_profile(body: JobProfileCreateRequest) -> JobProfileRespons
     if not body.role_title.strip():
         raise HTTPException(status_code=422, detail="role_title is required")
     jd_text = await _resolve_jd_text(body)
-    resume_text = _resolve_resume_text(body)
+    resume_text = await _resolve_resume_text(body)
 
     profile = JobProfile(
         profile_id=(
@@ -2301,7 +2332,7 @@ async def _resolve_resume_jd(body: ResumeCreateRequest) -> tuple[str, str]:
     return "", ""
 
 
-def _resolve_resume_input(body: ResumeCreateRequest) -> tuple[str, StructuredResume | None]:
+async def _resolve_resume_input(body: ResumeCreateRequest) -> tuple[str, StructuredResume | None]:
     """Returns (resume_text, structure). structure is non-None only for a
     JSON Resume upload, which needs no LLM extraction."""
     if body.resume_text.strip():
@@ -2312,6 +2343,10 @@ def _resolve_resume_input(body: ResumeCreateRequest) -> tuple[str, StructuredRes
         except (binascii.Error, ValueError):
             raise HTTPException(status_code=422, detail="resume_file_b64 is not valid base64")
         if (body.resume_filename or "").lower().endswith(".json"):
+            if len(data) > 1_000_000:
+                raise HTTPException(
+                    status_code=422,
+                    detail="That JSON Resume file is larger than 1 MB.")
             try:
                 structured = from_jsonresume(json.loads(data.decode("utf-8")))
             except Exception:
@@ -2321,10 +2356,7 @@ def _resolve_resume_input(body: ResumeCreateRequest) -> tuple[str, StructuredRes
                            "(jsonresume.org format).",
                 )
             return render_markdown(structured), structured
-        try:
-            return parse_resume(data, body.resume_filename), None
-        except ResumeParseError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
+        return await _parse_upload(data, body.resume_filename), None
     raise HTTPException(status_code=422, detail="Provide a resume (file upload or pasted text)")
 
 
@@ -2407,8 +2439,13 @@ async def _finish_resume_analysis(resume_id: str) -> None:
 async def create_resume(
     body: ResumeCreateRequest, background_tasks: BackgroundTasks
 ) -> ResumeDoc:
-    resume_text, structured = _resolve_resume_input(body)
-    jd_text, jd_label = await _resolve_resume_jd(body)
+    slot = RESUME_GATE.enter()
+    try:
+        resume_text, structured = await _resolve_resume_input(body)
+        jd_text, jd_label = await _resolve_resume_jd(body)
+    except BaseException:
+        slot.leave()
+        raise
 
     # Everything deterministic ships in THIS response, sub-second: the
     # user sees a real report immediately while the LLM phase runs behind.
@@ -2422,8 +2459,16 @@ async def create_resume(
         report=run_ats_checks(resume_text, jd_text or None, structured),
     )
     _save_resume_doc(doc)
-    background_tasks.add_task(_finish_resume_analysis, doc.resume_id)
+    background_tasks.add_task(_gated, slot, _finish_resume_analysis, doc.resume_id)
     return doc
+
+
+async def _gated(slot, work, *args) -> None:
+    """Run background work and give its slot back however it ends."""
+    try:
+        await work(*args)
+    finally:
+        slot.leave()
 
 
 @app.get("/resumes", response_model=list[ResumeSummaryItem])
@@ -2522,9 +2567,10 @@ async def tailor_resume_endpoint(
         )
     if doc.tailor_status == "tailoring":
         raise HTTPException(status_code=409, detail="Tailoring is already running.")
+    slot = RESUME_GATE.enter()
     doc.tailor_status, doc.tailor_error = "tailoring", ""
     _save_resume_doc(doc)
-    background_tasks.add_task(_finish_resume_tailor, resume_id)
+    background_tasks.add_task(_gated, slot, _finish_resume_tailor, resume_id)
     return doc
 
 
@@ -3063,8 +3109,8 @@ def _openai_audio_client():
     endpoints map that to 503."""
     if not os.environ.get("OPENAI_API_KEY"):
         return None
-    import openai
-    return openai.AsyncOpenAI()
+    from pipeline.providers.clients import openai_client
+    return openai_client()
 
 
 async def _openai_transcribe(client, audio: bytes, mime_type: str) -> str:

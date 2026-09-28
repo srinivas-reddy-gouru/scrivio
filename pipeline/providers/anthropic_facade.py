@@ -44,8 +44,8 @@ def _reply(**message) -> SimpleNamespace:
 class AnthropicOpenAIFacade:
     def __init__(self, client=None) -> None:
         if client is None:
-            import anthropic
-            client = anthropic.AsyncAnthropic()
+            from pipeline.providers.clients import anthropic_client
+            client = anthropic_client()
         self._client = client
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
         self.beta = SimpleNamespace(chat=SimpleNamespace(

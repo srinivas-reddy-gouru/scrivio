@@ -249,6 +249,51 @@ _CALL_TIMEOUT_S = 180
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
 
+MAX_OUTPUT_BYTES = 8_000_000
+
+
+class _TooMuchOutput(Exception):
+    pass
+
+
+async def _stop(process) -> None:
+    try:
+        process.kill()
+    except ProcessLookupError:
+        return
+    try:
+        await asyncio.wait_for(process.wait(), timeout=5)
+    except Exception:
+        pass
+
+
+async def _drain(stream, limit: int) -> bytes:
+    """Read a stream to its end, refusing to hold more than `limit`."""
+    held = bytearray()
+    while True:
+        chunk = await stream.read(65536)
+        if not chunk:
+            return bytes(held)
+        held.extend(chunk)
+        if len(held) > limit:
+            raise _TooMuchOutput
+
+
+async def _collect(process, prompt: bytes) -> tuple[bytes, bytes]:
+    """communicate(), with a ceiling on what is buffered."""
+    stdout = getattr(process, "stdout", None)
+    if stdout is None or not hasattr(stdout, "read"):
+        return await process.communicate(prompt)     # a stand-in without streams
+    if process.stdin is not None:
+        process.stdin.write(prompt)
+        await process.stdin.drain()
+        process.stdin.close()
+    out, err = await asyncio.gather(
+        _drain(stdout, MAX_OUTPUT_BYTES), _drain(process.stderr, 200_000))
+    await process.wait()
+    return out, err
+
+
 def _get_semaphore() -> asyncio.Semaphore:
     global _cli_semaphore
     if _cli_semaphore is None:
@@ -514,14 +559,26 @@ class _CLIMessages:
             )
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(prompt.encode()),
+                    _collect(process, prompt.encode()),
                     timeout=_CALL_TIMEOUT_S,
                 )
             except asyncio.TimeoutError:
-                process.kill()
+                await _stop(process)
                 raise ClaudeCLIError(
                     f"{name} CLI call timed out after {_CALL_TIMEOUT_S}s"
                 )
+            except _TooMuchOutput:
+                await _stop(process)
+                raise ClaudeCLIError(
+                    f"{name} CLI produced more output than the "
+                    f"{MAX_OUTPUT_BYTES // 1_000_000} MB limit and was stopped"
+                )
+            except asyncio.CancelledError:
+                # The job was cancelled. Cancelling only the wait would
+                # leave the assistant running, spending the subscription
+                # on an answer nobody is going to read.
+                await _stop(process)
+                raise
         if process.returncode != 0:
             detail = (stderr or stdout or b"").decode(errors="replace")[:500]
             if _looks_signed_out(detail):

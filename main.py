@@ -39,6 +39,7 @@ from pipeline.workers.single_draft_worker import (
 )
 from pipeline.cache import StageCache
 from pipeline.workers.extraction_worker import process_search_result, score_url
+from pipeline.providers import clients
 from pipeline.providers.anthropic_facade import AnthropicOpenAIFacade
 from pipeline.runtime_mode import (
     DEMO_LABEL, NO_PROVIDER, ProviderUnavailable, demo_mode,
@@ -615,7 +616,7 @@ async def run_direct(args) -> dict[str, PublishedArticle]:
         if not os.environ.get("OPENAI_API_KEY"):
             raise RuntimeError("--interactive requires OPENAI_API_KEY to be set")
         seed = args.topic or input("What would you like to write about? ").strip()
-        request = await interactive_clarify(seed, openai.AsyncOpenAI())
+        request = await interactive_clarify(seed, clients.openai_client())
     else:
         if not args.topic:
             raise RuntimeError("--topic is required unless --interactive is set")
@@ -1084,7 +1085,7 @@ def _openai_client(request: ArticleRequest):
     if provider == "claude-cli":
         return ClaudeCLIOpenAIFacade()
     if provider == "openai":
-        return openai.AsyncOpenAI()
+        return clients.openai_client()
     if provider == "anthropic":
         return AnthropicOpenAIFacade()
     raise ProviderUnavailable(NO_PROVIDER)
@@ -1217,9 +1218,9 @@ def _anthropic_client(request: ArticleRequest):
         return MockAnthropicClient(request)
     provider = _resolve_provider(getattr(request, "llm_provider", "auto"))
     if provider == "openai":
-        return OpenAIAnthropicAdapter(openai.AsyncOpenAI())
+        return OpenAIAnthropicAdapter(clients.openai_client())
     if provider == "anthropic":
-        return anthropic.AsyncAnthropic()
+        return clients.anthropic_client()
     if provider == "claude-cli":
         return ClaudeCLIAdapter()
     raise ProviderUnavailable(NO_PROVIDER)
