@@ -78,6 +78,7 @@ from pipeline.workers.resume_studio_worker import (
     render_docx,
     render_markdown,
     render_pdf,
+    unresolved_placeholders,
     users_own_words,
     review_resume,
     run_ats_checks,
@@ -2712,18 +2713,67 @@ _RESUME_DOWNLOADS = {
 }
 
 
+def _export_refusal(doc: ResumeDoc) -> str | None:
+    """Why the tailored resume cannot leave yet, or None when it can.
+
+    This is the same rule the packaging button shows, enforced where it
+    cannot be walked around: the button is disabled in one browser, and
+    the URL behind it answers anyone."""
+    unresolved = unresolved_placeholders(doc.tailored.resume)
+    if not unresolved:
+        return None
+    return (
+        "This resume is not finished: a [METRIC] placeholder is still in "
+        + "; ".join(unresolved)
+        + ". Type the real number into each one and save, or reword the "
+        "line so it does not need one. To download it unfinished, ask for "
+        "a draft."
+    )
+
+
 @app.get("/resumes/{resume_id}/download")
 async def download_resume(
-    resume_id: str, fmt: str = "md", version: str = "original"
+    resume_id: str, fmt: str = "md", version: str = "original",
+    draft: bool = False, expect: str = "",
 ) -> Response:
+    """Three kinds of export, each labelled in the X-Scrivio-Export header
+    and the filename so one cannot be mistaken for another:
+
+    - original: the resume as parsed. Always available.
+    - final:    the tailored resume, only once nothing is unresolved.
+    - draft:    the tailored resume as it stands, placeholders and all,
+                and only when explicitly requested.
+
+    `expect` is the updated_at of the version the page is showing. When it
+    is sent and the saved document has moved on, the export is refused:
+    the server cannot see unsaved text in a browser, but it can decline to
+    hand over a different version from the one on screen."""
     if fmt not in _RESUME_DOWNLOADS:
         raise HTTPException(status_code=422, detail="fmt must be pdf, docx, md, or json")
     if version not in ("original", "tailored"):
         raise HTTPException(status_code=422, detail="version must be original or tailored")
     doc = _load_resume_doc(resume_id)
+    if expect and expect != doc.updated_at.isoformat():
+        raise HTTPException(
+            status_code=409,
+            detail="This resume has changed since the page loaded it. Reload "
+                   "the page so the preview and the download are the same "
+                   "document, then export again.",
+        )
+    kind = "original"
     if version == "tailored":
         if doc.tailored is None:
             raise HTTPException(status_code=404, detail="No tailored version yet")
+        if doc.tailor_status == "tailoring":
+            raise HTTPException(
+                status_code=409,
+                detail="Tailoring is still running. Export once it has finished.",
+            )
+        kind = "draft" if draft else "final"
+        if not draft:
+            refusal = _export_refusal(doc)
+            if refusal:
+                raise HTTPException(status_code=409, detail=refusal)
         structured = doc.tailored.resume
     else:
         if doc.structured is None:
@@ -2738,11 +2788,16 @@ async def download_resume(
         payload = render_docx(structured)
     else:
         payload = json.dumps(to_jsonresume(structured), indent=2).encode("utf-8")
-    filename = f"resume-{version}-{resume_id}.{ext}"
+    label = "tailored-DRAFT" if kind == "draft" else version
+    filename = f"resume-{label}-{resume_id}.{ext}"
     return Response(
         content=payload,
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Scrivio-Export": kind,
+            "Cache-Control": "no-store",
+        },
     )
 
 

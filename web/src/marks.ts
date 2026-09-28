@@ -144,7 +144,11 @@ export const METRIC_TOKEN = "[METRIC]";
 
 /** Occurrence order MUST mirror the server traversal
  * (resume_studio_worker._metric_fields): basics.summary, work summaries +
- * highlights, projects, skills keywords, certificates. */
+ * highlights, projects, skills keywords, certificates, then user-made
+ * sections. The headline is counted too: the server refuses to export a
+ * resume with a placeholder anywhere on it, so the gate here must see
+ * everything the server sees. It is last because it is edited as text,
+ * not filled as a chip. */
 export function countMetrics(s: StructuredResume): number {
   const all: string[] = [
     s.basics.summary,
@@ -152,6 +156,8 @@ export function countMetrics(s: StructuredResume): number {
     ...s.projects.flatMap((p) => [p.description, ...p.highlights]),
     ...s.skills.flatMap((k) => k.keywords),
     ...s.certificates,
+    ...(s.custom ?? []).flatMap((c) => c.items),
+    s.basics.label,
   ];
   return all.reduce(
     (n, t) => n + (t.split(METRIC_TOKEN).length - 1), 0);

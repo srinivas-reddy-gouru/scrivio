@@ -28,6 +28,7 @@ from pipeline.workers.resume_fact_guard import (
     guard_numbers,
     note_new_terms,
     summary_rewrite_is_safe,
+    unresolved_placeholders,
     validate_model_output,
 )
 from pipeline.prompt_loader import load_prompt

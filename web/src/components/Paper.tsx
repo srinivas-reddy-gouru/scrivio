@@ -250,7 +250,12 @@ export function Paper({
   return (
     <div className="paper">
       <h1>{b.name || "Your name"}</h1>
-      {b.label && (
+      {b.label && onEdit ? (
+        // Editable like any other prose: a placeholder here blocks the
+        // export, so there has to be a way to resolve it.
+        <EditableText path="basics.label" text={b.label} onEdit={onEdit}
+          as="div" className="headline" />
+      ) : b.label && (
         <div
           className={"headline" + (mode === "tailored" && idx.byField.has("basics.label") ? " marked mark-teal note-tip" : "")}
           data-note={mode === "tailored" ? idx.byField.get("basics.label")?.what : undefined}

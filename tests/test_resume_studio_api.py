@@ -248,9 +248,12 @@ def test_download_tailored_version_gating():
     rid = doc["resume_id"]
     assert client.get(f"/resumes/{rid}/download?version=tailored").status_code == 404
     _tailor(client, rid)
-    tailored_md = client.get(f"/resumes/{rid}/download?version=tailored")
-    assert tailored_md.status_code == 200
-    assert "[METRIC]" in tailored_md.text
+    # The mock tailoring leaves a [METRIC] in place, so the finished export
+    # is refused and only an explicit draft carries the placeholder out.
+    assert client.get(f"/resumes/{rid}/download?version=tailored").status_code == 409
+    draft_md = client.get(f"/resumes/{rid}/download?version=tailored&draft=true")
+    assert draft_md.status_code == 200
+    assert "[METRIC]" in draft_md.text
     assert client.get(f"/resumes/{rid}/download?fmt=rtf").status_code == 422
     assert client.get(f"/resumes/{rid}/download?version=draft").status_code == 422
 

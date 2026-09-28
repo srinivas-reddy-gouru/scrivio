@@ -1069,12 +1069,32 @@ function CoachDock({ doc, onDoc }: {
 export function SendStation({ doc }: { doc: ResumeDoc }) {
   const t = doc.tailored!;
   const remaining = countMetrics(t.resume);
-  const dl = (fmt: string) => api.downloadUrl(doc.resume_id, fmt, "tailored");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+
+  /** The server decides whether this may leave, not this component: the
+   * count above only chooses which buttons to offer. `expect` makes the
+   * server refuse if the saved resume is no longer the one on screen. */
+  const download = async (fmt: string, draft = false) => {
+    setBusy(fmt + (draft ? "-draft" : "")); setError("");
+    try {
+      await api.downloadResume(doc.resume_id, fmt, {
+        version: "tailored", draft, expect: doc.updated_at,
+      });
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(""); }
+  };
+  const formats: Array<[string, string]> = [
+    ["pdf", "PDF"], ["docx", "Word"], ["md", "Markdown"], ["json", "JSON Resume"],
+  ];
+
   return (
     <div className="send-wrap">
-      <h1 className="font-display bar-tick">Ready to send</h1>
+      <h1 className="font-display bar-tick">
+        {remaining > 0 ? "Not ready to send yet" : "Ready to send"}
+      </h1>
       <div className="package">
-        <span className="stamp">TAILORED · HONEST</span>
+        <span className="stamp">{remaining > 0 ? "DRAFT" : "TAILORED · CHECKED"}</span>
         <b style={{ fontSize: "0.62rem" }}>{t.resume.basics.name}</b><br />
         <span style={{ color: "var(--ink-dim)" }}>{t.resume.basics.label}</span>
         <hr style={{ border: "none", borderTop: "1px solid #D8D2C2", margin: "0.4rem 0" }} />
@@ -1082,35 +1102,55 @@ export function SendStation({ doc }: { doc: ResumeDoc }) {
           <span key={i}>{h.slice(0, 60)}…<br /></span>
         ))}
       </div>
-      {remaining > 0 && (
-        <p className="fill-count" style={{ marginBottom: "0.6rem" }}>
-          ⚠ {remaining} [METRIC] still unfilled; downloads include the placeholders.
-        </p>
+      {remaining > 0 ? (
+        <>
+          <p className="fill-count" style={{ marginBottom: "0.6rem" }}>
+            {remaining} number{remaining > 1 ? "s are" : " is"} still a [METRIC] placeholder.
+            Go back to Tailor and type the real figure, or reword the line so it does not need one.
+          </p>
+          <div className="dl-row">
+            {formats.map(([fmt, label]) => (
+              <button key={fmt} className="btn btn-quiet" disabled={!!busy}
+                onClick={() => download(fmt, true)}>
+                {busy === `${fmt}-draft` ? "Preparing…" : `Draft ${label}`}
+              </button>
+            ))}
+          </div>
+          <p style={{ fontSize: "0.74rem", color: "var(--text-faint)", marginTop: "0.5rem" }}>
+            Drafts keep the placeholders and are named DRAFT, so one cannot be sent by mistake.
+          </p>
+        </>
+      ) : (
+        <div className="dl-row">
+          {formats.map(([fmt, label], i) => (
+            <button key={fmt} className={"btn" + (i ? " btn-quiet" : "")} disabled={!!busy}
+              onClick={() => download(fmt)}>
+              {busy === fmt ? "Preparing…" : i ? label : `Download ${label}`}
+            </button>
+          ))}
+        </div>
       )}
-      <div className="dl-row">
-        <a className="btn" href={dl("pdf")} download>Download PDF</a>
-        <a className="btn btn-quiet" href={dl("docx")} download>Word</a>
-        <a className="btn btn-quiet" href={dl("md")} download>Markdown</a>
-        <a className="btn btn-quiet" href={dl("json")} download>JSON Resume</a>
-      </div>
+      {error && <div className="errbox" role="alert" style={{ margin: "0.8rem auto", maxWidth: 560 }}>{error}</div>}
       <div className="recap">
         <div style={{ "--i": 0 } as React.CSSProperties}>
           <span className="mono" style={{ color: "var(--green)" }}>
             {doc.report?.score} → {doc.tailored_report?.score}
           </span>
-          <span className="lbl">ATS readiness</span>
+          <span className="lbl">checklist score</span>
         </div>
         <div style={{ "--i": 1 } as React.CSSProperties}>
           <span className="mono" style={{ color: "var(--teal)" }}>{t.changes.length}</span>
-          <span className="lbl">honest rewrites</span>
+          <span className="lbl">changes logged</span>
         </div>
         <div style={{ "--i": 2 } as React.CSSProperties}>
-          <span className="mono" style={{ color: "var(--amber)" }}>0</span>
-          <span className="lbl">facts invented</span>
+          <span className="mono" style={{ color: "var(--amber)" }}>{t.warnings.length}</span>
+          <span className="lbl">notes to review</span>
         </div>
       </div>
       <p style={{ fontSize: "0.74rem", color: "var(--text-faint)", marginTop: "1.6rem" }}>
-        Every employer, title, and date on this page is byte-identical to your original. That is the point.
+        Employers, titles, dates, degrees, skills, and contact details were checked against your
+        original, and each figure against the claim it came from. Wording is not something a
+        program can verify: read it before you send it.
       </p>
     </div>
   );

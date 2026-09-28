@@ -893,3 +893,47 @@ def audit_extraction(original_text: str, structured: StructuredResume) -> list[s
                             f"the figure {q.text} under {item.name or 'an entry'}")
     seen: set[str] = set()
     return [f for f in findings if not (f in seen or seen.add(f))]
+
+
+# ── What still stands between a resume and being sent ───────────────────────
+
+def _ordinal(n: int) -> str:
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def unresolved_placeholders(resume: StructuredResume) -> list[str]:
+    """Where every [METRIC] still is, in words a person can act on.
+
+    Scans every string on the resume, not only the fields the placeholder
+    editor knows how to fill: a placeholder in the headline is just as
+    unsendable as one in a bullet."""
+    found: list[str] = []
+
+    def look(text: str, where: str) -> None:
+        count = (text or "").count(METRIC_TOKEN)
+        if count:
+            times = "" if count == 1 else f" ({count} of them)"
+            found.append(f"{where}{times}")
+
+    look(resume.basics.label, "the headline")
+    look(resume.basics.summary, "the summary")
+    for w in resume.work:
+        at = w.name or w.position or "a job"
+        look(w.summary, f"the description line under {at}")
+        for i, h in enumerate(w.highlights, 1):
+            look(h, f"the {_ordinal(i)} bullet under {at}")
+    for p in resume.projects:
+        at = p.name or "a project"
+        look(p.description, f"the description of {at}")
+        for i, h in enumerate(p.highlights, 1):
+            look(h, f"the {_ordinal(i)} bullet under {at}")
+    for group in resume.skills:
+        for keyword in group.keywords:
+            look(keyword, "the skills list")
+    for c in resume.certificates:
+        look(c, "the certifications")
+    for section in resume.custom:
+        for i, item in enumerate(section.items, 1):
+            look(item, f"the {_ordinal(i)} line of {section.name or 'a section'}")
+    return found

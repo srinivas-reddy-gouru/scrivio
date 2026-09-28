@@ -66,6 +66,9 @@ export interface ResumeDoc {
   tailored_report: AtsReport | null;
   tailored_history: TailoredResume[];
   created_at: string;
+  /** Sent back with an export request, so the server can refuse to hand
+   * over a version other than the one this page is showing. */
+  updated_at?: string;
 }
 
 export interface ChatTurn { role: "user" | "assistant"; content: string; }

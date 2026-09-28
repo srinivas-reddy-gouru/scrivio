@@ -70,8 +70,28 @@ export const api = {
   deleteResume: (id: string) => fetch(`/resumes/${id}`, { method: "DELETE" }),
   listJobProfiles: () =>
     fetch("/job-profiles").then((r) => json<JobProfileSummary[]>(r)),
-  downloadUrl: (id: string, fmt: string, version: "original" | "tailored") =>
-    `/resumes/${id}/download?fmt=${fmt}&version=${version}`,
+  /** Exports go through fetch, not a bare link. A link cannot show why
+   * the server said no: the browser would navigate to a page of JSON. */
+  downloadResume: async (
+    id: string, fmt: string,
+    opts: { version: "original" | "tailored"; draft?: boolean; expect?: string },
+  ): Promise<void> => {
+    const query = new URLSearchParams({ fmt, version: opts.version });
+    if (opts.draft) query.set("draft", "true");
+    if (opts.expect) query.set("expect", opts.expect);
+    const res = await fetch(`/resumes/${id}/download?${query}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1]
+      ?? `resume.${fmt}`;
+    const url = URL.createObjectURL(await res.blob());
+    const link = document.createElement("a");
+    link.href = url; link.download = name;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
   listArticles: () => fetch("/articles").then((r) => json<ArticleSummary[]>(r)),
   listInterviews: () =>
     fetch("/interviews").then((r) => json<InterviewSessionItem[]>(r)),
