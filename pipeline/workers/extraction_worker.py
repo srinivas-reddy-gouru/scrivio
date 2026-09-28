@@ -453,6 +453,11 @@ async def process_search_result(
 
     filtered_text = injection_filter(text)
     chunks = chunk_text(filtered_text)
+    # The page body is filtered above. The title is external text too: it
+    # comes from the search index, is written by the page's author, and
+    # ends up in the article's reference list.
+    if REDACTION_TEXT in injection_filter(title or ""):
+        title = ""
     return build_evidence_spans(
         url,
         title,
