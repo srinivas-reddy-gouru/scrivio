@@ -1,0 +1,127 @@
+{
+ "mode": "cold",
+ "fonts": "as-is",
+ "dev_server_answering_after_s": 1.18,
+ "loads": [
+  {
+   "n": 1,
+   "goto": "loaded",
+   "goto_took_s": 0.211,
+   "domcontentloaded": 0.208,
+   "load": 0.211,
+   "main_frame_navigations_at_s": [
+    0.031
+   ],
+   "requests": 42,
+   "by_host": {
+    "127.0.0.1:<port>": {
+     "requests": 38,
+     "slowest_s": 0.141,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.googleapis.com": {
+     "requests": 1,
+     "slowest_s": 0.122,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.gstatic.com": {
+     "requests": 3,
+     "slowest_s": 0.16,
+     "failed": 0,
+     "unfinished": 1
+    }
+   },
+   "unfinished": [
+    "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwB"
+   ],
+   "five_slowest": [
+    [
+     0.16,
+     "NEVER FINISHED",
+     "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwB"
+    ],
+    [
+     0.141,
+     "finished",
+     "/auth/status"
+    ],
+    [
+     0.122,
+     "finished",
+     "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grote"
+    ],
+    [
+     0.119,
+     "finished",
+     "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2"
+    ],
+    [
+     0.115,
+     "finished",
+     "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4C_k3HqU.woff2"
+    ]
+   ]
+  },
+  {
+   "n": 2,
+   "goto": "loaded",
+   "goto_took_s": 0.244,
+   "domcontentloaded": 0.243,
+   "load": 0.244,
+   "main_frame_navigations_at_s": [
+    0.018
+   ],
+   "requests": 42,
+   "by_host": {
+    "127.0.0.1:<port>": {
+     "requests": 38,
+     "slowest_s": 0.047,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.googleapis.com": {
+     "requests": 1,
+     "slowest_s": 0.187,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.gstatic.com": {
+     "requests": 3,
+     "slowest_s": 0.126,
+     "failed": 0,
+     "unfinished": 0
+    }
+   },
+   "unfinished": [],
+   "five_slowest": [
+    [
+     0.187,
+     "finished",
+     "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grote"
+    ],
+    [
+     0.126,
+     "finished",
+     "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4C_k3HqU.woff2"
+    ],
+    [
+     0.124,
+     "finished",
+     "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2"
+    ],
+    [
+     0.119,
+     "finished",
+     "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwB"
+    ],
+    [
+     0.047,
+     "finished",
+     "/auth/status"
+    ]
+   ]
+  }
+ ]
+}

@@ -1,0 +1,76 @@
+{
+ "id": "sysadmin-junior",
+ "synthetic": "Every detail is invented. The address is on example.com and the phone number is in the range reserved for fiction.",
+ "resume": {
+  "basics": {
+   "name": "Elin Broussard",
+   "label": "Systems Administrator",
+   "email": "elin.broussard@example.com",
+   "phone": "+1 555 010 2580",
+   "url": "",
+   "location": "Baton Rouge, LA",
+   "summary": "Systems administrator looking after servers and accounts for an office of 300."
+  },
+  "work": [
+   {
+    "name": "Proseware",
+    "position": "Systems Administrator",
+    "startDate": "May 2022",
+    "endDate": "Present",
+    "summary": "",
+    "highlights": [
+     "Looked after 45 Windows servers and their backups",
+     "Created and removed accounts for 300 staff",
+     "Wrote PowerShell scripts that cut account setup from 30 minutes to 5 minutes",
+     "Answered help desk tickets escalated from the first line"
+    ]
+   }
+  ],
+  "education": [
+   {
+    "institution": "Bayou Community College",
+    "area": "Information Technology",
+    "studyType": "A.S.",
+    "startDate": "2020",
+    "endDate": "2022",
+    "score": ""
+   }
+  ],
+  "skills": [
+   {
+    "name": "Platforms",
+    "keywords": [
+     "Windows Server",
+     "VMware"
+    ]
+   },
+   {
+    "name": "Tools",
+    "keywords": [
+     "PowerShell",
+     "Active Directory"
+    ]
+   }
+  ],
+  "projects": [],
+  "certificates": []
+ },
+ "honest_rewordings": [
+  {
+   "where": "work[0].highlights[0]",
+   "line": "Administered 45 Windows servers and managed their backups"
+  },
+  {
+   "where": "work[0].highlights[1]",
+   "line": "Managed account provisioning and removal for 300 staff"
+  },
+  {
+   "where": "work[0].highlights[3]",
+   "line": "Resolved help desk tickets escalated from the first line of support"
+  },
+  {
+   "where": "work[0].highlights[2]",
+   "line": "Automated account setup with PowerShell, reducing the time from 30 minutes to 5 minutes"
+  }
+ ]
+}

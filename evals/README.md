@@ -6,12 +6,15 @@ good, which is a different question and a harder one.
 | Evaluation | Asks | Calls a model | Run in CI |
 | --- | --- | --- | --- |
 | `resume_guard_eval` | When a model writes something untrue into a resume, is it caught? | No | Yes |
+| `posting_pairs_eval` | Against real postings: what gets through, and what is wrongly put back? | No | In the test suite |
 | `interview_grading_eval` | Does the interview grader score answers correctly and consistently? | Yes, on request only | No |
 | `matchup` | Is the article pipeline better than one prompt to the same model? | Yes | No |
 | `run_eval`, `grade` | Did a prompt change make articles better or worse? | Yes | No |
 
-**What has been run.** The resume guard evaluation, which is deterministic.
-The article matchups recorded under `results/`. **Nothing else.** No live
+**What has been run.** The resume guard evaluation and the posting evaluation,
+both deterministic and neither involving a model. The article matchups, whose
+reports are written to `results/` and are not kept in the repository.
+**Nothing else.** No live
 evaluation of resume tailoring quality or of interview grading has been run,
 and no person has scored anything. Where this file describes a procedure, it
 is a procedure and not a result.
@@ -70,6 +73,65 @@ cases. There is no reason to think it was the last.
 **That the cases mean something** is checked by running them with the guard
 removed (`tests/test_eval_corpus.py`). Every adversarial case then fails. A
 case that passed with no guard at all would be testing nothing.
+
+## Resume, against real postings
+
+```bash
+python -m evals.posting_pairs_eval
+python -m evals.posting_pairs_eval --split tuning --detail
+```
+
+`corpus/postings-v1` holds 25 public job postings whose text may be copied, 9
+invented resumes, and an annotation of which words in the postings are names.
+[Its README](corpus/postings-v1/README.md) gives the sources, the licences,
+and how the rewrites are constructed.
+
+**Every rewrite is constructed. No model wrote any of them.** The figures are
+rates over constructed cases. They say what the guard does when a rewrite has
+a given fault, and nothing about how often a real model produces one.
+
+Two kinds of mistake are counted, and they are reported apart because they
+trade against each other:
+
+| | Tuning, 17 postings | Held out, 8 postings |
+| --- | --- | --- |
+| **Unsupported claims retained** | 80 of 592 (13.5%) | 32 of 312 (10.3%) |
+| of which, written in lower case mid-sentence | 22 of 148 (14.9%) | 2 of 78 (2.6%) |
+| of which, written as the posting writes it | 24 of 148 (16.2%) | 14 of 78 (17.9%) |
+| Names that are also words, retained | 54 of 80 (67.5%) | 16 of 16 (100%) |
+| **Supported names reverted** | 0 of 212 | 0 of 108 |
+| **Ordinary words from the posting, reverted** | 364 of 2,484 (14.7%) | 198 of 1,192 (16.6%) |
+| **Honest rewordings, reverted** | 2 of 136 (1.5%) | 0 of 64 |
+| Names in the posting the guard did not collect | 18 of 122 | 13 of 140 |
+| Ordinary words it took for names | 168 of 977 (17.2%) | 91 of 505 (18.0%) |
+
+Guard at `a3c1a9d`, run on 2026-09-29. The guard had not been adjusted to
+either set, so both are what an untouched guard does on postings it has never
+seen.
+
+What the tuning postings show, which is all that may be looked at:
+
+- **A short name is taken to be on the resume when its letters are.** `AI`,
+  `BA`, `BS`, `PE`, `FE` were kept, written in capitals, because "ai" is in
+  "maintained" and "ba" is in "database". A name found by its shape is looked
+  for in the resume's text with the spaces and punctuation removed. A name
+  found in lower case is compared word against word, which is why lower case
+  now does better than capitals.
+- **A name the posting writes in lower case is not collected**: `agile`,
+  `scrum`, `kanban`.
+- **About one capitalised ordinary word in six is taken for a name.** Most are
+  halves of the names of organisations (`Defense`, `National`, `Federal`,
+  `Peace`, `Corps`) or words from headings that are not on the list
+  (`Failure`, `Personnel`, `Occupational`). A rewrite that uses one of them,
+  where the original does not, is put back.
+- **One honest rewording in the tuning set was put back by the number check**,
+  not the name check. It moved a figure to the end of the sentence, after a
+  comma, where none of the words beside it were the words it had been beside.
+
+The word lists are a heuristic. These figures are what that heuristic costs
+and what it misses, on 25 postings from one kind of employer. Adding words to
+the lists would move the figures for these postings and would not amount to
+checking facts.
 
 ## Interviews: is the grading right?
 

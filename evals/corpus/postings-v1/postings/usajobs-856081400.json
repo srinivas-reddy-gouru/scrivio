@@ -1,0 +1,28 @@
+{
+ "id": "usajobs-856081400",
+ "source": "USAJOBS",
+ "source_url": "https://www.usajobs.gov/job/856081400",
+ "collected_on": "2026-09-29",
+ "raw_sha256": "c10538a0120d3a9080b454089ad213bf614d3b19d3dbecffa582157fbb59dc2d",
+ "licence": "Public domain in the United States",
+ "licence_basis": "A work of the United States Government (17 U.S.C. 105).",
+ "publisher": "Department of Health and Human Services",
+ "title": "IT Specialist (Cloud Platform Engineer)",
+ "sections_kept": [
+  "title",
+  "summary",
+  "duties",
+  "qualifications"
+ ],
+ "sections_left_out": [
+  "conditions of employment",
+  "additional information",
+  "how to apply",
+  "required documents",
+  "agency contact information",
+  "benefits"
+ ],
+ "text": "IT Specialist (Cloud Platform Engineer)\n\nThis position is located in the Department of Health & Human Services (HHS), Centers for Medicare & Medicaid Services (CMS), Office of Information Technology(OIT).\n\nAs an IT SPECIALIST (ENTARCH/SYSANALYSIS) referred to here as a IT Specialist (Cloud Platform Engineer), GS-2210-15, you will be providing enterprise-wide cloud platform engineering expertise, comprehensive financial operations oversight, C-suite technical consultation, and strategic analytical reports.\n\nDuties\n- Design, build, and deploy cloud infrastructure environments (development, testing, staging, production).\n\n- Execute systematic onboarding processes for new cloud customers and projects.\n\n- Design and implement cloud networking solutions including VPCs, subnets, and security groups.\n\n- Collaborate with stakeholders to design scalable and secure cloud architectures and provide technical guidance on cloud best practices, security standards, and cost optimization.\n\n- Implement and maintain security controls in accordance with federal standards (FedRAMP, FIPS 140-2).\n\nQualifications\nALL QUALIFICATION REQUIREMENTS MUST BE MET BY THE CLOSING DATE OF THIS ANNOUNCEMENT.\n\nYour resume (limited to no more than 2 pages) must include detailed information as it relates to the responsibilities and specialized experience for this position. Evidence of copying and pasting directly from the vacancy announcement without clearly documenting supplemental information to describe your experience will result in an ineligible rating. This will prevent you from receiving further consideration.\n\nThere is a BASIC REQUIREMENT AND MINIMUM QUALIFICATION REQUIREMENT for this position. You must meet both requirements.\n\nBASIC REQUIREMENT: You must have IT-related experience, at the GS-14 grade level in the federal government, demonstrating each of the four competencies listed:\n\nI have IT-related experience, demonstrated by paid or unpaid experience obtained in either the private or public sector and/or completion of specific, intensive training that demonstrates that I possess each of the following four competencies:\n\n- (1) Attention to Detail - Is thorough when performing work and conscientious about attending to detail.\n\n- (2) Customer Service - Works with clients and customers (that is, any individuals who use or receive the services or products that your work unit produces, including the general public, individuals who work in the agency, other agencies, or organizations outside the Government) to assess their needs, provide information or assistance, resolve their problems, or satisfy their expectations; knows about available products and services; is committed to providing quality products and services.\n\n- (3) Oral Communication - Expresses information (for example, ideas or facts) to individuals or groups effectively, taking into account the audience and nature of the information (for example, technical, sensitive, controversial); makes clear and convincing oral presentations; listens to others, attends to nonverbal cues, and responds appropriately.\n\n- (4) Problem Solving - Identifies problems; determines accuracy and relevance of information; uses sound judgment to generate and evaluate alternatives, and to make recommendations.\n\nAND\n\nIn order to qualify for the GS-15, you must meet the following: You must demonstrate in your resume at least one year (52 weeks) of qualifying specialized experience equivalent to the GS-14 grade level in the Federal government, obtained in either the private or public sector, to include: 1) Developing cloud systems across multiple platforms (Azure, AWS, GCP, Oracle) and upgrade outdated IT infrastructure to modern, secure cloud solutions; 2) Implementing automated security processes, deployment pipelines, and ensure all systems meet federal cybersecurity requirements; AND 3) Leading agency-wide cloud improvement projects and find ways to optimize spending and save money on cloud services.\n\nExperience refers to paid and unpaid experience, including volunteer work done through National Service programs (e.g., Peace Corps, AmeriCorps) and other organizations (e.g., professional, philanthropic, religious, spiritual, community, student, social). Volunteer work helps build critical competencies, knowledge, and skills, and can provide valuable training and experience that translates directly to paid employment. You will receive credit for all qualifying experience, including volunteer experience.\n\nClick the following link to view the occupational questionnaire: https://apply.usastaffing.gov/ViewQuestionnaire/12871992\n\nEducation\n\nThis job does not have an education qualification requirement.",
+ "split": "tuning",
+ "personal_details_found": 0
+}

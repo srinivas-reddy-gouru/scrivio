@@ -17,13 +17,114 @@ is open, and while it is, every later test that calls asyncio.run() fails
 with "cannot be called from a running event loop". Held for the session,
 that broke 238 unrelated tests on a clean install.
 """
+import json
+import os
+import re
 import sys
+import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 DIST = REPO / "web" / "dist" / "index.html"
+
+# ── What a failing browser test leaves behind ─────────────────────────
+# One of these tests once timed out loading a page, and the only record
+# was "Page.goto: Timeout 30000ms exceeded". That says a page was being
+# waited for and nothing about what the page was waiting for. So every
+# page opened here keeps an account of its requests, and when a test
+# fails the account is written down, with the end of each server's log.
+#
+# This records. It does not retry, and it does not give anything longer
+# to finish.
+DIAGNOSTICS = Path(os.environ.get("SCRIVIO_TEST_DIAGNOSTICS")
+                   or REPO / ".scrivio" / "test-diagnostics")
+_OPEN: list = []                 # pages opened by the test that is running
+_LOGS: dict[str, Path] = {}      # server logs, by what they are
+
+
+def watch(page):
+    """Keep an account of every request `page` makes."""
+    page.traffic = {}
+
+    def began(request):
+        page.traffic[request] = {"url": request.url, "began": time.monotonic(),
+                                 "took": None, "ended": "never finished"}
+
+    def ended(request, how):
+        entry = page.traffic.get(request)
+        if entry is not None:
+            entry["took"] = round(time.monotonic() - entry["began"], 3)
+            entry["ended"] = how
+
+    page.on("request", began)
+    page.on("requestfinished", lambda r: ended(r, "finished"))
+    page.on("requestfailed", lambda r: ended(r, f"failed: {r.failure or 'no reason given'}"))
+    _OPEN.append(page)
+    return page
+
+
+def account_of(page) -> dict:
+    """What `page` asked for, from whom, and what it was still waiting on."""
+    now = time.monotonic()
+    hosts: dict[str, dict] = {}
+    waiting, failed = [], []
+    for entry in getattr(page, "traffic", {}).values():
+        parts = urlsplit(entry["url"])
+        where = f"{parts.netloc}{parts.path}"[:140]
+        host = hosts.setdefault(parts.netloc, {"requests": 0, "slowest_seconds": 0.0,
+                                               "never_finished": 0, "failed": 0})
+        took = entry["took"] if entry["took"] is not None else round(now - entry["began"], 3)
+        host["requests"] += 1
+        host["slowest_seconds"] = max(host["slowest_seconds"], took)
+        if entry["ended"] == "never finished":
+            host["never_finished"] += 1
+            waiting.append({"what": where, "waited_seconds": took})
+        elif entry["ended"].startswith("failed"):
+            host["failed"] += 1
+            failed.append({"what": where, "how": entry["ended"]})
+    try:
+        url = page.url
+    except Exception:
+        url = "(the page was already closed)"
+    return {"page": url, "hosts": hosts, "still_waiting_for": waiting[:40],
+            "failed": failed[:40]}
+
+
+def _end_of(path: Path, lines: int = 40) -> list[str]:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ["(no log)"]
+    return [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in text.splitlines()[-lines:]]
+
+
+def write_account(test: str, failure: str, pages: list) -> Path:
+    DIAGNOSTICS.mkdir(parents=True, exist_ok=True)
+    name = re.sub(r"[^A-Za-z0-9_.-]+", "-", test).strip("-")[-120:]
+    target = DIAGNOSTICS / f"{time.strftime('%Y%m%dT%H%M%S')}-{name}.json"
+    target.write_text(json.dumps({
+        "test": test, "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "failure": failure.splitlines()[-25:],
+        "pages": [account_of(page) for page in pages],
+        "logs": {what: _end_of(path) for what, path in _LOGS.items()},
+    }, indent=1), encoding="utf-8")
+    return target
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if "browser" not in Path(str(item.fspath)).parts:
+        return
+    if report.when == "call" and report.failed and not hasattr(report, "wasxfail"):
+        written = write_account(item.nodeid, str(report.longrepr), list(_OPEN))
+        report.sections.append(("what the pages were waiting for", str(written)))
+    if report.when == "teardown":
+        _OPEN.clear()
 sys.path.insert(0, str(REPO / "tests"))
 from live_server import LiveServer  # noqa: E402
 
@@ -62,7 +163,8 @@ def server(tmp_path_factory):
 def page(browser, server):
     context = browser.new_context()
     context.add_cookies([server.session_cookie()])
-    page = context.new_page()
+    page = watch(context.new_page())
+    _LOGS["the API server"] = server.log
     page.requested, page.dialogs, page.console_errors = [], [], []
     page.on("request", lambda r: page.requested.append(r.url))
     page.on("dialog", lambda d: (page.dialogs.append(d.message), d.dismiss()))
@@ -101,10 +203,15 @@ def dev_server(demo_server):
     if npx is None or not (web / "node_modules" / "vite").is_dir():
         pytest.skip("the frontend dependencies are not installed: run `npm ci` in web/")
     port = free_port()
-    process = subprocess.Popen(
-        [npx, "vite", "--port", str(port), "--strictPort", "--host", "127.0.0.1"],
-        cwd=web, env={**os.environ, "SCRIVIO_BACKEND": demo_server.base},
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # What it says is kept. It used to be thrown away, and a page that
+    # would not load from it left nothing to read.
+    log = demo_server.root / "vite.log"
+    _LOGS["the Vite development server"] = log
+    with open(log, "ab") as out:
+        process = subprocess.Popen(
+            [npx, "vite", "--port", str(port), "--strictPort", "--host", "127.0.0.1"],
+            cwd=web, env={**os.environ, "SCRIVIO_BACKEND": demo_server.base},
+            stdout=out, stderr=out)
     base = f"http://127.0.0.1:{port}"
     try:
         for _ in range(200):
@@ -132,9 +239,10 @@ def paired_page(browser, server, base=None):
     if base:
         cookie["url"] = base
     context.add_cookies([cookie])
-    page = context.new_page()
+    page = watch(context.new_page())
     page.requested, page.dialogs, page.console_errors = [], [], []
     page.html_instead_of_data = []
+    _LOGS["the API server"] = server.log
     page.on("dialog", lambda d: (page.dialogs.append(d.message), d.accept()))
     page.on("pageerror", lambda e: page.console_errors.append(str(e)))
 

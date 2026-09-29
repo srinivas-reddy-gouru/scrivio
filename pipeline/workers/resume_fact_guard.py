@@ -34,6 +34,7 @@ before it is treated as ground truth.
 """
 from __future__ import annotations
 
+import functools
 import math
 import re
 from dataclasses import dataclass
@@ -1114,6 +1115,13 @@ def _heading(tokens: list[str], line: str) -> bool:
 
 def posting_names(jd_text: str) -> set[str]:
     """The names a posting uses, casefolded."""
+    return set(_posting_names(jd_text or ""))
+
+
+@functools.lru_cache(maxsize=64)
+def _posting_names(jd_text: str) -> frozenset[str]:
+    """Worked out once for a posting. It is asked for once for every line
+    of a rewrite, and the posting is the same each time."""
     always: set[str] = set()
     in_a_sentence: set[str] = set()
     where_anything_would_be: set[str] = set()
@@ -1147,7 +1155,7 @@ def posting_names(jd_text: str) -> set[str]:
     names |= {k for k in in_a_sentence if not _ordinary(k)}
     names |= {k for k in where_anything_would_be
               if not _ordinary(k) and k not in in_lower_case}
-    return names
+    return frozenset(names)
 
 
 def new_named_terms(text: str, known_squashed: str, jd_text: str = "",

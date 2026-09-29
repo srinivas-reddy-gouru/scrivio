@@ -1,0 +1,70 @@
+{
+ "id": "research-ops-mid",
+ "synthetic": "Every detail is invented. The address is on example.com and the phone number is in the range reserved for fiction.",
+ "resume": {
+  "basics": {
+   "name": "Solveig Abernathy",
+   "label": "Research Operations Coordinator",
+   "email": "solveig.abernathy@example.com",
+   "phone": "+1 555 010 2587",
+   "url": "",
+   "location": "Portland, OR",
+   "summary": "Coordinator of user research: recruiting, consent, scheduling, and the library of findings."
+  },
+  "work": [
+   {
+    "name": "Blue Yonder Airlines",
+    "position": "Research Operations Coordinator",
+    "startDate": "Jan 2021",
+    "endDate": "Present",
+    "summary": "",
+    "highlights": [
+     "Recruited and scheduled 240 participants for 30 studies",
+     "Wrote the consent forms and kept the records of consent",
+     "Set up the library where the team keeps its findings",
+     "Trained 12 designers to run their own interviews"
+    ]
+   }
+  ],
+  "education": [
+   {
+    "institution": "Columbia Gorge College",
+    "area": "Psychology",
+    "studyType": "B.A.",
+    "startDate": "2016",
+    "endDate": "2020",
+    "score": ""
+   }
+  ],
+  "skills": [
+   {
+    "name": "Practice",
+    "keywords": [
+     "Participant recruiting",
+     "Consent",
+     "Research repositories"
+    ]
+   }
+  ],
+  "projects": [],
+  "certificates": []
+ },
+ "honest_rewordings": [
+  {
+   "where": "work[0].highlights[0]",
+   "line": "Managed recruiting and scheduling of 240 participants across 30 studies"
+  },
+  {
+   "where": "work[0].highlights[1]",
+   "line": "Developed consent forms and maintained the records of consent"
+  },
+  {
+   "where": "work[0].highlights[2]",
+   "line": "Established the research library in which the team keeps its findings"
+  },
+  {
+   "where": "work[0].highlights[3]",
+   "line": "Provided training to 12 designers so that they could run their own interviews"
+  }
+ ]
+}

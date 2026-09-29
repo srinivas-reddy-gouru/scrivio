@@ -104,6 +104,17 @@ jobs:
         run: python -m pytest tests/browser -q
       - name: Restart tests (a real server, killed mid-run)
         run: python -m pytest tests/live -q
+      # When a browser test fails, what each page was waiting for and the
+      # end of each server's log are written here (tests/browser/conftest.py).
+      - name: Keep what a failed browser test left behind
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-diagnostics
+          path: .scrivio/test-diagnostics
+          if-no-files-found: ignore
+          include-hidden-files: true
+          retention-days: 14
 
   install:
     name: Clean install, following the README

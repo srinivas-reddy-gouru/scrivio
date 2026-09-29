@@ -1,0 +1,26 @@
+{
+ "id": "tts-data-analytics-product-managers",
+ "source": "TTS, U.S. General Services Administration",
+ "source_url": "https://github.com/18F/join.tts.gsa.gov/blob/5dfa66db0f4b/positions/Data-Analytics-Product-Managers.md",
+ "collected_on": "2026-09-29",
+ "raw_sha256": "bb53bfe59a80e3ebc4a4b84ea3abbba49ca038af993cf19e49c9b1a537e3a335",
+ "licence": "CC0 1.0 Universal",
+ "licence_basis": "The repository's LICENSE.md dedicates it to the public domain under CC0 1.0.",
+ "publisher": "General Services Administration",
+ "title": "Data & Analytics Portfolio: Product Manager GS15",
+ "sections_kept": [
+  "title",
+  "role summary",
+  "key objectives",
+  "qualifications"
+ ],
+ "sections_left_out": [
+  "basic information",
+  "how to apply",
+  "information sessions",
+  "the authoring template's instructions"
+ ],
+ "text": "Data & Analytics Portfolio: Product Manager GS15\n\nRole summary\nTTS is hiring for the role of GS-15 Product Managers to support our Data & Analytics Portfolio. Several business units within TTS are hiring for this role. Product Managers are crucial to TTS significantly improving our products, platforms, and services. This is an opportunity to make a huge difference in the lives of the public and other federal agencies. This page contains a high-level summary of the roles we are trying to fill.\n\nThese opportunities are located in the General Services Administration (GSA), Federal Acquisition Service (FAS), Technology Transformation Services (TTS). TTS applies modern methodologies and technologies to improve the lives of the public and public servants. We help agencies make their services more accessible, efficient, and effective with modern applications, platforms, processes, personnel, and software solutions.\n\nTTS is looking for talented product managers who will help our partner agencies deliver better digital services to the public. You’ll lead cross-functional teams to solve large, complex problems and deliver user-centered products using agile methodologies and modern software development practices.\n\nTTS is looking for product managers in both client services and product development roles, including:\n  - Leading cross-functional development teams to own and grow existing, in-market products\n  - Joining cross-functional teams to partner with other government agencies and help them deliver mission-critical software\n  - Partnering with government agencies evolve their culture and establish sustainable best practices for product development\n\nThese roles will be a great fit for you if you are a:\n  - Strategic thinker who is comfortable defining a compelling vision and designing a measurable strategy to achieve that vision\n  - Decisive leader who knows how to motivate cross-functional teams to build the right thing\n  - Strong executor that is able to deliver results to agencies and the public\n\nOur ideal candidates will be equally excited about sticky technical issues and intricate human ones. The strongest candidates will have a background working on cross-functional, multidisciplinary teams that deliver digital products and services in an incremental, user-focused environment.\n\nIf you are interested in any or all of these roles, you should apply. You may be matched with multiple teams across TTS during the interview process based on your skills, experience, and interests.\n\nQualifications\nProvide as much detail as possible on your resume so that we can evaluate your\nprevious experience. Follow our\n[guidance on creating a federal style resume.](https://join.tts.gsa.gov/resume/)\n\nFailure to provide required information may result in disqualification.\n\nFor each job on your resume, provide:\n\n- The exact dates you held each job (from month/year to month/year or “present”)\n- Number of hours per week you worked (if part time)\n\n**SPECIALIZED EXPERIENCE REQUIREMENTS:**\n\nTo qualify, you must have one (1) year of specialized experience at the next\nlower GS-grade (or equivalent). Specialized experience for this role is defined as: \n  - Experience developing and implementing a product strategy that aligns with strategic objectives and user needs\n  - Experience leading cross-functional teams of software engineers, data analysts, user experience/user interface designers to develop and deliver features\n  - Experience overseeing product design and working with designers to create user-friendly tools, dashboards and reporting systems\n  - Experience utilizing web and data analytics and data management tools to inform product strategy and monitor performance\n  - Experience developing and maintaining relationships with internal and external stakeholders to represent and advance program interests",
+ "split": "tuning",
+ "personal_details_found": 0
+}

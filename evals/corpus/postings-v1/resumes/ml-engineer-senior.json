@@ -1,0 +1,77 @@
+{
+ "id": "ml-engineer-senior",
+ "synthetic": "Every detail is invented. The address is on example.com and the phone number is in the range reserved for fiction.",
+ "resume": {
+  "basics": {
+   "name": "Haruto Vandenberg",
+   "label": "Machine Learning Engineer",
+   "email": "haruto.vandenberg@example.com",
+   "phone": "+1 555 010 2808",
+   "url": "",
+   "location": "Seattle, WA",
+   "summary": "Engineer who takes models from a notebook to a service that stays up."
+  },
+  "work": [
+   {
+    "name": "Wingtip Toys",
+    "position": "Machine Learning Engineer",
+    "startDate": "Nov 2019",
+    "endDate": "Present",
+    "summary": "",
+    "highlights": [
+     "Put 6 models into production behind one API, serving 2 million predictions a day",
+     "Built the pipeline that retrains each model weekly in Python and PyTorch",
+     "Cut the cost of serving by 30% by batching requests",
+     "Wrote the monitoring that catches a model drifting"
+    ]
+   }
+  ],
+  "education": [
+   {
+    "institution": "Cascade University",
+    "area": "Computer Science",
+    "studyType": "M.S.",
+    "startDate": "2017",
+    "endDate": "2019",
+    "score": ""
+   }
+  ],
+  "skills": [
+   {
+    "name": "Languages",
+    "keywords": [
+     "Python",
+     "SQL"
+    ]
+   },
+   {
+    "name": "Tools",
+    "keywords": [
+     "PyTorch",
+     "Docker",
+     "Airflow"
+    ]
+   }
+  ],
+  "projects": [],
+  "certificates": []
+ },
+ "honest_rewordings": [
+  {
+   "where": "work[0].highlights[0]",
+   "line": "Deployed 6 models to production behind one API, serving 2 million predictions a day"
+  },
+  {
+   "where": "work[0].highlights[3]",
+   "line": "Designed and implemented monitoring to detect when a model drifts"
+  },
+  {
+   "where": "work[0].highlights[1]",
+   "line": "Developed the weekly retraining pipeline for each model in Python and PyTorch"
+  },
+  {
+   "where": "work[0].highlights[2]",
+   "line": "Optimized serving by batching requests, reducing the cost by 30%"
+  }
+ ]
+}

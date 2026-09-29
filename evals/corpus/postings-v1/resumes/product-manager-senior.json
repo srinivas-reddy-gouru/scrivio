@@ -1,0 +1,88 @@
+{
+ "id": "product-manager-senior",
+ "synthetic": "Every detail is invented. The address is on example.com and the phone number is in the range reserved for fiction.",
+ "resume": {
+  "basics": {
+   "name": "Dariusz Okonkwo-Hale",
+   "label": "Senior Product Manager",
+   "email": "dariusz.okonkwo-hale@example.com",
+   "phone": "+1 555 010 3246",
+   "url": "",
+   "location": "Chicago, IL",
+   "summary": "Product manager for internal data products, with a background in analysis."
+  },
+  "work": [
+   {
+    "name": "Litware",
+    "position": "Senior Product Manager",
+    "startDate": "Apr 2019",
+    "endDate": "Present",
+    "summary": "",
+    "highlights": [
+     "Owned the roadmap for the reporting product used by 2,000 staff",
+     "Ran discovery interviews with 60 users before each major release",
+     "Set the quarterly goals for a team of 8 with engineering and design",
+     "Retired 3 legacy reports, saving 20 hours of manual work a week"
+    ]
+   },
+   {
+    "name": "Litware",
+    "position": "Business Analyst",
+    "startDate": "Jul 2015",
+    "endDate": "Mar 2019",
+    "summary": "",
+    "highlights": [
+     "Wrote requirements for the finance reporting team",
+     "Built the dashboards the finance directors read each month"
+    ]
+   }
+  ],
+  "education": [
+   {
+    "institution": "Great Lakes University",
+    "area": "Economics",
+    "studyType": "B.A.",
+    "startDate": "2011",
+    "endDate": "2015",
+    "score": ""
+   }
+  ],
+  "skills": [
+   {
+    "name": "Practice",
+    "keywords": [
+     "Roadmaps",
+     "User interviews",
+     "Prioritisation"
+    ]
+   },
+   {
+    "name": "Tools",
+    "keywords": [
+     "SQL",
+     "Jira"
+    ]
+   }
+  ],
+  "projects": [],
+  "certificates": []
+ },
+ "honest_rewordings": [
+  {
+   "where": "work[0].highlights[0]",
+   "line": "Managed the roadmap and priorities for the reporting product used by 2,000 staff"
+  },
+  {
+   "where": "work[0].highlights[1]",
+   "line": "Conducted discovery research with 60 users ahead of each major release"
+  },
+  {
+   "where": "work[0].highlights[2]",
+   "line": "Partnered with engineering and design to set quarterly goals for a team of 8"
+  },
+  {
+   "where": "work[1].highlights[0]",
+   "line": "Gathered and documented requirements for the finance reporting team"
+  }
+ ]
+}

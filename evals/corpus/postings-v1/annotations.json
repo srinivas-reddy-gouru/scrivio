@@ -1,0 +1,676 @@
+{
+ "annotated_by": "An AI assistant (Claude), on 2026-09-29, from a list of every word in each posting that has a capital letter or a digit in it. Not reviewed by a person.",
+ "what_is_annotated": "Which of those words are names. Every other capitalised word in a posting is taken to be ordinary: a heading, or the first word of a line.",
+ "kinds": {
+  "tech": "A language, tool, platform, or product",
+  "standard": "A standard, framework, regulation, or protocol",
+  "credential": "A certificate, licence, degree, or clearance",
+  "method": "A way of working that people claim experience of",
+  "field": "A field of work named by its initials",
+  "term": "A technical term of art",
+  "proper": "An organisation, programme, or place. A name, and not a claim of skill"
+ },
+ "grade_codes": "A word with a digit in it that is a pay grade or series (GS-13, GS-2210-15, ND-03) is a name of kind 'code'. They are recognised by pattern and not listed.",
+ "names": {
+  "10x": {
+   "kind": "proper"
+  },
+  "abet": {
+   "kind": "credential"
+  },
+  "acas": {
+   "kind": "tech"
+  },
+  "af": {
+   "kind": "proper"
+  },
+  "agile": {
+   "kind": "method"
+  },
+  "ai": {
+   "kind": "field"
+  },
+  "ai/ml": {
+   "kind": "field"
+  },
+  "american": {
+   "kind": "proper"
+  },
+  "americans": {
+   "kind": "proper"
+  },
+  "americorps": {
+   "kind": "proper"
+  },
+  "angular": {
+   "kind": "tech"
+  },
+  "ao": {
+   "kind": "proper"
+  },
+  "api": {
+   "kind": "term"
+  },
+  "apis": {
+   "kind": "term"
+  },
+  "appsw": {
+   "kind": "term"
+  },
+  "arlington": {
+   "kind": "proper"
+  },
+  "aws": {
+   "kind": "tech"
+  },
+  "azure": {
+   "kind": "tech"
+  },
+  "ba": {
+   "kind": "credential"
+  },
+  "bash": {
+   "kind": "tech"
+  },
+  "bethesda": {
+   "kind": "proper"
+  },
+  "bi": {
+   "kind": "term"
+  },
+  "bootstrap": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "bs": {
+   "kind": "credential"
+  },
+  "bsc": {
+   "kind": "proper"
+  },
+  "c#": {
+   "kind": "tech"
+  },
+  "c++": {
+   "kind": "tech"
+  },
+  "c2c": {
+   "kind": "term"
+  },
+  "ca": {
+   "kind": "proper"
+  },
+  "capitol": {
+   "kind": "proper"
+  },
+  "cbp": {
+   "kind": "proper"
+  },
+  "ccsp": {
+   "kind": "credential"
+  },
+  "cd": {
+   "kind": "method"
+  },
+  "cfr": {
+   "kind": "standard"
+  },
+  "chef": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "ci": {
+   "kind": "method"
+  },
+  "ci/cd": {
+   "kind": "method"
+  },
+  "cis": {
+   "kind": "standard"
+  },
+  "cloudformation": {
+   "kind": "tech"
+  },
+  "cloudtrail": {
+   "kind": "tech"
+  },
+  "cloudwatch": {
+   "kind": "tech"
+  },
+  "cmm": {
+   "kind": "proper"
+  },
+  "cms": {
+   "kind": "proper"
+  },
+  "columbia": {
+   "kind": "proper"
+  },
+  "config": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "congress": {
+   "kind": "proper"
+  },
+  "copilot": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "crowdstrike": {
+   "kind": "tech"
+  },
+  "css": {
+   "kind": "tech"
+  },
+  "databricks": {
+   "kind": "tech"
+  },
+  "dc": {
+   "kind": "proper"
+  },
+  "dcips": {
+   "kind": "proper"
+  },
+  "dcsa": {
+   "kind": "proper"
+  },
+  "devops": {
+   "kind": "method"
+  },
+  "devsecops": {
+   "kind": "method"
+  },
+  "dha": {
+   "kind": "proper"
+  },
+  "django": {
+   "kind": "tech"
+  },
+  "docker": {
+   "kind": "tech"
+  },
+  "dod": {
+   "kind": "proper"
+  },
+  "dodi": {
+   "kind": "proper"
+  },
+  "dodm": {
+   "kind": "proper"
+  },
+  "dot": {
+   "kind": "proper"
+  },
+  "ebs": {
+   "kind": "tech"
+  },
+  "ecde": {
+   "kind": "credential"
+  },
+  "ei": {
+   "kind": "credential"
+  },
+  "eit": {
+   "kind": "credential"
+  },
+  "eks": {
+   "kind": "tech"
+  },
+  "entarch": {
+   "kind": "proper"
+  },
+  "est": {
+   "kind": "proper"
+  },
+  "etl": {
+   "kind": "method"
+  },
+  "fas": {
+   "kind": "proper"
+  },
+  "fe": {
+   "kind": "credential"
+  },
+  "fedramp": {
+   "kind": "standard"
+  },
+  "fips": {
+   "kind": "standard"
+  },
+  "fisma": {
+   "kind": "standard"
+  },
+  "flask": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "fpl": {
+   "kind": "proper"
+  },
+  "fsis": {
+   "kind": "proper"
+  },
+  "fta": {
+   "kind": "proper"
+  },
+  "gcp": {
+   "kind": "tech"
+  },
+  "gcsa": {
+   "kind": "credential"
+  },
+  "gemini": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "giac": {
+   "kind": "credential"
+  },
+  "git": {
+   "kind": "tech"
+  },
+  "github": {
+   "kind": "tech"
+  },
+  "gitlab": {
+   "kind": "tech"
+  },
+  "go": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "golang": {
+   "kind": "tech"
+  },
+  "google": {
+   "kind": "tech"
+  },
+  "gsa": {
+   "kind": "proper"
+  },
+  "guam": {
+   "kind": "proper"
+  },
+  "guardduty": {
+   "kind": "tech"
+  },
+  "gui": {
+   "kind": "term"
+  },
+  "hhs": {
+   "kind": "proper"
+  },
+  "hr": {
+   "kind": "proper"
+  },
+  "html5": {
+   "kind": "tech"
+  },
+  "i/o": {
+   "kind": "term"
+  },
+  "ia": {
+   "kind": "term"
+  },
+  "iam": {
+   "kind": "tech"
+  },
+  "ids": {
+   "kind": "term"
+  },
+  "infosec": {
+   "kind": "term"
+  },
+  "ips": {
+   "kind": "term"
+  },
+  "it": {
+   "kind": "term",
+   "also_a_word": true
+  },
+  "itops": {
+   "kind": "term"
+  },
+  "java": {
+   "kind": "tech"
+  },
+  "javascript": {
+   "kind": "tech"
+  },
+  "jenkins": {
+   "kind": "tech"
+  },
+  "jfhq-dodin": {
+   "kind": "proper"
+  },
+  "jquery": {
+   "kind": "tech"
+  },
+  "jupyter": {
+   "kind": "tech"
+  },
+  "kanban": {
+   "kind": "method"
+  },
+  "kpi": {
+   "kind": "term"
+  },
+  "ksas": {
+   "kind": "term"
+  },
+  "kubernetes": {
+   "kind": "tech"
+  },
+  "langchain": {
+   "kind": "tech"
+  },
+  "lcs": {
+   "kind": "proper"
+  },
+  "linux": {
+   "kind": "tech"
+  },
+  "llama": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "llama-2": {
+   "kind": "tech"
+  },
+  "llamaindex": {
+   "kind": "tech"
+  },
+  "llm": {
+   "kind": "field"
+  },
+  "llmops": {
+   "kind": "method"
+  },
+  "llms": {
+   "kind": "field"
+  },
+  "login.gov": {
+   "kind": "proper"
+  },
+  "lsd": {
+   "kind": "proper"
+  },
+  "maryland": {
+   "kind": "proper"
+  },
+  "maui": {
+   "kind": "tech"
+  },
+  "md": {
+   "kind": "proper"
+  },
+  "mde": {
+   "kind": "tech"
+  },
+  "medicaid": {
+   "kind": "proper"
+  },
+  "medicare": {
+   "kind": "proper"
+  },
+  "memgraph": {
+   "kind": "tech"
+  },
+  "microsoft": {
+   "kind": "tech"
+  },
+  "mistral": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "ml": {
+   "kind": "field"
+  },
+  "mlops": {
+   "kind": "method"
+  },
+  "mvp": {
+   "kind": "term"
+  },
+  "nbis": {
+   "kind": "proper"
+  },
+  "neo4j": {
+   "kind": "tech"
+  },
+  "net": {
+   "kind": "tech"
+  },
+  "netapp": {
+   "kind": "tech"
+  },
+  "nist": {
+   "kind": "standard"
+  },
+  "nist-800-53": {
+   "kind": "standard"
+  },
+  "nlp": {
+   "kind": "field"
+  },
+  "nsa": {
+   "kind": "proper"
+  },
+  "o365": {
+   "kind": "tech"
+  },
+  "oa": {
+   "kind": "proper"
+  },
+  "ocdo": {
+   "kind": "proper"
+  },
+  "ocio": {
+   "kind": "proper"
+  },
+  "oidc": {
+   "kind": "standard"
+  },
+  "oig": {
+   "kind": "proper"
+  },
+  "oit": {
+   "kind": "proper"
+  },
+  "openai": {
+   "kind": "tech"
+  },
+  "opm": {
+   "kind": "proper"
+  },
+  "opms": {
+   "kind": "proper"
+  },
+  "oracle": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "ota": {
+   "kind": "proper"
+  },
+  "owasp": {
+   "kind": "standard"
+  },
+  "pam": {
+   "kind": "term"
+  },
+  "pe": {
+   "kind": "credential"
+  },
+  "ph.d": {
+   "kind": "credential"
+  },
+  "pmo": {
+   "kind": "proper"
+  },
+  "poa": {
+   "kind": "term"
+  },
+  "postgres": {
+   "kind": "tech"
+  },
+  "powershell": {
+   "kind": "tech"
+  },
+  "pra": {
+   "kind": "standard"
+  },
+  "puerto": {
+   "kind": "proper"
+  },
+  "python": {
+   "kind": "tech"
+  },
+  "rag": {
+   "kind": "field"
+  },
+  "rails": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "react": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "rest": {
+   "kind": "standard",
+   "also_a_word": true
+  },
+  "rico": {
+   "kind": "proper"
+  },
+  "risc": {
+   "kind": "term"
+  },
+  "riverside": {
+   "kind": "proper"
+  },
+  "rmf": {
+   "kind": "standard"
+  },
+  "ruby": {
+   "kind": "tech"
+  },
+  "rust": {
+   "kind": "tech",
+   "also_a_word": true
+  },
+  "s3": {
+   "kind": "tech"
+  },
+  "saas": {
+   "kind": "term"
+  },
+  "saml": {
+   "kind": "standard"
+  },
+  "sas": {
+   "kind": "tech"
+  },
+  "scala": {
+   "kind": "tech"
+  },
+  "sci": {
+   "kind": "credential"
+  },
+  "scrum": {
+   "kind": "method"
+  },
+  "sdlc": {
+   "kind": "method"
+  },
+  "ses": {
+   "kind": "proper"
+  },
+  "siem": {
+   "kind": "term"
+  },
+  "soap": {
+   "kind": "standard"
+  },
+  "soc": {
+   "kind": "term"
+  },
+  "sql": {
+   "kind": "tech"
+  },
+  "srg": {
+   "kind": "standard"
+  },
+  "stem": {
+   "kind": "credential"
+  },
+  "stig": {
+   "kind": "standard"
+  },
+  "sysadmin": {
+   "kind": "term"
+  },
+  "sysanalysis": {
+   "kind": "proper"
+  },
+  "tanium": {
+   "kind": "tech"
+  },
+  "tenable": {
+   "kind": "tech"
+  },
+  "terraform": {
+   "kind": "tech"
+  },
+  "tlms": {
+   "kind": "proper"
+  },
+  "trellix": {
+   "kind": "tech"
+  },
+  "tts": {
+   "kind": "proper"
+  },
+  "typescript": {
+   "kind": "tech"
+  },
+  "u.s": {
+   "kind": "proper"
+  },
+  "unix": {
+   "kind": "tech"
+  },
+  "unix-like": {
+   "kind": "tech"
+  },
+  "us": {
+   "kind": "proper"
+  },
+  "usps": {
+   "kind": "proper"
+  },
+  "ux": {
+   "kind": "term"
+  },
+  "virginia": {
+   "kind": "proper"
+  },
+  "vmware": {
+   "kind": "tech"
+  },
+  "vpcs": {
+   "kind": "term"
+  },
+  "waf": {
+   "kind": "term"
+  },
+  "washington": {
+   "kind": "proper"
+  },
+  "wpa": {
+   "kind": "proper"
+  }
+ }
+}

@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from conftest import paired_page
+from conftest import paired_page, watch
 
 RESUME = """Jordan Rivera
 Backend Engineer
@@ -157,7 +157,7 @@ def test_with_no_provider_the_interface_says_why_nothing_runs(browser, server):
 
 def test_an_unpaired_browser_is_asked_to_pair_and_shown_nothing(browser, demo_server):
     context = browser.new_context()
-    page = context.new_page()
+    page = watch(context.new_page())
 
     page.goto(f"{demo_server.base}/#/desk")
 

@@ -1,0 +1,192 @@
+{
+ "mode": "warm",
+ "fonts": "as-is",
+ "dev_server_answering_after_s": 1.08,
+ "loads": [
+  {
+   "n": 1,
+   "goto": "loaded",
+   "goto_took_s": 0.278,
+   "domcontentloaded": 0.276,
+   "load": 0.277,
+   "main_frame_navigations_at_s": [
+    0.108
+   ],
+   "requests": 42,
+   "by_host": {
+    "127.0.0.1:<port>": {
+     "requests": 38,
+     "slowest_s": 0.154,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.googleapis.com": {
+     "requests": 1,
+     "slowest_s": 0.113,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.gstatic.com": {
+     "requests": 3,
+     "slowest_s": 0.133,
+     "failed": 0,
+     "unfinished": 3
+    }
+   },
+   "unfinished": [
+    "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2",
+    "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4C_k3HqU.woff2",
+    "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwB"
+   ],
+   "five_slowest": [
+    [
+     0.154,
+     "finished",
+     "/mode"
+    ],
+    [
+     0.154,
+     "finished",
+     "/mode"
+    ],
+    [
+     0.15,
+     "finished",
+     "/resumes"
+    ],
+    [
+     0.149,
+     "finished",
+     "/resumes"
+    ],
+    [
+     0.149,
+     "finished",
+     "/mode"
+    ]
+   ]
+  },
+  {
+   "n": 2,
+   "goto": "loaded",
+   "goto_took_s": 0.184,
+   "domcontentloaded": 0.183,
+   "load": 0.184,
+   "main_frame_navigations_at_s": [
+    0.053
+   ],
+   "requests": 42,
+   "by_host": {
+    "127.0.0.1:<port>": {
+     "requests": 38,
+     "slowest_s": 0.047,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.googleapis.com": {
+     "requests": 1,
+     "slowest_s": 0.094,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.gstatic.com": {
+     "requests": 3,
+     "slowest_s": 0.252,
+     "failed": 0,
+     "unfinished": 1
+    }
+   },
+   "unfinished": [
+    "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4C_k3HqU.woff2"
+   ],
+   "five_slowest": [
+    [
+     0.252,
+     "NEVER FINISHED",
+     "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4C_k3HqU.woff2"
+    ],
+    [
+     0.251,
+     "finished",
+     "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwB"
+    ],
+    [
+     0.203,
+     "finished",
+     "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2"
+    ],
+    [
+     0.094,
+     "finished",
+     "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grote"
+    ],
+    [
+     0.047,
+     "finished",
+     "/auth/status"
+    ]
+   ]
+  },
+  {
+   "n": 3,
+   "goto": "loaded",
+   "goto_took_s": 0.271,
+   "domcontentloaded": 0.27,
+   "load": 0.271,
+   "main_frame_navigations_at_s": [
+    0.027
+   ],
+   "requests": 42,
+   "by_host": {
+    "127.0.0.1:<port>": {
+     "requests": 38,
+     "slowest_s": 0.038,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.googleapis.com": {
+     "requests": 1,
+     "slowest_s": 0.201,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.gstatic.com": {
+     "requests": 3,
+     "slowest_s": 0.247,
+     "failed": 0,
+     "unfinished": 1
+    }
+   },
+   "unfinished": [
+    "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwB"
+   ],
+   "five_slowest": [
+    [
+     0.247,
+     "NEVER FINISHED",
+     "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwB"
+    ],
+    [
+     0.201,
+     "finished",
+     "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grote"
+    ],
+    [
+     0.14,
+     "finished",
+     "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4C_k3HqU.woff2"
+    ],
+    [
+     0.14,
+     "finished",
+     "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2"
+    ],
+    [
+     0.038,
+     "finished",
+     "/resumes"
+    ]
+   ]
+  }
+ ]
+}

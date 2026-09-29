@@ -1,0 +1,89 @@
+{
+ "id": "backend-mid",
+ "synthetic": "Every detail is invented. The address is on example.com and the phone number is in the range reserved for fiction.",
+ "resume": {
+  "basics": {
+   "name": "Maya Lindqvist",
+   "label": "Backend Engineer",
+   "email": "maya.lindqvist@example.com",
+   "phone": "+1 555 010 2071",
+   "url": "",
+   "location": "Minneapolis, MN",
+   "summary": "Backend engineer who builds and runs web services for internal tools."
+  },
+  "work": [
+   {
+    "name": "Northwind Traders",
+    "position": "Backend Engineer",
+    "startDate": "Mar 2021",
+    "endDate": "Present",
+    "summary": "",
+    "highlights": [
+     "Built the order service in Python and Django, handling 40,000 requests a day",
+     "Moved the reporting database to PostgreSQL with no loss of data",
+     "Wrote the deployment scripts and the runbook for the on-call rotation",
+     "Reviewed code for a team of 5 engineers"
+    ]
+   },
+   {
+    "name": "Fabrikam Freight",
+    "position": "Junior Developer",
+    "startDate": "Jun 2019",
+    "endDate": "Feb 2021",
+    "summary": "",
+    "highlights": [
+     "Fixed defects in the shipment tracking service",
+     "Added tests to the billing module, raising coverage from 35% to 70%"
+    ]
+   }
+  ],
+  "education": [
+   {
+    "institution": "Lakeshore State University",
+    "area": "Computer Science",
+    "studyType": "B.S.",
+    "startDate": "2015",
+    "endDate": "2019",
+    "score": ""
+   }
+  ],
+  "skills": [
+   {
+    "name": "Languages",
+    "keywords": [
+     "Python",
+     "SQL"
+    ]
+   },
+   {
+    "name": "Tools",
+    "keywords": [
+     "Django",
+     "PostgreSQL",
+     "Docker",
+     "Git"
+    ]
+   }
+  ],
+  "projects": [],
+  "certificates": []
+ },
+ "honest_rewordings": [
+  {
+   "where": "work[0].highlights[0]",
+   "line": "Developed and maintained the order service in Python and Django, serving 40,000 requests a day"
+  },
+  {
+   "where": "work[0].highlights[2]",
+   "line": "Authored deployment scripts and the on-call runbook, supporting the operations of the team"
+  },
+  {
+   "where": "work[0].highlights[3]",
+   "line": "Provided code review and technical guidance to a team of 5 engineers"
+  },
+  {
+   "where": "work[1].highlights[1]",
+   "line": "Improved the quality of the billing module by adding tests, raising coverage from 35% to 70%"
+  }
+ ]
+}
