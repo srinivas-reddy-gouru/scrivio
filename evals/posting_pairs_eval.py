@@ -278,6 +278,16 @@ def _rate(t: Tally) -> str:
     return f"{t.wrong:4} of {t.cases:4}  ({t.rate:6.1%})" if t.cases else "   none"
 
 
+def together(s: SplitReport) -> Tally:
+    """Every unsupported claim constructed for the split. The names that
+    are also words (Go, Rust) are counted apart from the rest, because
+    the guard treats them differently, and a reader who is given one of
+    the two figures takes it for the whole."""
+    apart = s.unsupported_retained_names_that_are_also_words
+    return Tally(cases=s.unsupported_retained.cases + apart.cases,
+                 wrong=s.unsupported_retained.wrong + apart.wrong)
+
+
 def render(report: Report, *, detail: str | None = None) -> str:
     lines = [f"Resume guard against real postings, corpus {report.corpus}, guard at "
              f"{report.guard_commit}", "", report.what_this_is, ""]
@@ -292,11 +302,13 @@ def render(report: Report, *, detail: str | None = None) -> str:
             f"{s.ordinary_words_taken_for_names:4} of {s.ordinary_words:4}",
             "",
             "  UNSUPPORTED CLAIMS RETAINED (a claim nobody made, still on the resume)",
-            f"    all forms                               {_rate(s.unsupported_retained)}",
+            f"    every constructed claim                 {_rate(together(s))}",
+            "    of which",
+            f"    names that are not also words           {_rate(s.unsupported_retained)}",
         ]
         lines += [f"      {form:38}  {_rate(t)}" for form, t in s.unsupported_retained_by_form.items()]
         lines += [
-            f"    names that are also words, all forms    "
+            f"    names that are also words               "
             f"{_rate(s.unsupported_retained_names_that_are_also_words)}",
             "",
             "  SUPPORTED OR HONEST LINES REVERTED (a line that was fine, put back)",

@@ -238,3 +238,31 @@ def test_the_result_on_record_is_in_the_repository():
     if not tracked:
         pytest.skip("not a git checkout, or nothing committed yet")
     assert "evals/corpus/postings-v1/on-record/2026-09-29-guard-a3c1a9d.json" in tracked
+
+
+def test_the_first_figure_given_is_of_every_claim_constructed(result):
+    """The names that are also words are counted apart. The report used to
+    give the other group's figure first and call it "all forms", which read
+    as the whole and was lower than the whole."""
+    report, outcomes = result
+    text = posting_pairs_eval.render(report)
+    readme = (posting_pairs_eval.CORPUS.parents[1] / "README.md").read_text(encoding="utf-8")
+    cells = []
+
+    for split in report.splits:
+        every = posting_pairs_eval.together(split)
+        made = [o for o in outcomes if o.family == "unsupported" and o.split == split.split]
+        apart = split.unsupported_retained_names_that_are_also_words
+
+        assert every.cases == len(made)
+        assert every.wrong == sum(o.wrong for o in made)
+        assert every.wrong > split.unsupported_retained.wrong
+        assert f"every constructed claim                 {every.wrong:4} of {every.cases:4}" in text
+        cells.append((f"{every.wrong} of {every.cases} ({every.rate:.1%})",
+                      f"{split.unsupported_retained.wrong} of {split.unsupported_retained.cases}",
+                      f"{apart.wrong} of {apart.cases}"))
+
+    (every_t, rest_t, apart_t), (every_h, rest_h, apart_h) = cells
+    assert f"| **{every_t}** | **{every_h}** |" in readme
+    assert re.search(rf"\| Names that are not also words \| {rest_t} \(.*?\) \| {rest_h} \(", readme)
+    assert re.search(rf"\| Names that are also words \(Go, Rust\) \| {apart_t} \(.*?\) \| {apart_h} \(", readme)

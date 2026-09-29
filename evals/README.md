@@ -95,15 +95,21 @@ trade against each other:
 
 | | Tuning, 17 postings | Held out, 8 postings |
 | --- | --- | --- |
-| **Unsupported claims retained** | 80 of 592 (13.5%) | 32 of 312 (10.3%) |
-| of which, written in lower case mid-sentence | 22 of 148 (14.9%) | 2 of 78 (2.6%) |
-| of which, written as the posting writes it | 24 of 148 (16.2%) | 14 of 78 (17.9%) |
-| Names that are also words, retained | 54 of 80 (67.5%) | 16 of 16 (100%) |
+| **Unsupported claims retained, of every one constructed** | **134 of 672 (19.9%)** | **48 of 328 (14.6%)** |
+| Names that are not also words | 80 of 592 (13.5%) | 32 of 312 (10.3%) |
+| of those, written in lower case mid-sentence | 22 of 148 (14.9%) | 2 of 78 (2.6%) |
+| of those, written as the posting writes it | 24 of 148 (16.2%) | 14 of 78 (17.9%) |
+| Names that are also words (Go, Rust) | 54 of 80 (67.5%) | 16 of 16 (100%) |
 | **Supported names reverted** | 0 of 212 | 0 of 108 |
 | **Ordinary words from the posting, reverted** | 364 of 2,484 (14.7%) | 198 of 1,192 (16.6%) |
 | **Honest rewordings, reverted** | 2 of 136 (1.5%) | 0 of 64 |
 | Names in the posting the guard did not collect | 18 of 122 | 13 of 140 |
 | Ordinary words it took for names | 168 of 977 (17.2%) | 91 of 505 (18.0%) |
+
+The first row is the two groups under it, added together. An earlier version
+of this table gave 80 of 592 as the figure for unsupported claims retained,
+without saying that the names which are also words were counted apart from
+it. That read as a lower figure than the evaluation had found.
 
 Guard at `a3c1a9d`, run on 2026-09-29. The guard had not been adjusted to
 either set, so both are what an untouched guard does on postings it has never

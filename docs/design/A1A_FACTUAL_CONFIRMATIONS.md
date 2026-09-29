@@ -31,8 +31,8 @@ Said first, because it is the part most likely to be assumed.
 **It finds no more unsupported claims than are found today.** A confirmation
 can only be asked for a claim that was detected. Detection is the heuristic
 in `pipeline/workers/resume_fact_guard.py`, and on the posting corpus it
-retained 80 of 592 constructed unsupported claims on the tuning postings and
-32 of 312 on the held-out ones. None of the following is changed by this
+retained 134 of 672 constructed unsupported claims on the tuning postings and
+48 of 328 on the held-out ones. None of the following is changed by this
 design:
 
 | Gap | Why a confirmation field does not help |

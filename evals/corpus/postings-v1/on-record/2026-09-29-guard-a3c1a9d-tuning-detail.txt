@@ -9,12 +9,14 @@ Constructed rewrites against real public postings and invented resumes. No model
     ordinary words it took for names         168 of  977
 
   UNSUPPORTED CLAIMS RETAINED (a claim nobody made, still on the resume)
-    all forms                                 80 of  592  ( 13.5%)
+    every constructed claim                  134 of  672  ( 19.9%)
+    of which
+    names that are not also words             80 of  592  ( 13.5%)
       as the posting writes it                  24 of  148  ( 16.2%)
       lower case, mid-sentence                  22 of  148  ( 14.9%)
       lower case, first word                    22 of  148  ( 14.9%)
       upper case, mid-sentence                  12 of  148  (  8.1%)
-    names that are also words, all forms      54 of   80  ( 67.5%)
+    names that are also words                 54 of   80  ( 67.5%)
 
   SUPPORTED OR HONEST LINES REVERTED (a line that was fine, put back)
     a name that is on the resume               0 of  212  (  0.0%)
