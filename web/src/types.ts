@@ -66,6 +66,9 @@ export interface ResumeDoc {
   tailored_report: AtsReport | null;
   tailored_history: TailoredResume[];
   created_at: string;
+  /** Sent back with an export request, so the server can refuse to hand
+   * over a version other than the one this page is showing. */
+  updated_at?: string;
 }
 
 export interface ChatTurn { role: "user" | "assistant"; content: string; }
@@ -103,6 +106,24 @@ export interface InterviewStats {
   total_sessions: number; completed_sessions: number; total_answered: number;
   average_score: number | null; per_topic: TopicStats[];
   recent_scores: number[]; streak_days: number;
+}
+
+/** What will actually run, from GET /mode. Never carries a credential. */
+export interface ModeStatus {
+  demo: boolean; ready: boolean;
+  writing: string; fact_checking: string;
+  cli: { state: string; cli: string; checked_at: string | null };
+  problem: string; notice: string;
+}
+
+export interface DataOverview {
+  stored: Record<string, { count: number; bytes: number; folder: string }>;
+  processed_by: {
+    provider: string; local: boolean; statement: string;
+    what_is_sent: Array<{ studio: string; sent: string }>;
+  };
+  retention: string;
+  not_covered_by_delete: string[];
 }
 
 export interface SettingsInfo {

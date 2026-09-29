@@ -144,7 +144,48 @@ export const METRIC_TOKEN = "[METRIC]";
 
 /** Occurrence order MUST mirror the server traversal
  * (resume_studio_worker._metric_fields): basics.summary, work summaries +
- * highlights, projects, skills keywords, certificates. */
+ * highlights, projects, skills keywords, certificates, then user-made
+ * sections. The headline is counted too: the server refuses to export a
+ * resume with a placeholder anywhere on it, so the gate here must see
+ * everything the server sees. It is last because it is edited as text,
+ * not filled as a chip. */
+/** Every field that can hold a placeholder, with its path, in the order
+ * the server walks them when it fills values in
+ * (resume_studio_worker._metric_fields). Skills and certificates are in
+ * the walk, so they are counted here, even though the paper does not
+ * draw chips in them. */
+function metricFields(s: StructuredResume): Array<[string, string]> {
+  return [
+    ["basics.summary", s.basics.summary],
+    ...s.work.flatMap((w, wi): Array<[string, string]> => [
+      [`work[${wi}].summary`, w.summary],
+      ...w.highlights.map((h, hi): [string, string] => [`work[${wi}].highlights[${hi}]`, h]),
+    ]),
+    ...s.projects.flatMap((p, pi): Array<[string, string]> => [
+      [`projects[${pi}].description`, p.description],
+      ...p.highlights.map((h, hi): [string, string] => [`projects[${pi}].highlights[${hi}]`, h]),
+    ]),
+    ...s.skills.flatMap((k, ki) =>
+      k.keywords.map((w, wi): [string, string] => [`skills[${ki}].keywords[${wi}]`, w])),
+    ...s.certificates.map((c, ci): [string, string] => [`certificates[${ci}]`, c]),
+    ...(s.custom ?? []).flatMap((c, ci) =>
+      c.items.map((item, ii): [string, string] => [`custom[${ci}].items[${ii}]`, item])),
+  ];
+}
+
+const placeholdersIn = (text: string) => (text ?? "").split(METRIC_TOKEN).length - 1;
+
+/** For each field, the index of its first placeholder. */
+export function metricStarts(s: StructuredResume): Map<string, number> {
+  const starts = new Map<string, number>();
+  let n = 0;
+  for (const [path, text] of metricFields(s)) {
+    starts.set(path, n);
+    n += placeholdersIn(text);
+  }
+  return starts;
+}
+
 export function countMetrics(s: StructuredResume): number {
   const all: string[] = [
     s.basics.summary,
@@ -152,6 +193,8 @@ export function countMetrics(s: StructuredResume): number {
     ...s.projects.flatMap((p) => [p.description, ...p.highlights]),
     ...s.skills.flatMap((k) => k.keywords),
     ...s.certificates,
+    ...(s.custom ?? []).flatMap((c) => c.items),
+    s.basics.label,
   ];
   return all.reduce(
     (n, t) => n + (t.split(METRIC_TOKEN).length - 1), 0);

@@ -1,0 +1,28 @@
+{
+ "id": "usajobs-863191600",
+ "source": "USAJOBS",
+ "source_url": "https://www.usajobs.gov/job/863191600",
+ "collected_on": "2026-09-29",
+ "raw_sha256": "f56d04b5a049184e63882185eabf99ee79c91251fdaf09fb1ab0fca306ccbc7b",
+ "licence": "Public domain in the United States",
+ "licence_basis": "A work of the United States Government (17 U.S.C. 105).",
+ "publisher": "Department of State",
+ "title": "Data Scientist",
+ "sections_kept": [
+  "title",
+  "summary",
+  "duties",
+  "qualifications"
+ ],
+ "sections_left_out": [
+  "conditions of employment",
+  "additional information",
+  "how to apply",
+  "required documents",
+  "agency contact information",
+  "benefits"
+ ],
+ "text": "Data Scientist\n\nThis position is located in the Workforce Planning and Analysis Division, Office of Organization and Talent Analytics, Bureau of Human Resources (HR/OTA/WPA). OTA provides a number of services in the areas of resource management, workforce planning, classification/compensation policy and organizational analysis. WPA serves as the corporate workforce planning entity for the Department.\n\nDuties\n- Serves as a technical authority on analytical, statistical, and programming techniques necessary to collect, organize, analyze, and interpret unique and highly specialized data sets for decision-making in the Department.\n\n- Participates in discovery processes with business owner teams and stakeholders to identify requirements, expected outcomes for new or existing initiatives, and the measurements of success.\n\n- Identifies internal and external data sources, leverages new data collection processes and performs all phases of the systems development life cycle required in the design, development, and implementation of features enabling data access.\n\n- Uses advanced analytical techniques to develop computational algorithms and statistical methods that find patterns and relationships in large volumes of data\nand from those patterns develops findings, inferences, conclusions and recommendations.\n\n- Provides technical expertise, leadership, and support to many Department and interagency interlocutors to ensure maximum achievement of product and program objectives.\n\nQualifications\nApplicants must meet all the required qualification requirements described below by the closing date of this announcement. If you are qualifying based on education OR if there are mandatory education requirements listed below, you MUST submit a copy of your college transcript with your application.\n\nNOTE: Applicants must meet time-in-grade and time after competitive appointment requirements, by the closing date of this announcement.\n\nTime-In-Grade Requirements: Federal applicants must have served 52 weeks at the next lower grade to satisfy time-in-grade restrictions, per 5CFR 300, Subpart F.\n\nApplicants MUST meet the required basic entry qualification requirements described below:\n\nBASIC REQUIREMENTS: Have an undergraduate or graduate degree from an accredited college or university in mathematics, statistics, computer science, data science or field directly related to the position. The degree must be in a major field of study (at least at the baccalaureate level) that is appropriate for the position; OR Have a combination of education and experience: Courses equivalent to a major field of study (30 semester hours) as shown above, plus additional education or appropriate experience.\n\nOR\n\nHave a combination of education and experience: Courses equivalent to a major field of study (30 semester hours) as shown above, plus additional education or appropriate experience.\n\nIN ADDITION to the basic requirements, this position requires one year of specialized experience equivalent to at least the GS-13 level in the Federal service which provided the applicant with the particular knowledge, skills and abilities to perform the duties of the position.\n\nQualifying specialized experience must demonstrate the following:\n\n- Experience collecting, organizing, analyzing and interpreting data sets used to support projects or programs.\n\n- Experience conducting analyses using software and/or programming languages (e.g., R, Python, SQL, or SAS) to explore/group data, and test hypotheses to predict outcomes and make informative decisions.\n\n- Experience advising senior leadership in interpreting and communicating insights from data and making recommendations in the modernization of existing services.\n\nNote: You MUST submit transcripts as verification of educational requirement by the closing date of this announcement. If you fail to provide requested information, or the information you submit is insufficient to verify your eligibility, you WILL lose consideration for this position.\n\nEducation\n\nSee the qualifications section of this vacancy announcement for education requirements.\n\nEducation completed in foreign colleges or universities may be used to meet the education requirements if you can show that the foreign education is comparable to that received in an accredited educational institution in the United States. It is your responsibility to provide such evidence when applying. For a list of accredited organizations recognized as specializing in interpretation of foreign education credentials, visit: www.naces.org/members.php.",
+ "split": "tuning",
+ "personal_details_found": 0
+}

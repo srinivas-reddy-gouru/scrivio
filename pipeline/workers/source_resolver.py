@@ -23,6 +23,7 @@ import re
 from pydantic import BaseModel
 
 from pipeline.model_config import get_model
+from pipeline.prompt_loader import load_prompt
 
 
 # Fast-path seed map for very common technologies. Matched on word boundaries
@@ -70,23 +71,7 @@ _SHARED_HOSTS = frozenset({
 
 MAX_OFFICIAL_DOMAINS = 4
 
-_SYSTEM_PROMPT = (
-    "You identify the OFFICIAL documentation websites for software "
-    "technologies. Given an article topic, return the bare domains of the "
-    "canonical, first-party documentation for the technologies it involves — "
-    "the vendor's or project's own docs (e.g. kafka.apache.org for Kafka, "
-    "docs.oracle.com for Java, react.dev for React).\n"
-    "Rules:\n"
-    "- Bare domains only, no scheme, no path (docs.oracle.com — not "
-    "https://docs.oracle.com/javase).\n"
-    "- Only first-party sources. Never blogs, tutorial sites, Stack Overflow, "
-    "Wikipedia, or aggregator sites.\n"
-    "- Never shared hosting domains (github.com, gitlab.com, medium.com, "
-    "npmjs.com, pypi.org). If a project's only documentation is its "
-    "repository README, omit it rather than returning the hosting domain.\n"
-    "- At most 4 domains, most relevant first.\n"
-    "- If the topic involves no identifiable technology, return an empty list."
-)
+_SYSTEM_PROMPT = load_prompt("official_sources_v1.txt").strip()
 
 
 class OfficialSources(BaseModel):

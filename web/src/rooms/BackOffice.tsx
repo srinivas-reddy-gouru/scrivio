@@ -1,8 +1,17 @@
 /** The Back Office: the utility room. Engines, model tiers, keys.
  * No metaphor theatrics; honest states and one save per edit batch. */
 import { useEffect, useState } from "react";
-import { settingsApi } from "../api";
-import type { SettingsFull } from "../types";
+import { api, dataApi, settingsApi } from "../api";
+import type { DataOverview, ModeStatus, SettingsFull } from "../types";
+
+const PROVIDER_NAMES: Record<string, string> = {
+  anthropic: "Anthropic API", openai: "OpenAI API", demo: "Canned demo output (no model)",
+  none: "Nothing configured",
+};
+const describe = (provider: string, mode: ModeStatus): string =>
+  provider === "claude-cli"
+    ? `${mode.cli.cli} subscription (command line)`
+    : PROVIDER_NAMES[provider] ?? provider;
 
 const ENGINES: Array<{ id: string; name: string; blurb: string }> = [
   { id: "", name: "Auto", blurb: "Whatever is available wins: single key uses that provider; subscription CLI fills the gap." },
@@ -32,8 +41,12 @@ export function BackOffice() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState<ModeStatus | null>(null);
 
-  const load = () => settingsApi.full().then(setS).catch(() => setStatus({ msg: "The office is unreachable; is the backend up?", ok: false }));
+  const load = () => {
+    api.mode().then(setMode).catch(() => setMode(null));
+    return settingsApi.full().then(setS).catch(() => setStatus({ msg: "Settings could not be loaded. Is the server still running?", ok: false }));
+  };
   useEffect(() => { load(); }, []);
 
   const stage = (key: string, value: string) => {
@@ -75,9 +88,28 @@ export function BackOffice() {
     <div className="room-wrap">
       <h1 className="room-title bar-tick-left">Settings</h1>
       <p className="room-sub">
-        Running on {s.resolved_provider === "claude-cli" ? `the ${s.active_cli || "claude"} subscription CLI` : `the ${s.resolved_provider} API`}
-        {s.provider_auto ? " (auto-resolved)" : " (pinned)"}.
+        {mode?.demo ? "Demo mode: canned examples, no model is called."
+          : mode && !mode.ready ? "No provider is configured yet, so nothing can run."
+          : <>Running on {s.resolved_provider === "claude-cli" ? `the ${s.active_cli || "claude"} subscription CLI` : `the ${s.resolved_provider} API`}
+            {s.provider_auto ? " (auto-resolved)" : " (pinned)"}.</>}
       </p>
+      {mode && (
+        <div className="panel what-runs" aria-label="What will run">
+          <p className="eyebrow">What will run</p>
+          <dl>
+            <dt>Writing, grading, tailoring</dt><dd>{describe(mode.writing, mode)}</dd>
+            <dt>Fact-checking claims</dt><dd>{describe(mode.fact_checking, mode)}</dd>
+            <dt>Command-line assistant</dt>
+            <dd>{mode.cli.cli}: {mode.cli.state}
+              {mode.cli.checked_at ? ` (as of ${mode.cli.checked_at.replace("T", " ")})` : ""}</dd>
+          </dl>
+          {mode.problem && <p className="office-note" role="alert">{mode.problem}</p>}
+          <p className="office-note">
+            An installed command-line assistant is not the same as a signed-in one. Whether it
+            is signed in is learned from the last real call, never by spending one to check.
+          </p>
+        </div>
+      )}
       <div className="office-grid">
         <div className="panel">
           <p className="eyebrow">The engine</p>
@@ -170,8 +202,13 @@ export function BackOffice() {
             </div>
           ))}
         </div>
-        <p className="office-note">Keys live in your local .env; they never leave this machine. Values shown masked.</p>
+        <p className="office-note">
+          Keys are kept in the settings file on this machine, and each is sent only to the
+          provider it belongs to, as its credential. Values are shown masked.
+        </p>
       </div>
+
+      <DataPanel />
 
       <div className="room-col" style={{ display: "flex", gap: "0.7rem", alignItems: "center", marginTop: "1.1rem", flexWrap: "wrap" }}>
         <button className="btn" onClick={save} disabled={!dirty || saving}>
@@ -182,6 +219,100 @@ export function BackOffice() {
           <span style={{ fontSize: "0.76rem", color: status.ok ? "var(--green)" : "var(--redpen)" }}>{status.msg}</span>
         )}
       </div>
+    </div>
+  );
+}
+
+
+const KIND_LABELS: Record<string, string> = {
+  resumes: "Resumes", job_targets: "Job targets", interviews: "Interview sessions",
+  articles: "Articles", run_records: "Records of article runs",
+  set_aside: "Damaged files set aside", stage_cache: "Cached article stages",
+};
+const CONFIRM = "delete everything";
+
+/** What is held, where it goes, and the two things a person should be
+ * able to do with their own data without reading the source: take a copy,
+ * and remove it. */
+function DataPanel() {
+  const [data, setData] = useState<DataOverview | null>(null);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState("");
+  const [note, setNote] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  const load = () => dataApi.overview().then(setData).catch(() => setData(null));
+  useEffect(() => { load(); }, []);
+  if (!data) return null;
+
+  const run = async (what: string, work: () => Promise<unknown>, done: string) => {
+    setBusy(what); setNote(null);
+    try { await work(); setNote({ msg: done, ok: true }); await load(); }
+    catch (e) { setNote({ msg: (e as Error).message, ok: false }); }
+    finally { setBusy(""); }
+  };
+  const total = Object.values(data.stored).reduce((n, k) => n + k.count, 0);
+
+  return (
+    <div className="panel data-panel" aria-labelledby="data-title">
+      <p className="eyebrow" id="data-title">Your data</p>
+      <p className="data-statement">{data.processed_by.statement}</p>
+
+      <table className="data-table">
+        <caption className="sr-only">What is stored on this machine</caption>
+        <thead><tr><th scope="col">Stored here</th><th scope="col">How many</th><th scope="col">Where</th></tr></thead>
+        <tbody>
+          {Object.entries(data.stored).map(([kind, k]) => (
+            <tr key={kind}>
+              <th scope="row">{KIND_LABELS[kind] ?? kind}</th>
+              <td className="mono">{k.count}</td>
+              <td className="mono folder">{k.folder}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {!data.processed_by.local && (
+        <details className="fold">
+          <summary>What is sent to your provider ({data.processed_by.provider})</summary>
+          <dl className="sent-list">
+            {data.processed_by.what_is_sent.map((row) => (
+              <div key={row.studio}><dt>{row.studio}</dt><dd>{row.sent}</dd></div>
+            ))}
+          </dl>
+        </details>
+      )}
+      <p className="office-note">{data.retention}</p>
+
+      <div className="data-actions">
+        <button className="btn" disabled={!!busy || total === 0}
+          onClick={() => run("export", dataApi.exportAll, "Your export was saved. It contains your resumes and answers: keep it private.")}>
+          {busy === "export" ? "Preparing…" : "Export everything"}
+        </button>
+      </div>
+
+      <details className="fold danger">
+        <summary>Delete everything</summary>
+        <p>
+          Removes every resume, job target, interview, article, and cached stage from this
+          machine. It cannot be undone. Your settings and keys are kept.
+        </p>
+        <ul>
+          {data.not_covered_by_delete.map((line) => <li key={line}>{line}</li>)}
+        </ul>
+        <label htmlFor="confirm-delete">To confirm, type <b>{CONFIRM}</b></label>
+        <input id="confirm-delete" type="text" value={typed} autoComplete="off"
+          onChange={(e) => setTyped(e.target.value)} />
+        <button className="btn btn-danger"
+          disabled={!!busy || typed.trim().toLowerCase() !== CONFIRM}
+          onClick={() => run("delete", () => dataApi.deleteAll(typed), "Everything was deleted.")
+            .then(() => setTyped(""))}>
+          {busy === "delete" ? "Deleting…" : "Delete everything"}
+        </button>
+      </details>
+      {note && (
+        <p role="status" style={{ fontSize: "0.8rem", marginTop: "0.7rem",
+          color: note.ok ? "var(--green)" : "var(--redpen)" }}>{note.msg}</p>
+      )}
     </div>
   );
 }

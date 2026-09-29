@@ -1,0 +1,28 @@
+{
+ "id": "usajobs-848520700",
+ "source": "USAJOBS",
+ "source_url": "https://www.usajobs.gov/job/848520700",
+ "collected_on": "2026-09-29",
+ "raw_sha256": "d988ed185efdb3b117cdf7598e52cc6bdcf65a1ed9964029cfc5aa0a49b28081",
+ "licence": "Public domain in the United States",
+ "licence_basis": "A work of the United States Government (17 U.S.C. 105).",
+ "publisher": "Department of the Navy",
+ "title": "SOFTWARE DEVELOPER",
+ "sections_kept": [
+  "title",
+  "summary",
+  "duties",
+  "qualifications"
+ ],
+ "sections_left_out": [
+  "conditions of employment",
+  "additional information",
+  "how to apply",
+  "required documents",
+  "agency contact information",
+  "benefits"
+ ],
+ "text": "SOFTWARE DEVELOPER\n\nThis is a public notice flyer to notify interested applicants of anticipated vacancies. Applications will not be accepted through this flyer. Interested applicants must follow the directions in the \"How to Apply\" section of this flyer to be considered. There may or may not be actual vacancies filled from this flyer. Notice of Result letters will not be sent to applicants who respond to this flyer.\n\nDuties\n- You will conduct Weapon Control Systems system integration efforts, including but not limited to developing software requirements and design, programming, integration, trouble shooting, and data analysis.\n\n- You will provide leadership through mentoring, supporting the project software development processes and collaborating across all functional areas within the organization and among external stakeholders\n\n- You will develop and write/code new (or modify existing) computer applications, software, or specialized utility programs following software assurance best practices.\n\n- You will analyze user needs and software requirements to determine feasibility of design within time and cost constraints.\n\n- You will confer with systems analysts, engineers, programmers, and others to design application and to obtain information on project limitations and capabilities, performance requirements, and interfaces.\n\n- You will correct errors by making appropriate changes and rechecking the program to ensure desired results are produced.\n\n- You will modify and maintain existing software to correct errors, to adapt it to new hardware, or to upgrade interfaces and improve performance.\n\nQualifications\nYour resume must also demonstrate at least one year of specialized experience at or equivalent to the next lower pay band, ND-03 (GS-09/11 equivalency), in the Federal service or equivalent experience in the private or public sector. Specialized experience must demonstrate the following: Experience as a professional scientist in computer programming principles such as object-oriented design, software debugging principles and development models.\n\nExamples of qualifying experience may include:\n\n- Conducting systems integration efforts, including but not limited to, developing software requirements and design, programming, integration, trouble shooting, and data analysis.\n\n- Skill in writing code in various coding languages (Java, C++ etc.)\n\n- Advanced knowledge of engineering/scientific concepts and technology with the ability to adapt theory and/or good scientific practices.\n\nAdditional qualification information can be found from the following Office of Personnel Management website:\n\nhttps://www.opm.gov/policy-data-oversight/classification-qualifications/general-schedule-qualification-standards/#url=Occupational-Series\n\nComputer Science Series, 1550\n\nExperience refers to paid and unpaid experience, including volunteer work done through National Service programs (e.g., professional, philanthropic, religious, spiritual, community, student, social). Volunteer work helps build critical competencies, knowledge, and skills and can provide valuable training and experience that translates directly to paid employment.\n\nEducation\n\nApplicants must meet at least one of the following positive education qualifications requirements of the Office of Personnel Management (OPM) Qualifications Standards Manual:\n\n- 1550-Computer Science Series: A degree in computer science; or a degree with at least 30 semester hours in a combination of mathematics, statistics, and computer science. At least 15 of these 30 semester hours must have been in a combination of statistics and mathematics that included differential and integral calculus:",
+ "split": "held_out",
+ "personal_details_found": 0
+}

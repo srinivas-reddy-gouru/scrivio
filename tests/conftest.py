@@ -97,3 +97,88 @@ def _isolate_output_root(tmp_path, monkeypatch):
     # Every session, resume, and job-profile path is derived from this one
     # name, so redirecting it moves the whole tree.
     monkeypatch.setattr(server, "OUTPUT_ROOT", Path(tmp_path), raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _a_paired_browser_by_default(tmp_path, monkeypatch):
+    """Tests of tailoring, interviews, and articles are not tests of the
+    front door, so they run as a browser that is already paired.
+
+    This is a seam in the TEST process, in the same style as the mock
+    provider clients above. There is no environment variable or setting
+    that turns the boundary off in a running server, and there must not
+    be: a switch like that gets left on. tests/test_local_boundary.py
+    puts the real check back and exercises it."""
+    try:
+        from api import boundary
+    except Exception:
+        return
+    monkeypatch.setenv("SCRIVIO_STATE_DIR", str(tmp_path / ".scrivio-state"))
+    monkeypatch.setenv("SCRIVIO_ALLOWED_HOSTS", "testserver")
+    monkeypatch.delenv("SCRIVIO_ALLOWED_ORIGINS", raising=False)
+    monkeypatch.setattr(boundary, "request_is_authenticated", lambda cookies: True)
+    monkeypatch.setattr(boundary, "pairing", boundary.Pairing())
+
+
+@pytest.fixture(autouse=True)
+def _never_the_real_settings_file(tmp_path, monkeypatch):
+    """PATCH /settings writes a file, and by default that file is the
+    repository's .env, which holds the developer's real provider keys.
+    Every test gets a settings file of its own, whether or not it thinks
+    it touches settings."""
+    try:
+        from api import server
+    except Exception:
+        return
+    monkeypatch.setattr(server, "_ENV_FILE", tmp_path / "test-settings.env")
+
+
+@pytest.fixture(autouse=True)
+def _a_stage_cache_of_its_own(tmp_path, monkeypatch):
+    """The article pipeline caches each stage by its inputs, in
+    .cache/article_pipeline under the repository. The suite runs that
+    pipeline on canned clients, with topics a person might really use.
+    Sharing the directory meant a test could be served the developer's
+    real cached work, and a real run could be served a canned plan."""
+    from pipeline import cache
+
+    monkeypatch.setattr(cache, "_DEFAULT_CACHE_DIR", tmp_path / ".stage-cache")
+
+
+@pytest.fixture(autouse=True)
+def _no_real_keys_in_any_test(monkeypatch):
+    """No test may hold a real credential, whatever it is testing.
+
+    api/server.py loads the developer's .env when it is imported, so their
+    provider and search keys are in os.environ for the rest of the run.
+    The provider clients are replaced by canned ones above, but search was
+    not: creating an interview researches real questions first, and with
+    a real search key present that was a real search, from the test
+    suite, on the developer's account. A test that needs a key to be
+    present sets a fake one itself."""
+    for name in (
+        "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "TAVILY_API_KEY",
+        "BRAVE_SEARCH_API_KEY", "EXA_API_KEY", "JINA_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_network_in_any_test(monkeypatch):
+    """The last line: if something still tries to reach the internet, it
+    fails at once and says so, instead of succeeding quietly or hanging.
+    Loopback is allowed, which is how tests talk to servers they started."""
+    import socket
+
+    real_connect = socket.socket.connect
+
+    def guarded(self, address, *args, **kwargs):
+        host = address[0] if isinstance(address, tuple) else address
+        if isinstance(host, str) and host not in ("127.0.0.1", "::1", "localhost") \
+                and not host.startswith("/"):
+            raise OSError(
+                f"a test tried to open a network connection to {host!r}. "
+                "Tests must not use the network: stub the call instead.")
+        return real_connect(self, address, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded)

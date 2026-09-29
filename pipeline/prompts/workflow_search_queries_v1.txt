@@ -1,0 +1,1 @@
+Generate exactly three targeted web search queries that will find primary evidence for the given article thesis and angle. Queries must be specific and focused — not generic topic overviews.

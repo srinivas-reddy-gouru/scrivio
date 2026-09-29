@@ -1,0 +1,175 @@
+........................................................................ [  5%]
+........................................................................ [ 11%]
+........................................................................ [ 17%]
+........................................................................ [ 23%]
+........................................................................ [ 29%]
+........................................................................ [ 35%]
+........................................................................ [ 41%]
+........................................................................ [ 47%]
+........................................................................ [ 53%]
+........................................................................ [ 59%]
+........................................................................ [ 65%]
+........................................................................ [ 71%]
+........................................................................ [ 77%]
+........................................................................ [ 83%]
+........................................................................ [ 89%]
+........................................................................ [ 95%]
+...............................F
+=================================== FAILURES ===================================
+________________ test_resume_import_review_edit_and_export[dev] ________________
+
+app = (<Page url='http://127.0.0.1:50999/#/desk'>, 'http://127.0.0.1:50999')
+
+    def test_resume_import_review_edit_and_export(app):
+        page, base = app
+    
+>       tailored(page, base)
+
+tests/browser/test_workflows.py:66: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/browser/test_workflows.py:55: in tailored
+    page.goto(f"{base}/#/desk")
+<site-packages>/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+<site-packages>/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+<site-packages>/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+<site-packages>/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <playwright._impl._connection.Connection object at 0x1343a96a0>
+cb = <function Channel.send.<locals>.<lambda> at 0x1341e4ae0>
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -> Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+>           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 30000ms exceeded.
+E           Call log:
+E             - navigating to "http://127.0.0.1:50999/#/desk", waiting until "load"
+
+<site-packages>/playwright/_impl/_connection.py:558: TimeoutError
+=============================== warnings summary ===============================
+../../../..<site-packages>/pydantic/_internal/_fields.py:161
+  <site-packages>/pydantic/_internal/_fields.py:161: UserWarning: Field "model_solution" has conflict with protected namespace "model_".
+  
+  You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+    warnings.warn(
+
+../../../..<site-packages>/pydantic/_internal/_fields.py:161
+  <site-packages>/pydantic/_internal/_fields.py:161: UserWarning: Field "model_output" has conflict with protected namespace "model_".
+  
+  You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+    warnings.warn(
+
+../../../..<site-packages>/pydantic/main.py:193: 2 warnings
+tests/test_api_server.py: 17 warnings
+tests/test_coding_round.py: 7 warnings
+tests/test_compiler_worker.py: 9 warnings
+tests/test_critic_worker.py: 3 warnings
+tests/test_data_controls.py: 234 warnings
+tests/test_demo_isolation.py: 31 warnings
+tests/test_interview_api.py: 65 warnings
+tests/test_interview_memory.py: 41 warnings
+tests/test_job_interview_api.py: 27 warnings
+tests/test_job_lifecycle.py: 309 warnings
+tests/test_local_boundary.py: 142 warnings
+tests/test_observability.py: 11 warnings
+tests/test_orchestrator.py: 1 warning
+tests/test_relevance_worker.py: 2 warnings
+tests/test_resource_limits.py: 14 warnings
+tests/test_resume_export_gate.py: 26 warnings
+tests/test_resume_fact_guards.py: 10 warnings
+tests/test_resume_review_gate.py: 122 warnings
+tests/test_resume_studio_api.py: 66 warnings
+tests/test_runtime_mode.py: 4 warnings
+tests/test_single_draft_worker.py: 2 warnings
+tests/test_source_resolver.py: 1 warning
+  <site-packages>/pydantic/main.py:193: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    self.__pydantic_validator__.validate_python(data, self_instance=self)
+
+tests/test_cli_process_group.py::test_a_call_that_succeeds_leaves_the_assistants_helper_alone
+tests/test_render_process.py::test_no_task_is_left_waiting_on_a_pipe[lets-go]
+  <site-packages>/_pytest/unraisableexception.py:78: PytestUnraisableExceptionWarning: Exception ignored in: <function BaseSubprocessTransport.__del__ at 0x1075489a0>
+  
+  Traceback (most recent call last):
+    File "/opt/anaconda3/lib/python3.12/asyncio/base_subprocess.py", line 126, in __del__
+      self.close()
+    File "/opt/anaconda3/lib/python3.12/asyncio/base_subprocess.py", line 104, in close
+      proto.pipe.close()
+    File "/opt/anaconda3/lib/python3.12/asyncio/unix_events.py", line 568, in close
+      self._close(None)
+    File "/opt/anaconda3/lib/python3.12/asyncio/unix_events.py", line 592, in _close
+      self._loop.call_soon(self._call_connection_lost, exc)
+    File "/opt/anaconda3/lib/python3.12/asyncio/base_events.py", line 795, in call_soon
+      self._check_closed()
+    File "/opt/anaconda3/lib/python3.12/asyncio/base_events.py", line 541, in _check_closed
+      raise RuntimeError('Event loop is closed')
+  RuntimeError: Event loop is closed
+  
+    warnings.warn(pytest.PytestUnraisableExceptionWarning(msg))
+
+tests/test_coding_round.py: 3 warnings
+tests/test_demo_isolation.py: 1 warning
+tests/test_interview_api.py: 22 warnings
+tests/test_interview_memory.py: 7 warnings
+tests/test_job_interview_api.py: 8 warnings
+  <repo>/api/server.py:2286: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    session.updated_at = datetime.utcnow()
+
+tests/test_data_controls.py: 33 warnings
+tests/test_job_lifecycle.py: 29 warnings
+tests/test_local_boundary.py: 71 warnings
+tests/test_observability.py: 2 warnings
+tests/test_resume_export_gate.py: 18 warnings
+tests/test_resume_fact_guards.py: 20 warnings
+tests/test_resume_review_gate.py: 219 warnings
+tests/test_resume_studio_api.py: 125 warnings
+tests/test_runtime_mode.py: 6 warnings
+  <repo>/api/server.py:2705: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    doc.updated_at = datetime.utcnow()
+
+tests/test_data_controls.py::test_a_record_saved_by_an_older_version_restores_and_opens
+tests/test_data_controls.py::test_a_record_saved_by_an_older_version_restores_and_opens
+tests/test_job_lifecycle.py::test_documents_saved_before_these_changes_still_open
+tests/test_job_lifecycle.py::test_documents_saved_before_these_changes_still_open
+  <site-packages>/pydantic/main.py:597: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    return cls.__pydantic_validator__.validate_json(json_data, strict=strict, context=context)
+
+tests/test_interview_api.py: 12 warnings
+  <repo>/api/server.py:1985: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    today = datetime.utcnow().date()
+
+tests/test_interview_api.py::test_streak_computation_edges
+  <repo>/tests/test_interview_api.py:437: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    today = datetime.utcnow().date()  # streaks anchor on UTC (session timestamps)
+
+tests/test_resume_fact_guards.py: 1 warning
+tests/test_resume_review_gate.py: 5 warnings
+tests/test_resume_studio_api.py: 6 warnings
+  <repo>/api/server.py:3296: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    doc.updated_at = datetime.utcnow()
+
+tests/test_resume_studio_api.py::test_removing_an_entry_drops_it_from_both_copies
+  <repo>/api/server.py:3339: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    doc.updated_at = datetime.utcnow()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 1183 passed, 1744 warnings in 188.34s (0:03:08)
+EXIT 1

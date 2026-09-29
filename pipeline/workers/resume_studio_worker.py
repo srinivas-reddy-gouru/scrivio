@@ -20,6 +20,19 @@ from collections.abc import Sequence
 
 from pipeline.model_config import get_model
 from pipeline.workers.citation_utils import scrub_em_dashes
+from pipeline.workers.resume_fact_guard import (
+    METRIC_TOKEN,
+    audit_extraction,
+    enforce_honesty,
+    find_entry,
+    guard_numbers,
+    refuse_new_terms,
+    summary_rewrite_is_safe,
+    settle_findings,
+    unanswered_additions,
+    unresolved_placeholders,
+    validate_model_output,
+)
 from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
     AtsCheck,
@@ -133,7 +146,7 @@ async def tailor_resume(
     )
     tool_use = next(b for b in response.content if b.type == "tool_use")
     tailored = TailoredResume.model_validate(tool_use.input)
-    tailored = enforce_honesty(structured, tailored)
+    tailored = validate_model_output(structured, tailored, jd_text=jd_text)
     scrub_structure_dashes(tailored.resume)
     # Voice gate: the tailor's own prose is held to the weak-language bar.
     # Deterministic and non-destructive — rewriting phrasing in code would
@@ -150,27 +163,32 @@ async def tailor_resume(
     # lives in the prompt; this targeted retry is the deterministic belt
     # for when the model overruns it anyway.
     if len(tailored.resume.basics.summary.split()) > 60:
-        tailored = await _condense_summary(tailored, jd_text, client, preset)
+        tailored = await _condense_summary(
+            tailored, jd_text, client, preset, original=structured)
     return tailored
 
 
+_CONDENSER_PROMPT = load_prompt("resume_summary_condenser_v1.txt").strip()
+
+
 async def _condense_summary(
-    tailored: TailoredResume, jd_text: str, client, preset: str
+    tailored: TailoredResume, jd_text: str, client, preset: str,
+    *, original: StructuredResume | None = None,
 ) -> TailoredResume:
     """Second, single-purpose pass: cut the summary under 60 words without
-    adding anything new. Falls back to an honest warning if it fails."""
+    adding anything new. Falls back to an honest warning if it fails.
+
+    This is a model call like any other, so its output is checked like any
+    other. A condensation can only remove; one that names or counts
+    something the longer summary did not is refused whole, and the
+    summary that already passed validation stays."""
     n_before = len(tailored.resume.basics.summary.split())
+    summary_before = tailored.resume.basics.summary
     try:
         response = await client.messages.create(
             model=get_model("resume_tailor", preset),
             max_tokens=400,
-            system=(
-                "Condense the resume summary you are given to 55 words or "
-                "fewer. Keep the claims most relevant to the job description; "
-                "cut the weakest ones entirely. Never add a skill, title, or "
-                "claim that is not already in the summary. No em or en "
-                "dashes. Reply with the condensed summary text only."
-            ),
+            system=_CONDENSER_PROMPT,
             messages=[{
                 "role": "user",
                 "content": (
@@ -184,6 +202,14 @@ async def _condense_summary(
         ).strip()
     except Exception:
         text = ""
+    if text and original is not None:
+        refused = summary_rewrite_is_safe(original, summary_before, text, jd_text)
+        if refused:
+            tailored.warnings.append(
+                "[basics.summary] Kept the longer summary: the shortened "
+                "version was discarded because " + "; ".join(refused) + "."
+            )
+            text = ""
     if text and len(text.split()) <= 60:
         tailored.resume.basics.summary = text
         scrub_structure_dashes(tailored.resume)
@@ -382,15 +408,17 @@ def remove_resume_entry(resume: StructuredResume, path: str) -> str:
     return name
 
 
-def _match_index(resume: StructuredResume, kind: str, name: str) -> int | None:
-    """Find an entry by NAME, never by index. Tailoring may reorder or drop
-    entries, so the same index means different things in the two copies."""
-    items = getattr(resume, kind)
-    for i, item in enumerate(items):
-        their = item.institution if kind == "education" else item.name
-        if their == name:
-            return i
-    return None
+def _match_index(resume: StructuredResume, kind: str, like) -> int | None:
+    """Find the counterpart of an entry by IDENTITY, never by index and
+    never by name alone. Tailoring may reorder entries, and two roles at
+    one employer share a name: matching on the name would file a bullet
+    added to the second role under the first."""
+    if kind == "custom":
+        return next((i for i, c in enumerate(resume.custom) if c.name == like.name), None)
+    return find_entry(resume, kind, like)
+
+
+counterpart_index = _match_index
 
 
 def mirror_append(source: StructuredResume, target: StructuredResume,
@@ -408,7 +436,7 @@ def mirror_append(source: StructuredResume, target: StructuredResume,
                 return False
             kind, i = m.group(1), int(m.group(2))
             parent = getattr(source, kind)[i]
-            j = _match_index(target, kind, parent.name)
+            j = _match_index(target, kind, parent)
             if j is None:
                 return False
             getattr(target, kind)[j].highlights.append(value)
@@ -417,7 +445,7 @@ def mirror_append(source: StructuredResume, target: StructuredResume,
             return False
         i = int(m.group(1))
         if kind == "custom":
-            j = _match_index(target, "custom", source.custom[i].name)
+            j = _match_index(target, "custom", source.custom[i])
             if j is None:
                 return False
             target.custom[j].items.append(value)
@@ -516,16 +544,20 @@ async def edit_resume_by_instruction(
     )
     tool_use = next(b for b in response.content if b.type == "tool_use")
     edited = TailoredResume.model_validate(tool_use.input)
-    edited = enforce_honesty(original, edited)
+    edited = validate_model_output(
+        original, edited, baseline=tailored, jd_text=jd_text,
+        user_text=users_own_words(instruction, conversation),
+    )
     scrub_structure_dashes(edited.resume)
     return edited
 
 
-_NUMBER_RE = re.compile(r"\d[\d,.]*")
-
-
-def _numbers_in(text: str) -> set[str]:
-    return {m.rstrip(".,").replace(",", "") for m in _NUMBER_RE.findall(text)}
+def users_own_words(instruction: str, conversation: Sequence[dict] = ()) -> str:
+    """What the USER said: the instruction and their side of the chat. The
+    coach's turns are model output, and a figure the coach suggested is
+    not a figure the candidate supplied."""
+    turns = [m.get("content", "") for m in conversation if m.get("role") == "user"]
+    return " ".join([instruction, *turns])
 
 
 def _prose_paths(resume: StructuredResume):
@@ -568,132 +600,38 @@ def _prose_paths(resume: StructuredResume):
 
 
 def guard_edited_numbers_and_log(
-    before: TailoredResume, after: TailoredResume, user_text: str
+    before: TailoredResume, after: TailoredResume, user_text: str,
+    original: StructuredResume | None = None,
 ) -> TailoredResume:
     """Two deterministic belts behind every LLM edit pass.
 
-    Numbers: a numeral in the edited text must already exist somewhere in
-    the pre-edit resume or in the user's own words (instruction + chat).
-    Anything else is an invented metric — the exact thing this studio
-    promises never to do — so the field reverts and gets a warning.
+    Numbers: a figure in an edited line must come from that line as it
+    was, from the matching entry of the resume next to the same thing it
+    counts, or from the user's own words. A number that merely exists
+    somewhere else on the resume proves nothing: "Maintained 12 services"
+    does not license "Mentored 12 engineers". Anything unsupported reverts
+    the line and says so.
 
     Change log: the model's self-reported changes are reconciled against
     the real before/after diff; fields that changed without a log entry
     get one, so the teal marks and tooltips always reflect reality."""
-    allowed = _numbers_in(before.resume.model_dump_json()) | _numbers_in(user_text)
+    after = guard_numbers(
+        original if original is not None else before.resume,
+        after, baseline=before, user_text=user_text,
+    )
     before_map = {path: get() for path, get, _ in _prose_paths(before.resume)}
     logged = {c.where for c in after.changes}
     synthesized: list[ResumeChange] = []
-    for path, get, set_ in _prose_paths(after.resume):
-        new_text = get()
+    for path, get, _ in _prose_paths(after.resume):
         old_text = before_map.get(path)
-        if old_text is None or new_text == old_text:
+        if old_text is None or get() == old_text or path in logged:
             continue
-        invented = _numbers_in(new_text) - _numbers_in(old_text) - allowed
-        if invented:
-            set_(old_text)
-            after.warnings.append(
-                f"Reverted {path}: the edit introduced the number(s) "
-                f"{', '.join(sorted(invented))} which came neither from your "
-                "resume nor from you. Scrivio never invents metrics; supply "
-                "the real figure and it will be applied."
-            )
-            continue
-        if path not in logged:
-            synthesized.append(ResumeChange(
-                kind="rephrased", where=path,
-                what="Updated in this pass (entry added from the actual diff).",
-            ))
+        synthesized.append(ResumeChange(
+            kind="rephrased", where=path,
+            what="Updated in this pass (entry added from the actual diff).",
+        ))
     after.changes.extend(synthesized)
     return after
-
-
-# ── Honesty post-guard ──────────────────────────────────────────────────────
-
-def enforce_honesty(
-    original: StructuredResume, tailored: TailoredResume
-) -> TailoredResume:
-    """Deterministic backstop: facts the model may not touch — employers,
-    titles, employment dates, schools, degrees, certificates — must be a
-    subset of the original's. Inventions are stripped (or reverted) and
-    surfaced as warnings, never silently shipped."""
-    warnings = list(tailored.warnings)
-
-    orig_by_employer = {w.name: w for w in original.work if w.name}
-    kept_work: list[ResumeWorkItem] = []
-    for item in tailored.resume.work:
-        source = orig_by_employer.get(item.name)
-        if source is None:
-            warnings.append(
-                f"Removed work entry '{item.name or item.position}' — that employer "
-                "is not on the original resume."
-            )
-            continue
-        if item.position != source.position:
-            warnings.append(
-                f"Reverted job title at {item.name} to '{source.position}' — titles "
-                "cannot be changed."
-            )
-            item.position = source.position
-        if (item.startDate, item.endDate) != (source.startDate, source.endDate):
-            warnings.append(
-                f"Reverted employment dates at {item.name} — dates cannot be changed."
-            )
-            item.startDate, item.endDate = source.startDate, source.endDate
-        kept_work.append(item)
-    tailored.resume.work = kept_work
-
-    orig_schools = {e.institution for e in original.education if e.institution}
-    kept_edu = []
-    for edu in tailored.resume.education:
-        if edu.institution and edu.institution not in orig_schools:
-            warnings.append(
-                f"Removed education entry '{edu.institution}' — that institution "
-                "is not on the original resume."
-            )
-            continue
-        kept_edu.append(edu)
-    tailored.resume.education = kept_edu
-
-    orig_certs = set(original.certificates)
-    invented_certs = [c for c in tailored.resume.certificates if c not in orig_certs]
-    if invented_certs:
-        tailored.resume.certificates = [
-            c for c in tailored.resume.certificates if c in orig_certs
-        ]
-        warnings.append(
-            "Removed certificates not on the original resume: "
-            + ", ".join(invented_certs)
-        )
-
-    # Custom sections exist so the USER can add what the standard has no
-    # field for. The tailor can see them and may rephrase their items, but
-    # a section the original does not have is the model inventing a whole
-    # category of experience, which is the worst version of the failure
-    # these guards exist to catch.
-    orig_sections = {c.name for c in original.custom}
-    kept_custom = []
-    for section in tailored.resume.custom:
-        if section.name not in orig_sections:
-            warnings.append(
-                f"Removed the '{section.name or 'untitled'}' section — it is not "
-                "on the original resume."
-            )
-            continue
-        kept_custom.append(section)
-    # And the reverse: a section the user made must survive a tailor run
-    # that simply forgot to emit it. The model rewrites the whole document
-    # from the original, so an omission is indistinguishable from a
-    # deletion, and silently losing the user's own Publications section is
-    # the worse of the two failures to allow.
-    kept_names = {c.name for c in kept_custom}
-    for section in original.custom:
-        if section.name not in kept_names:
-            kept_custom.append(section.model_copy(deep=True))
-    tailored.resume.custom = kept_custom
-
-    tailored.warnings = warnings
-    return tailored
 
 
 # ── Weak-language detection ─────────────────────────────────────────────────
@@ -773,7 +711,6 @@ def scrub_structure_dashes(s: StructuredResume) -> StructuredResume:
 # then per work item (summary, highlights…), per project (description,
 # highlights…), per skill (keywords…), certificates.
 
-METRIC_TOKEN = "[METRIC]"
 
 
 def _metric_fields(s: StructuredResume):
@@ -797,6 +734,10 @@ def _metric_fields(s: StructuredResume):
     for i in range(len(s.certificates)):
         yield (lambda s=s, i=i: s.certificates[i],
                lambda v, s=s, i=i: s.certificates.__setitem__(i, v))
+    for c in s.custom:
+        for i in range(len(c.items)):
+            yield (lambda c=c, i=i: c.items[i],
+                   lambda v, c=c, i=i: c.items.__setitem__(i, v))
 
 
 def list_metric_placeholders(s: StructuredResume) -> list[dict]:

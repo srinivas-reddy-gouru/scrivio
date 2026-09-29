@@ -1,0 +1,85 @@
+{
+ "id": "data-scientist-mid",
+ "synthetic": "Every detail is invented. The address is on example.com and the phone number is in the range reserved for fiction.",
+ "resume": {
+  "basics": {
+   "name": "Ngozi Ferreira",
+   "label": "Data Scientist",
+   "email": "ngozi.ferreira@example.com",
+   "phone": "+1 555 010 2796",
+   "url": "",
+   "location": "Atlanta, GA",
+   "summary": "Data scientist working on forecasting and reporting for operations teams."
+  },
+  "work": [
+   {
+    "name": "Tailspin Logistics",
+    "position": "Data Scientist",
+    "startDate": "Sep 2020",
+    "endDate": "Present",
+    "summary": "",
+    "highlights": [
+     "Built a demand forecast in Python that reduced overstock by 12%",
+     "Wrote the SQL that feeds the weekly operations report",
+     "Presented findings to the directors of 4 regions each quarter",
+     "Cleaned and joined 9 data sources into one reporting table"
+    ]
+   }
+  ],
+  "education": [
+   {
+    "institution": "Peachtree Institute",
+    "area": "Statistics",
+    "studyType": "M.S.",
+    "startDate": "2018",
+    "endDate": "2020",
+    "score": ""
+   },
+   {
+    "institution": "Peachtree Institute",
+    "area": "Mathematics",
+    "studyType": "B.S.",
+    "startDate": "2014",
+    "endDate": "2018",
+    "score": ""
+   }
+  ],
+  "skills": [
+   {
+    "name": "Languages",
+    "keywords": [
+     "Python",
+     "SQL",
+     "R"
+    ]
+   },
+   {
+    "name": "Tools",
+    "keywords": [
+     "Tableau",
+     "Jupyter"
+    ]
+   }
+  ],
+  "projects": [],
+  "certificates": []
+ },
+ "honest_rewordings": [
+  {
+   "where": "work[0].highlights[0]",
+   "line": "Developed a demand forecasting model in Python, reducing overstock by 12%"
+  },
+  {
+   "where": "work[0].highlights[2]",
+   "line": "Communicated analytical findings to the directors of 4 regions each quarter"
+  },
+  {
+   "where": "work[0].highlights[3]",
+   "line": "Collected, cleaned, and integrated 9 data sources into one reporting table"
+  },
+  {
+   "where": "work[0].highlights[1]",
+   "line": "Designed and maintained the SQL behind the weekly operations report"
+  }
+ ]
+}

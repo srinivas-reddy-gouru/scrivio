@@ -5,19 +5,28 @@ import json
 import logging
 import os
 import re
+import shutil
+import sys
+import tempfile
+import time
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-try:
-    from dotenv import load_dotenv
+# SCRIVIO_ENV_FILE names the settings file, for anyone who wants it
+# somewhere other than the repository root. It is also what lets a
+# verification server run with NO provider keys at all: point it at a
+# file that does not exist and nothing is loaded.
+from pipeline import local_settings
 
-    load_dotenv(override=True)
-except ModuleNotFoundError:
-    pass
+# Read here, before anything below looks at the environment. Where the
+# file is and how it is read are decided in pipeline/local_settings.py,
+# which the backup tool, the setup check, and the article command use
+# too, so that they cannot disagree with the server about it.
+_ENV_FILE = local_settings.load()
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,8 +34,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from uuid import uuid4
 
+from api import boundary, data_controls, limits, observability, settings_store
+from pipeline.providers.claude_cli_adapter import cli_status
+from pipeline.runtime_mode import (
+    DEMO_LABEL, DEMO_NO_FETCH, DEMO_NO_VOICE, NO_PROVIDER, ProviderUnavailable,
+    demo_mode,
+)
+from api import jobs
 from api.jobs import Job, create_job, get_job
-from main import _anthropic_client, generate_article
+from main import (
+    _anthropic_client, _openai_client, _resolve_provider, generate_article,
+    verification_provider,
+)
 from pipeline.schemas.models import (
     AnswerEvaluation,
     ArticleRequest,
@@ -44,6 +63,7 @@ from pipeline.schemas.models import (
     CodingProblem,
     ResumeChange,
     ResumeDoc,
+    ResumeIssue,
     StructuredResume,
     TailoredResume,
 )
@@ -59,12 +79,16 @@ from pipeline.workers.job_interviewer_worker import (
     generate_job_scorecard,
     research_job_questions,
 )
-from pipeline.workers.resume_parser import ResumeParseError, parse_resume
+from pipeline.workers.resume_parser import (
+    ResumeParseError, parse_resume, parse_resume_bounded,
+)
 from pipeline.workers.resume_studio_worker import (
     add_resume_entry,
     advise_resume,
     apply_tailored_edits,
+    audit_extraction,
     build_resume_advice_context,
+    counterpart_index,
     mirror_append,
     remove_resume_entry,
     edit_resume_by_instruction,
@@ -75,6 +99,10 @@ from pipeline.workers.resume_studio_worker import (
     render_docx,
     render_markdown,
     render_pdf,
+    settle_findings,
+    unanswered_additions,
+    unresolved_placeholders,
+    users_own_words,
     review_resume,
     run_ats_checks,
     tailor_resume,
@@ -99,19 +127,390 @@ from pipeline.workers.topic_classifier import classify_topic_breadth
 # Where finished articles are written to disk. Each job creates a
 # timestamped subdirectory containing one markdown file per explanation
 # level plus a meta.json with the request and verification reports.
-OUTPUT_ROOT = Path(os.environ.get("ARTICLE_OUTPUT_DIR", "./output"))
+def output_root_for(demo: bool) -> Path:
+    """Demo work lives in its own directory, so a canned resume review can
+    never turn up in the history of someone's real job search, and real
+    work is never shown under a demo banner."""
+    return local_settings.output_root(demo)
+
+
+OUTPUT_ROOT = output_root_for(demo_mode())
 
 
 app = FastAPI(title="Article Generator API", version="0.1.0")
 
-# Permissive for local dev; tighten before any public deploy.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# The interface and the API share an origin, so no cross-origin access is
+# needed and none is granted by default. SCRIVIO_ALLOWED_ORIGINS names the
+# exceptions (a dev server on another host, say). There is no wildcard:
+# with credentials in play, "*" would be an invitation.
+_extra_origins = [
+    o.strip() for o in os.environ.get("SCRIVIO_ALLOWED_ORIGINS", "").split(",") if o.strip()
+]
+if _extra_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_extra_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_headers=["Content-Type"],
+    )
+app.add_middleware(limits.BodyLimit)
+app.add_middleware(observability.RequestId)
+# Added last, so it is outermost: nothing reaches a route, or CORS, without
+# passing the host, origin, and session checks first. A body is not read,
+# let alone measured, for a caller who is not allowed in.
+app.add_middleware(boundary.LocalBoundary)
+
+# How much of each kind of paid work runs at once on this install.
+ARTICLE_GATE = limits.Gate("article generation", 2)
+RESUME_GATE = limits.Gate("resume analysis or tailoring", 3)
+# Every request that can reach a provider, for as long as it is being
+# answered. The two gates above cover work that goes on after the request
+# has returned. Until this one existed they were the only gates, and nine
+# routes that call a model, fetch a page, or send audio had none: a
+# question put to the interviewer, an instructed edit, a job target. The
+# topic classifier behind POST /generate ran before the article gate was
+# reached, so the limit on articles did not limit it.
+CALL_GATE = limits.Gate("request(s) that call a provider", 4)
+
+
+async def calls_a_provider():
+    """A dependency, so that a route declares it where it is declared and
+    a test can check that every route that needs it has it. The slot is
+    given back when the request ends, however it ends: answered, failed,
+    or abandoned by a client that went away."""
+    slot = CALL_GATE.enter()
+    try:
+        yield
+    finally:
+        slot.leave()
+
+
+PROVIDER = [Depends(calls_a_provider)]
+
+
+@app.exception_handler(limits.Busy)
+async def _busy(request: Request, exc: limits.Busy) -> Response:
+    return Response(
+        content=json.dumps({"detail": str(exc)}), status_code=429,
+        media_type="application/json",
+        headers={"Retry-After": str(exc.retry_after), "Cache-Control": "no-store"},
+    )
+app.router.on_startup.append(boundary.announce_pairing_code)
+
+
+def _recover_after_restart() -> None:
+    """What a stopped server left half done is marked as such. Nothing is
+    started: every one of these is a run of paid model calls."""
+    jobs.configure(lambda: OUTPUT_ROOT / "_jobs")
+    found = jobs.recover()
+    resumes = 0
+    root = OUTPUT_ROOT / "resumes"
+    if root.is_dir():
+        for path in root.glob("*.json"):
+            try:
+                _load_resume_doc(path.stem)      # recovers as it loads
+                resumes += 1
+            except HTTPException:
+                continue
+    if found["interrupted"]:
+        logging.warning("%d article job(s) were interrupted by the last shutdown",
+                        found["interrupted"])
+
+
+async def _leave_things_recoverable() -> None:
+    """On a clean shutdown, say now what the next start would otherwise
+    have to work out: work in flight is interrupted. Anything reading the
+    files in between sees the truth rather than "running"."""
+    for job in list(jobs._jobs.values()):
+        if job.state == jobs.RUNNING:
+            await job.finish(
+                jobs.INTERRUPTED,
+                ProgressEvent(type="error", stage="interrupted",
+                              message=jobs.INTERRUPTED_MESSAGE),
+                error=jobs.INTERRUPTED_MESSAGE)
+            if job.task is not None and not job.task.done():
+                job.task.cancel()
+    for resume_id in list(_RESUME_WORK):
+        _RESUME_WORK.discard(resume_id)
+        try:
+            _load_resume_doc(resume_id)          # recovers as it loads
+        except HTTPException:
+            continue
+
+
+jobs.configure(lambda: OUTPUT_ROOT / "_jobs")
+app.router.on_startup.append(_recover_after_restart)
+app.router.on_shutdown.append(_leave_things_recoverable)
+
+
+@app.exception_handler(ProviderUnavailable)
+async def _provider_unavailable(request: Request, exc: ProviderUnavailable) -> Response:
+    """A request that needs a model and has none is a 503 with the reason,
+    not a 500 and not a canned answer."""
+    return Response(
+        content=json.dumps({"detail": str(exc)}),
+        status_code=503, media_type="application/json",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.middleware("http")
+async def _say_which_mode(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Scrivio-Mode"] = "demo" if demo_mode() else "real"
+    return response
+
+
+# ── Your data ───────────────────────────────────────────────────────
+
+_SENT_TO_PROVIDER = [
+    ("Resume", "The full text of your resume, and the job description, each "
+               "time it is analysed, tailored, edited by instruction, or "
+               "discussed with the coach."),
+    ("Job prep", "Your resume text and the job description, when a job "
+                 "target is analysed and when its interview is written and graded."),
+    ("Interviews", "Your answers, as typed or transcribed, when they are graded."),
+    ("Voice", "Audio of your spoken answers goes to OpenAI for transcription, "
+              "and the interviewer's questions go there to be spoken. Only "
+              "when an OpenAI key is set; otherwise the browser does both."),
+    ("Articles", "The topic and your instructions. Web pages are fetched "
+                 "from this machine."),
+    ("Web search", "Search queries, to the search provider you configured. "
+                   "For job prep these include the role and company name."),
+]
+
+
+def _log_failure(what: str) -> None:
+    """Log that something failed, and what kind of failure, without the
+    traceback. A validation error quotes the input it rejected, and near
+    a resume or an interview answer that input is the user's own text."""
+    exc = sys.exc_info()[1]
+    logging.error("%s (%s)", what, type(exc).__name__ if exc else "unknown")
+
+
+def _stage_cache_dir() -> Path:
+    from pipeline import cache
+    return Path(cache._DEFAULT_CACHE_DIR)
+
+
+@app.get("/data")
+async def data_overview() -> dict:
+    """Where your data is, how much there is, and where it is sent."""
+    writing = "demo" if demo_mode() else _resolve_provider("auto")
+    return {
+        "stored": data_controls.inventory(OUTPUT_ROOT, _stage_cache_dir()),
+        "processed_by": {
+            "provider": writing,
+            "local": writing in ("demo", "none"),
+            "statement": (
+                "Nothing is sent anywhere: this is demo mode." if writing == "demo" else
+                "Nothing can be sent: no provider is configured." if writing == "none" else
+                "Your data is stored on this machine and sent to your "
+                "provider to be processed. Stored locally does not mean "
+                "processed locally."),
+            "what_is_sent": [{"studio": a, "sent": b} for a, b in _SENT_TO_PROVIDER],
+        },
+        "retention": (
+            "Scrivio keeps everything until you delete it. It never deletes "
+            "on a schedule. What your provider keeps is governed by your "
+            "agreement with them, not by this application."),
+        "not_covered_by_delete": [
+            "Anything your provider retained from requests already sent.",
+            "Backups you made with `python -m api.data backup`.",
+            "Files you downloaded.",
+        ],
+    }
+
+
+@app.get("/data/export")
+async def data_export() -> Response:
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return Response(
+        content=data_controls.export_all(OUTPUT_ROOT), media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="scrivio-export-{stamp}.zip"',
+                 "Cache-Control": "no-store"},
+    )
+
+
+class DeleteAllRequest(BaseModel):
+    confirm: str = ""
+
+
+@app.post("/data/delete-all")
+async def data_delete_all(body: DeleteAllRequest) -> dict:
+    """Irreversible, so it has to be asked for in words."""
+    if body.confirm.strip().lower() != data_controls.CONFIRMATION:
+        raise HTTPException(
+            status_code=422,
+            detail=f'To delete everything, send confirm: "{data_controls.CONFIRMATION}".')
+    if _RESUME_WORK or ARTICLE_GATE.running:
+        raise HTTPException(
+            status_code=409,
+            detail="Something is still running. Wait for it to finish or stop "
+                   "it, then delete.")
+    removed = data_controls.delete_all(OUTPUT_ROOT, _stage_cache_dir())
+    jobs.clear_jobs()
+    return {"deleted": removed}
+
+
+class ModeStatus(BaseModel):
+    """What will actually run. No keys, no masked keys, no paths."""
+    demo: bool
+    ready: bool
+    interface: str = "modern"   # "classic" when the current one is not built
+    writing: str          # anthropic | openai | claude-cli | demo | none
+    fact_checking: str    # the same set; may differ from writing
+    cli: dict
+    problem: str = ""
+    notice: str = ""
+
+
+@app.get("/mode", response_model=ModeStatus)
+async def mode_status() -> ModeStatus:
+    """Answers "if I press the button, what happens?" without pressing it.
+    Nothing here calls a model: whether a CLI is signed in is reported
+    from the last real call that was made, not by spending one to ask."""
+    demo = demo_mode()
+    writing = "demo" if demo else _resolve_provider("auto")
+    checking = verification_provider(None)
+    cli = cli_status()
+    problem = ""
+    if not demo:
+        if writing == "none":
+            problem = str(ProviderUnavailable(NO_PROVIDER))
+        elif "claude-cli" in (writing, checking) and cli["state"] == "installed, not signed in":
+            problem = (
+                f"The {cli['cli']} command-line assistant is installed but the "
+                "last call found it signed out. Sign in from a terminal, or "
+                "add an API key in Settings.")
+    return ModeStatus(
+        interface="modern" if boundary.modern_interface_at_root else "classic",
+        demo=demo, ready=demo or not problem, writing=writing,
+        fact_checking=checking, cli=cli, problem=problem,
+        notice=DEMO_LABEL if demo else "",
+    )
+
+
+class PairRequest(BaseModel):
+    code: str = Field(default="", max_length=64)
+
+
+@app.get("/auth/status")
+async def auth_status(request: Request) -> dict:
+    """Whether this browser is paired. Says nothing else: not the code, not
+    whether a key exists, not who else is signed in."""
+    return {
+        "authenticated": boundary.request_is_authenticated(dict(request.cookies)),
+        "locked_for": boundary.pairing.locked_for(),
+    }
+
+
+@app.post("/auth/pair")
+async def auth_pair(body: PairRequest) -> Response:
+    wait = boundary.pairing.locked_for()
+    if wait:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many wrong codes. Try again in {wait} seconds.",
+            headers={"Retry-After": str(wait)},
+        )
+    if not boundary.pairing.attempt(body.code):
+        raise HTTPException(
+            status_code=403,
+            detail="That is not the pairing code. It is printed in the terminal "
+                   "where the Scrivio server is running.",
+        )
+    # The next browser needs a code of its own, and the person who can see
+    # the terminal is the one who should get it.
+    boundary.announce_pairing_code()
+    return Response(
+        content=json.dumps({"authenticated": True}),
+        media_type="application/json",
+        headers={"Set-Cookie": boundary.session_cookie_header(boundary.mint_session()),
+                 "Cache-Control": "no-store"},
+    )
+
+
+@app.post("/auth/logout")
+async def auth_logout() -> Response:
+    return Response(
+        content=json.dumps({"authenticated": False}),
+        media_type="application/json",
+        headers={"Set-Cookie": boundary.session_cookie_header("", clear=True)},
+    )
+
+
+@app.post("/auth/forget-all")
+async def auth_forget_all() -> Response:
+    """Sign out every browser that was ever paired, except this one."""
+    boundary.forget_every_browser()
+    return Response(
+        content=json.dumps({"authenticated": True}),
+        media_type="application/json",
+        headers={"Set-Cookie": boundary.session_cookie_header(boundary.mint_session())},
+    )
+
+
+_PAIR_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pair this browser · Scrivio</title>
+<style>
+  body{font:16px/1.5 system-ui,sans-serif;background:#0d1514;color:#e8edea;
+       display:grid;place-items:center;min-height:100vh;margin:0}
+  main{max-width:26rem;padding:2rem}
+  h1{font-size:1.4rem;margin:0 0 .6rem}
+  p{color:#93a5a2;margin:0 0 1.2rem}
+  label{display:block;font-size:.85rem;margin-bottom:.35rem}
+  input{font:inherit;font-family:ui-monospace,monospace;letter-spacing:.12em;
+        text-transform:uppercase;width:100%;box-sizing:border-box;padding:.6rem .7rem;
+        border-radius:8px;border:1px solid #2c3d3b;background:#121c1b;color:inherit}
+  button{font:inherit;font-weight:600;margin-top:.9rem;padding:.6rem 1.1rem;border:0;
+         border-radius:8px;background:#20b8cd;color:#062024;cursor:pointer}
+  input:focus,button:focus{outline:3px solid #20b8cd66;outline-offset:2px}
+  [role=alert]{color:#e06a55;min-height:1.5em;margin-top:.8rem}
+</style></head><body><main>
+<h1>Pair this browser</h1>
+<p>Scrivio keeps your resumes and interview answers on this machine, so it
+only talks to a browser you have paired. The code is in the terminal where
+the server is running.</p>
+<form id="pair">
+  <label for="code">Pairing code</label>
+  <input id="code" name="code" autocomplete="off" autocapitalize="characters"
+         spellcheck="false" placeholder="XXXX-XXXX" required autofocus>
+  <button type="submit">Pair</button>
+  <div role="alert" id="problem"></div>
+</form>
+<script>
+document.getElementById("pair").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const problem = document.getElementById("problem");
+  problem.textContent = "";
+  try {
+    const res = await fetch("/auth/pair", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({code: document.getElementById("code").value}),
+    });
+    if (res.ok) { location.replace("/"); return; }
+    problem.textContent = (await res.json()).detail || "That did not work.";
+  } catch (e) { problem.textContent = "Could not reach the server."; }
+});
+</script></main></body></html>"""
+
+
+@app.get("/auth/pair", include_in_schema=False)
+async def auth_pair_page() -> Response:
+    """A page with no dependencies, for when the interface that would
+    normally ask for the code is the thing that cannot load."""
+    return Response(
+        content=_PAIR_PAGE, media_type="text/html",
+        headers={"Cache-Control": "no-store",
+                 "Content-Security-Policy":
+                     "default-src 'none'; style-src 'unsafe-inline'; "
+                     "script-src 'unsafe-inline'; connect-src 'self'; "
+                     "form-action 'none'; base-uri 'none'; frame-ancestors 'none'"},
+    )
 
 
 class GenerateResponse(BaseModel):
@@ -136,7 +535,89 @@ class JobStatusResponse(BaseModel):
 
 @app.get("/health")
 async def health() -> dict:
+    """Liveness: the process is up and answering. Nothing else. It stays
+    true when no provider is configured, because restarting the process
+    would not fix that."""
     return {"ok": True}
+
+
+def _readiness() -> dict[str, str]:
+    """Each thing real work depends on. No provider is called."""
+    checks: dict[str, str] = {}
+    try:
+        OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+        probe = OUTPUT_ROOT / f".ready-{os.getpid()}"
+        probe.write_text("ok")
+        probe.unlink()
+        checks["storage"] = "ok"
+    except OSError:
+        checks["storage"] = "failing"
+    if demo_mode():
+        checks["provider"] = "demo"
+    else:
+        writing, checking = _resolve_provider("auto"), verification_provider(None)
+        if "none" in (writing, checking):
+            checks["provider"] = "missing"
+        elif "claude-cli" in (writing, checking) and \
+                cli_status()["state"] == "installed, not signed in":
+            checks["provider"] = "signed out"
+        else:
+            checks["provider"] = "ok"
+    checks["interface"] = "ok" if boundary.modern_interface_at_root else "not built"
+    checks["capacity"] = (
+        "full" if ARTICLE_GATE.running >= ARTICLE_GATE.limit else "ok")
+    return checks
+
+
+@app.get("/ready")
+async def ready() -> Response:
+    """Readiness: whether real work can be done right now. 200 when it
+    can and 503 when it cannot, with the name of each check and nothing
+    about how the install is configured."""
+    checks = _readiness()
+    blocking = [k for k, v in checks.items()
+                if k in ("storage", "provider") and v not in ("ok", "demo")]
+    return Response(
+        content=json.dumps({"ready": not blocking, "checks": checks}),
+        status_code=200 if not blocking else 503,
+        media_type="application/json", headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/diagnostics")
+async def diagnostics() -> dict:
+    """What is running, what has gone quiet, and how long stages took.
+    Behind the session: it names topics, which are the user's."""
+    now = time.monotonic()
+    running, stalled, recent = [], [], []
+    for job in list(jobs._jobs.values()):
+        last = job.last_event_at
+        entry = {"job": job.job_id[:8], "state": job.state, "events": job.last_seq,
+                 "quiet_for": round(now - last, 1) if last else None}
+        if job.state == jobs.RUNNING:
+            running.append(entry)
+            if last and now - last > observability.STALL_SECONDS:
+                stalled.append(entry)
+        else:
+            recent.append({**entry, "stages": observability.stage_timings(
+                job.events_after(0))})
+    return {
+        "readiness": _readiness(),
+        "articles": {"running": len(running), "limit": ARTICLE_GATE.limit,
+                     "stalled": stalled, "in_flight": running,
+                     "recently_finished": recent[-10:]},
+        "resumes": {"in_progress": len(_RESUME_WORK), "limit": RESUME_GATE.limit,
+                    "running_now": RESUME_GATE.running},
+        "provider_calls": {"running": CALL_GATE.running, "limit": CALL_GATE.limit},
+        "stall_threshold_seconds": observability.STALL_SECONDS,
+        "usage": {
+            "measured": False,
+            "note": "Token counts and cost are not recorded. A subscription "
+                    "command-line assistant does not report them, and an "
+                    "estimate presented as a measurement would be worse than "
+                    "none.",
+        },
+    }
 
 
 def _is_steered(request: ArticleRequest) -> bool:
@@ -217,8 +698,22 @@ async def _maybe_request_clarification(
     return await generate_clarification_questions(request.topic, breadth, client)
 
 
-@app.post("/generate", response_model=GenerateResponse)
+def _require_providers(request: ArticleRequest) -> None:
+    """Both halves of the pipeline, checked before a job exists. Finding
+    out ten minutes into a run that the fact-checker has nothing to run
+    on is the expensive way to learn it."""
+    _anthropic_client(request)
+    _openai_client(request)
+
+
+@app.post("/generate", response_model=GenerateResponse, dependencies=PROVIDER)
 async def generate(request: ArticleRequest) -> GenerateResponse:
+    if request.include_gifs:
+        from render.vhs_worker import DISABLED_REASON
+        raise HTTPException(
+            status_code=422,
+            detail=f"{DISABLED_REASON} Send the request again without include_gifs.")
+    _require_providers(request)
     # Step 1: if the topic is broad and the user hasn't given us steering,
     # ask clarifying questions instead of starting a job.
     clarification = await _maybe_request_clarification(request)
@@ -233,20 +728,33 @@ async def generate(request: ArticleRequest) -> GenerateResponse:
     # every downstream agent sees the user's steering.
     effective_request = _apply_clarification_answers(request)
 
-    # Step 3: start the job exactly as before.
-    job = create_job()
+    # Step 3: start the job, if it is not already running and there is
+    # room for one. The same request arriving twice (a double click, a
+    # client retrying after its own timeout) joins the run in progress
+    # instead of starting a second paid one.
+    already = jobs.running_job_for(jobs.request_key(effective_request))
+    if already is not None:
+        return GenerateResponse(job_id=already.job_id)
+    slot = ARTICLE_GATE.enter()
+    job = create_job(effective_request)
 
     async def callback(event: ProgressEvent) -> None:
         await job.publish(event)
 
+    async def run() -> None:
+        try:
+            await _run_job(job, effective_request, callback)
+        finally:
+            slot.leave()         # finished, failed, or cancelled: all free it
+
     # Keep a handle on the asyncio.Task so the cancel endpoint can stop it.
     # Without this the running pipeline can't be interrupted — closing the
     # SSE stream from the client side wouldn't help.
-    job.task = asyncio.create_task(_run_job(job, effective_request, callback))
+    job.task = asyncio.create_task(run())
     return GenerateResponse(job_id=job.job_id)
 
 
-@app.post("/clarify", response_model=ClarificationQuestions)
+@app.post("/clarify", response_model=ClarificationQuestions, dependencies=PROVIDER)
 async def clarify(request: ArticleRequest) -> ClarificationQuestions:
     """Return clarification questions for a topic without starting a job.
 
@@ -274,8 +782,11 @@ async def clarify(request: ArticleRequest) -> ClarificationQuestions:
 async def _run_job(
     job: Job, request: ArticleRequest, callback
 ) -> None:
+    observability.job_id.set(job.job_id[:8])
     try:
         result = await generate_article(request, progress_callback=callback)
+        if job.closed:
+            return           # cancelled while the last stage was finishing
         job.result = result
 
         # Persist to disk so the article survives a server restart and so
@@ -283,40 +794,33 @@ async def _run_job(
         output_dir = _persist_job(job.job_id, request, result)
         logging.info("Job %s articles saved to %s", job.job_id, output_dir)
 
-        await job.publish(
-            ProgressEvent(
-                type="complete",
-                stage="complete",
-                data={
-                    "output_dir": str(output_dir),
-                    "articles": {
-                        level: article.model_dump(mode="json")
-                        for level, article in result.items()
-                    },
+        await job.finish(jobs.COMPLETE, ProgressEvent(
+            type="complete",
+            stage="complete",
+            data={
+                "output_dir": str(output_dir),
+                "articles": {
+                    level: article.model_dump(mode="json")
+                    for level, article in result.items()
                 },
-            )
-        )
+            },
+        ))
     except asyncio.CancelledError:
-        # Explicit cancellation via the /jobs/{id} DELETE endpoint. We
-        # publish a terminal `cancelled` event so the SSE client knows to
-        # stop and update the UI accordingly. Don't re-raise — the task
-        # has done its cleanup and ending here is the intended outcome.
+        # Job.cancel() already made the state terminal and logged the
+        # event. Nothing to add, and nothing to re-raise: ending here is
+        # the intended outcome.
         logging.info("Job %s cancelled by user", job.job_id)
-        job.error = "Cancelled by user"
-        await job.publish(
-            ProgressEvent(
-                type="cancelled", stage="cancelled",
-                message="Cancelled by user",
-            )
-        )
     except Exception as exc:
-        logging.exception("Job %s failed", job.job_id)
-        job.error = str(exc)
-        await job.publish(
-            ProgressEvent(type="error", stage="error", message=str(exc))
+        # The detail goes to the log, under the job's id. The user gets
+        # what kind of failure it was and that id to quote.
+        logging.error("Job %s failed: %s", job.job_id[:8], type(exc).__name__,
+                      exc_info=not isinstance(exc, ProviderUnavailable))
+        message = observability.public_error(exc, job.job_id[:8])
+        await job.finish(
+            jobs.FAILED,
+            ProgressEvent(type="error", stage="error", message=message),
+            error=message,
         )
-    finally:
-        await job.close()
 
 
 @app.delete("/jobs/{job_id}")
@@ -353,7 +857,10 @@ def _persist_job(
 
     # Write one markdown file per explanation level.
     for level, article in result.items():
-        (job_dir / f"{level}.md").write_text(article.markdown, encoding="utf-8")
+        markdown = article.markdown
+        if demo_mode():
+            markdown = f"> {DEMO_LABEL}\n\n{markdown}"
+        (job_dir / f"{level}.md").write_text(markdown, encoding="utf-8")
 
     # Write a meta.json with the request and the verification reports
     # (sources, claim support status, etc.) — useful for traceability.
@@ -362,6 +869,14 @@ def _persist_job(
         "job_id": job_id,
         "generated_at": datetime.now().isoformat(),
         "request": request.model_dump(mode="json"),
+        # Which providers produced this, recorded at the time, so an article
+        # can always be told apart from a demo and its fact-check traced.
+        "provenance": {
+            "mode": "demo" if demo_mode() else "real",
+            "writing_provider": "demo" if demo_mode() else _resolve_provider(
+                getattr(request, "llm_provider", "auto")),
+            "fact_checking_provider": verification_provider(request),
+        },
         "verification_reports": [
             r.model_dump(mode="json") for r in first_article.verification_reports
         ],
@@ -379,18 +894,36 @@ def _slug(text: str) -> str:
     return "-".join(part for part in slug.split("-") if part) or "article"
 
 
+def _sse(seq: int, event: ProgressEvent) -> str:
+    return f"id: {seq}\ndata: {event.model_dump_json()}\n\n"
+
+
 @app.get("/jobs/{job_id}/stream")
-async def stream(job_id: str) -> StreamingResponse:
+async def stream(job_id: str, request: Request, after: int = 0) -> StreamingResponse:
+    """The job's events, in order, from wherever the client left off.
+
+    A browser's EventSource reconnects by itself and sends the id of the
+    last event it received in Last-Event-ID. Honouring it is what makes a
+    dropped connection invisible: nothing is missed and nothing repeats.
+    `after` does the same for a client that cannot set that header. A
+    connection made after the job ended is sent the record and closed."""
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    resumed = request.headers.get("last-event-id", "")
+    cursor = int(resumed) if resumed.isdigit() else max(0, after)
 
     async def event_source() -> AsyncGenerator[str, None]:
-        while True:
-            event = await job.queue.get()
-            if event is None:
-                break
-            yield f"data: {event.model_dump_json()}\n\n"
+        # How long to wait before the browser reconnects, if it has to.
+        yield "retry: 2000\n\n"
+        async for item in job.subscribe(cursor):
+            if isinstance(item, jobs.Heartbeat):
+                yield ": keepalive\n\n"
+            elif isinstance(item, jobs.Gap):
+                yield ("event: gap\ndata: " + json.dumps({
+                    "after": item.after, "resumes_at": item.resumes_at}) + "\n\n")
+            else:
+                yield _sse(*item)
 
     return StreamingResponse(
         event_source(),
@@ -404,18 +937,26 @@ async def stream(job_id: str) -> StreamingResponse:
 
 @app.get("/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(job_id: str) -> JobStatusResponse:
+    """Where a job stands, for a client that would rather ask than listen,
+    or that needs to reconcile after a stream went quiet."""
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job.cancelled:
+    if job.state == jobs.CANCELLED:
         return JobStatusResponse(status="cancelled", error=job.error or "Cancelled by user")
-    if job.error:
+    if job.state == jobs.INTERRUPTED:
+        return JobStatusResponse(status="interrupted", error=job.error)
+    if job.state == jobs.FAILED:
         return JobStatusResponse(status="error", error=job.error)
-    if job.result is not None:
-        articles = {
-            level: article.model_dump(mode="json")
-            for level, article in job.result.items()
-        }
+    if job.state == jobs.COMPLETE:
+        if job.result is not None:
+            articles = {
+                level: article.model_dump(mode="json")
+                for level, article in job.result.items()
+            }
+        else:                   # finished under an earlier run of the server
+            final = [e for _, e in job.events_after(0) if e.type == "complete"]
+            articles = final[-1].data.get("articles") if final else None
         return JobStatusResponse(status="complete", articles=articles)
     return JobStatusResponse(status="pending")
 
@@ -584,6 +1125,20 @@ async def list_articles(limit: int = 50) -> list[ArticleSummary]:
     return _group_into_lineages(_scan_summaries())[:limit]
 
 
+@app.delete("/articles/{article_id}")
+async def delete_article(article_id: str) -> dict:
+    """Removes the article's folder: every level, and its record of
+    sources. Interviews that were grounded in it are kept; they hold their
+    own questions and answers."""
+    if not _ARTICLE_DIR_PATTERN.match(article_id):
+        raise HTTPException(status_code=404, detail="Article not found")
+    article_dir = OUTPUT_ROOT / article_id
+    if not article_dir.is_dir() or not (article_dir / "meta.json").is_file():
+        raise HTTPException(status_code=404, detail="Article not found")
+    shutil.rmtree(article_dir)
+    return {"deleted": article_id}
+
+
 @app.get("/articles/{article_id}", response_model=ArticleDetail)
 async def get_article(article_id: str, level: str | None = None) -> ArticleDetail:
     """Return one article's markdown plus its metadata.
@@ -646,7 +1201,6 @@ async def get_article(article_id: str, level: str | None = None) -> ArticleDetai
 # Read / write API keys and toggles in the project-root .env file.
 # Keys are never returned in plaintext — only masked (last 4 chars shown).
 
-_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 # API keys the settings UI shows/edits, in display order.
 # LLM_PROVIDER is NOT here — it's a preference value, not a secret key.
@@ -688,54 +1242,25 @@ _SEARCH_KEYS = ("TAVILY_API_KEY", "BRAVE_SEARCH_API_KEY", "EXA_API_KEY")
 
 
 def _read_env_file() -> dict[str, str]:
-    """Parse the .env file into a plain dict (key → raw value, no quoting)."""
-    result: dict[str, str] = {}
-    if not _ENV_FILE.exists():
-        return result
-    for line in _ENV_FILE.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, _, v = line.partition("=")
-        result[k.strip()] = v.strip()
-    return result
+    """The settings file as a plain dict, read the way it is loaded at
+    startup: literally, with no variable expansion."""
+    return settings_store.read(_ENV_FILE)
 
 
-def _write_env_file(pairs: dict[str, str]) -> None:
-    """Write *pairs* to the .env file, preserving unmanaged lines."""
-    existing_lines: list[str] = []
-    if _ENV_FILE.exists():
-        existing_lines = _ENV_FILE.read_text(encoding="utf-8").splitlines()
-
-    # Collect keys we'll manage (update in-place, append, or drop-if-cleared).
-    managed_set = {k for k, _ in _MANAGED_KEYS} | {"LLM_PROVIDER"} | set(pairs.keys())
-    output_lines: list[str] = []
-    updated_keys: set[str] = set()
-
-    for line in existing_lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            output_lines.append(line)
-            continue
-        k = stripped.split("=", 1)[0].strip()
-        if k in pairs:
-            output_lines.append(f"{k}={pairs[k]}")
-            updated_keys.add(k)
-        elif k in managed_set:
-            # Managed key absent from pairs = cleared — drop the line.
-            # (Previously this branch was missing, so "clear" removed the
-            # value from os.environ but left the stale line in .env, and
-            # the old value came back on the next restart.)
-            continue
-        else:
-            output_lines.append(line)
-
-    # Append any new keys not already in the file.
-    for k, v in pairs.items():
-        if k not in updated_keys:
-            output_lines.append(f"{k}={v}")
-
-    _ENV_FILE.write_text("\n".join(output_lines) + "\n", encoding="utf-8")
+def _setting_kind(key: str) -> tuple[str, tuple[str, ...]]:
+    """What a setting is allowed to contain, from what it is for."""
+    if key == "LLM_PROVIDER":
+        return "choice", ("anthropic", "openai", "claude-cli")
+    if key == "LLM_CLI":
+        from pipeline.providers.claude_cli_adapter import CLI_SPECS
+        return "choice", tuple(sorted(CLI_SPECS))
+    if key == "USE_JINA_READER":
+        return "boolean", ()
+    if key.endswith("_MODEL"):
+        return "model", ()
+    if key.endswith("_API_KEY"):
+        return "secret", ()
+    return "text", ()
 
 
 def _mask_value(v: str) -> str:
@@ -846,39 +1371,55 @@ async def get_settings() -> SettingsResponse:
 
 @app.patch("/settings")
 async def update_settings(body: SettingsPatch) -> dict:
-    """Write updated key values to the .env file and reload into os.environ.
+    """Save settings to the settings file and into the running process.
 
-    Pass an empty string for a key to clear it.
-    Only keys listed in _MANAGED_KEYS may be updated.
-    """
-    # LLM_PROVIDER is a preference value (not a secret key) — allow it here
+    Pass an empty string for a key to clear it. Only keys listed in
+    _MANAGED_KEYS (and LLM_PROVIDER) may be set. Everything is validated
+    before anything is written, so a save is applied whole or not at
+    all, and the process environment changes only after the file has."""
+    # LLM_PROVIDER is a preference value (not a secret key), allowed here
     # even though it is not listed in _MANAGED_KEYS.
     allowed = {k for k, _ in _MANAGED_KEYS} | {"LLM_PROVIDER"}
     rejected = [k for k in body.updates if k not in allowed]
     if rejected:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown keys: {rejected}. Allowed: {sorted(allowed)}",
+            detail=f"{len(rejected)} setting name(s) are not ones this "
+                   f"application manages. Allowed: {sorted(allowed)}",
         )
 
-    updates = {k: v for k, v in body.updates.items() if v}
-    clears = {k for k, v in body.updates.items() if not v}
+    try:
+        changes = {}
+        for key, value in body.updates.items():
+            kind, choices = _setting_kind(key)
+            changes[key] = settings_store.check_value(
+                key, value, kind=kind, choices=choices)
+    except settings_store.SettingsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
-    # Read current file, strip cleared keys, merge updates.
-    current = _read_env_file()
-    for k in clears:
-        current.pop(k, None)
-    current.update(updates)
-    _write_env_file(current)
+    try:
+        settings_store.update(_ENV_FILE, changes, managed=allowed)
+    except settings_store.SettingsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except OSError:
+        # The reason may contain a path; the values must not appear at all.
+        logging.error("Settings could not be written to disk")
+        raise HTTPException(
+            status_code=500,
+            detail="The settings could not be saved to disk. Nothing was changed.",
+        )
 
-    # Hot-reload into the running process so the change takes effect
-    # without a server restart.
-    for k, v in updates.items():
-        os.environ[k] = v
-    for k in clears:
-        os.environ.pop(k, None)
+    # Only now, with the file safely replaced, does the running process
+    # change: a failed save must not leave the server on settings that
+    # will be gone at the next restart.
+    updated = [k for k, v in changes.items() if v]
+    cleared = [k for k, v in changes.items() if not v]
+    for key in updated:
+        os.environ[key] = changes[key]
+    for key in cleared:
+        os.environ.pop(key, None)
 
-    return {"ok": True, "updated": list(updates), "cleared": list(clears)}
+    return {"ok": True, "updated": updated, "cleared": cleared}
 
 
 # ── Interview practice ───────────────────────────────────────────────
@@ -1193,7 +1734,7 @@ class InterviewAnswerResponse(BaseModel):
     summary: InterviewSummary | None
 
 
-@app.post("/interviews", response_model=InterviewSessionPublic)
+@app.post("/interviews", response_model=InterviewSessionPublic, dependencies=PROVIDER)
 async def create_interview(body: InterviewCreateRequest) -> InterviewSessionPublic:
     if body.mode == "job":
         if not body.job_profile_id:
@@ -1456,6 +1997,19 @@ def _compute_streak(dates: set) -> int:
 # NOTE: registered before GET /interviews/{session_id} — FastAPI matches
 # routes in registration order, so "/interviews/stats" must come first or
 # it would be captured as session_id="stats".
+@app.delete("/interviews/{session_id}")
+async def delete_interview(session_id: str) -> dict:
+    if not _SESSION_ID_PATTERN.match(session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    path = _session_path(session_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Session not found")
+    async with _session_lock(session_id):
+        path.unlink(missing_ok=True)
+    _interview_locks.pop(session_id, None)
+    return {"deleted": session_id}
+
+
 @app.get("/interviews/stats", response_model=InterviewStats)
 async def interview_stats() -> InterviewStats:
     """Deterministic aggregates over every stored session — the data behind
@@ -1607,6 +2161,7 @@ def _article_markdown_for(session: InterviewSession) -> str | None:
 @app.post(
     "/interviews/{session_id}/answers",
     response_model=InterviewAnswerResponse,
+    dependencies=PROVIDER,
 )
 async def submit_interview_answer(
     session_id: str, body: InterviewAnswerRequest
@@ -1758,7 +2313,7 @@ async def submit_interview_answer(
                         results=results, client=client, preset=preset,
                     )
                 except Exception:
-                    logging.exception("Debrief generation failed; continuing without it")
+                    _log_failure("Debrief generation failed; continuing without it")
             elif session.mode == "job" and session.job_profile_id:
                 # Recruiter-grade scorecard: competency rollup + panel
                 # debrief + cited study plan. Failure-tolerant garnish.
@@ -1772,7 +2327,7 @@ async def submit_interview_answer(
                     session.summary.scorecard = scorecard
                     session.summary.debrief = scorecard.debrief
                 except Exception:
-                    logging.exception("Scorecard generation failed; continuing without it")
+                    _log_failure("Scorecard generation failed; continuing without it")
         _save_session(session)
 
         followup = (
@@ -1878,28 +2433,53 @@ async def _resolve_jd_text(body: JobProfileCreateRequest) -> str:
     if body.job_description.strip():
         return body.job_description.strip()[:30_000]
     if body.jd_url.strip():
-        from pipeline.workers.extraction_worker import (
-            fetch_with_retry, injection_filter, remove_boilerplate,
-        )
-        try:
-            raw, _strategy = await fetch_with_retry(body.jd_url.strip())
-            text = injection_filter(remove_boilerplate(raw)).strip()
-        except Exception:
-            raise HTTPException(
-                status_code=422,
-                detail="Could not fetch the job posting URL — paste the JD text instead.",
-            )
-        if len(text) < 200:
-            raise HTTPException(
-                status_code=422,
-                detail="The job posting page yielded almost no text (likely "
-                       "behind a login or rendered by JavaScript) — paste the JD text instead.",
-            )
-        return text[:30_000]
+        return await _fetch_job_description(body.jd_url.strip())
     raise HTTPException(status_code=422, detail="Provide the job description (text or URL)")
 
 
-def _resolve_resume_text(body: JobProfileCreateRequest) -> str:
+async def _fetch_job_description(url: str) -> str:
+    """Fetch a posting the user gave a URL for. The one place both studios
+    do this, so the outbound policy and the injection filter are applied
+    once and cannot be forgotten in one of two copies."""
+    from pipeline.workers.extraction_worker import (
+        BlockedFetchError, fetch_with_retry, injection_filter, remove_boilerplate,
+    )
+    if demo_mode():
+        raise HTTPException(status_code=422, detail=DEMO_NO_FETCH)
+    try:
+        raw, _strategy = await fetch_with_retry(url)
+        text = injection_filter(remove_boilerplate(raw)).strip()
+    except BlockedFetchError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"That address was not fetched. {exc} Paste the job "
+                   "description text instead.",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Could not fetch the job posting URL. Paste the JD text instead.",
+        )
+    if len(text) < 200:
+        raise HTTPException(
+            status_code=422,
+            detail="The job posting page yielded almost no text (likely "
+                   "behind a login or rendered by JavaScript). Paste the JD text instead.",
+        )
+    return text[:30_000]
+
+
+async def _parse_upload(data: bytes, filename: str) -> str:
+    """An uploaded document, parsed under limits and off the event loop.
+    The parse runs in a child process that can be stopped; this thread
+    only waits for it, so the rest of the application keeps answering."""
+    try:
+        return await asyncio.to_thread(parse_resume_bounded, data, filename)
+    except ResumeParseError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+async def _resolve_resume_text(body: JobProfileCreateRequest) -> str:
     if body.resume_text.strip():
         return body.resume_text.strip()[:30_000]
     if body.resume_file_b64:
@@ -1907,19 +2487,16 @@ def _resolve_resume_text(body: JobProfileCreateRequest) -> str:
             data = base64.b64decode(body.resume_file_b64, validate=True)
         except (binascii.Error, ValueError):
             raise HTTPException(status_code=422, detail="resume_file_b64 is not valid base64")
-        try:
-            return parse_resume(data, body.resume_filename)
-        except ResumeParseError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
+        return await _parse_upload(data, body.resume_filename)
     raise HTTPException(status_code=422, detail="Provide a resume (file upload or pasted text)")
 
 
-@app.post("/job-profiles", response_model=JobProfileResponse)
+@app.post("/job-profiles", response_model=JobProfileResponse, dependencies=PROVIDER)
 async def create_job_profile(body: JobProfileCreateRequest) -> JobProfileResponse:
     if not body.role_title.strip():
         raise HTTPException(status_code=422, detail="role_title is required")
     jd_text = await _resolve_jd_text(body)
-    resume_text = _resolve_resume_text(body)
+    resume_text = await _resolve_resume_text(body)
 
     profile = JobProfile(
         profile_id=(
@@ -1966,15 +2543,37 @@ async def get_job_profile(profile_id: str) -> JobProfileResponse:
     return JobProfileResponse(profile=profile, analysis=analysis)
 
 
+def _sessions_for_job(profile_id: str) -> list[Path]:
+    found = []
+    root = _sessions_root()
+    for path in (root.glob("*.json") if root.is_dir() else []):
+        try:
+            if json.loads(path.read_text(encoding="utf-8")).get("job_profile_id") == profile_id:
+                found.append(path)
+        except (ValueError, OSError):
+            continue
+    return found
+
+
 @app.delete("/job-profiles/{profile_id}")
-async def delete_job_profile(profile_id: str) -> dict:
+async def delete_job_profile(profile_id: str, with_interviews: bool = False) -> dict:
+    """A job target holds a copy of your resume and the job description.
+    The interviews taken for it are separate records that hold their own
+    questions and answers, so by default they are kept. The response says
+    how many there are, because "deleted" should not mean "mostly"."""
     if not _SESSION_ID_PATTERN.match(profile_id):
         raise HTTPException(status_code=404, detail="Job profile not found")
     path = _job_profile_path(profile_id)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Job profile not found")
+    linked = _sessions_for_job(profile_id)
     path.unlink()
-    return {"deleted": profile_id}
+    if with_interviews:
+        for session in linked:
+            session.unlink(missing_ok=True)
+    return {"deleted": profile_id,
+            "interviews_deleted": len(linked) if with_interviews else 0,
+            "interviews_kept": 0 if with_interviews else len(linked)}
 
 
 def _job_context_for(profile: JobProfile, question) -> str:
@@ -2007,6 +2606,52 @@ def _resume_path(resume_id: str) -> Path:
     return _resumes_root() / f"{resume_id}.json"
 
 
+# Resume work running in THIS process, by resume id. A document that says
+# it is being analysed or tailored, and is not in here, was left that way
+# by a server that stopped.
+_RESUME_WORK: set[str] = set()
+_resume_locks: dict[str, asyncio.Lock] = {}
+
+ANALYSIS_INTERRUPTED = (
+    "Reading this resume was cut short when the server stopped. Your upload "
+    "and the checklist are intact. Press Analyze again to finish it."
+)
+TAILOR_INTERRUPTED = (
+    "Tailoring was cut short when the server stopped. Your resume and any "
+    "earlier tailored version are intact. Press Tailor to run it again."
+)
+
+
+def _resume_lock(resume_id: str) -> asyncio.Lock:
+    return _resume_locks.setdefault(resume_id, asyncio.Lock())
+
+
+def _refuse_if_busy(resume_id: str) -> None:
+    """A change that takes a model call holds the document for its length.
+    A second change arriving meanwhile would be built on the version the
+    first is about to replace, and one of the two would be lost."""
+    if _resume_lock(resume_id).locked():
+        raise HTTPException(
+            status_code=409,
+            detail="Another change to this resume is still being applied. "
+                   "Wait for it to finish, then try again.")
+
+
+def _recover_interrupted(doc: ResumeDoc) -> bool:
+    """Turn a status left behind by a restart into one that says so.
+    Nothing is re-run: that is a paid call, and the user's to ask for."""
+    if doc.resume_id in _RESUME_WORK:
+        return False
+    changed = False
+    if doc.status == "analyzing":
+        doc.status, doc.error = "error", ANALYSIS_INTERRUPTED
+        changed = True
+    if doc.tailor_status == "tailoring":
+        doc.tailor_status, doc.tailor_error = "error", TAILOR_INTERRUPTED
+        changed = True
+    return changed
+
+
 def _load_resume_doc(resume_id: str) -> ResumeDoc:
     if not _SESSION_ID_PATTERN.match(resume_id):
         raise HTTPException(status_code=404, detail="Resume not found")
@@ -2014,9 +2659,44 @@ def _load_resume_doc(resume_id: str) -> ResumeDoc:
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Resume not found")
     try:
-        return ResumeDoc.model_validate_json(path.read_text(encoding="utf-8"))
+        doc = ResumeDoc.model_validate_json(path.read_text(encoding="utf-8"))
     except Exception:
-        raise HTTPException(status_code=410, detail="Resume document unreadable")
+        # Set aside under a name that says what it is. Deleting it would
+        # destroy the only copy; leaving it would fail every list and
+        # every open, for ever.
+        aside = path.with_suffix(".json.corrupt")
+        try:
+            os.replace(path, aside)
+        except OSError:
+            pass
+        logging.error("Resume %s could not be read and was set aside", resume_id)
+        raise HTTPException(
+            status_code=410,
+            detail="This resume's saved file is damaged and could not be "
+                   f"opened. It was kept as {aside.name} in the resumes "
+                   "folder. Upload the resume again to continue.")
+    if _recover_interrupted(doc):
+        _save_resume_doc(doc)
+    return doc
+
+
+def _keep_findings(doc: ResumeDoc, path: Path) -> None:
+    """What was unanswered in the saved document is unanswered in the one
+    about to replace it, unless it has been removed or confirmed.
+
+    Done here, where every save passes, and not in each place that
+    changes a resume. A finding used to last only as long as every such
+    place remembered to keep it, and the instructed edit did not."""
+    if doc.tailored is None:
+        return
+    carried: list[str] = []
+    try:
+        saved = ResumeDoc.model_validate_json(path.read_text(encoding="utf-8"))
+        if saved.tailored is not None:
+            carried = list(saved.tailored.warnings)
+    except (OSError, ValueError):
+        pass                       # nothing saved yet, or nothing readable
+    settle_findings(doc.structured, doc.tailored, carried)
 
 
 def _save_resume_doc(doc: ResumeDoc) -> None:
@@ -2024,9 +2704,41 @@ def _save_resume_doc(doc: ResumeDoc) -> None:
     root.mkdir(parents=True, exist_ok=True)
     doc.updated_at = datetime.utcnow()
     path = _resume_path(doc.resume_id)
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(doc.model_dump_json(indent=2), encoding="utf-8")
-    os.replace(tmp, path)
+    _keep_findings(doc, path)
+    # A name of its own: two saves of one document used to share a single
+    # ".json.tmp" and could write into each other's file.
+    fd, temp = tempfile.mkstemp(dir=root, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(doc.model_dump_json(indent=2))
+        os.replace(temp, path)
+    except BaseException:
+        try:
+            os.unlink(temp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _merge_background_result(resume_id: str, apply) -> None:
+    """Save what a background task produced, onto the document as it is
+    NOW rather than as it was when the task started.
+
+    The task loaded the document, spent a minute with a model, and used
+    to save its own copy back, replacing whatever had happened meanwhile.
+    Here the current document is read again and `apply` sets only the
+    fields the task owns. If the document was deleted in the meantime it
+    stays deleted: a finished task does not bring it back."""
+    path = _resume_path(resume_id)
+    if not path.is_file():
+        return
+    try:
+        current = ResumeDoc.model_validate_json(path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    apply(current)
+    if path.is_file():
+        _save_resume_doc(current)
 
 
 class ResumeCreateRequest(BaseModel):
@@ -2061,28 +2773,11 @@ async def _resolve_resume_jd(body: ResumeCreateRequest) -> tuple[str, str]:
     if body.jd_text.strip():
         return body.jd_text.strip()[:30_000], "pasted JD"
     if body.jd_url.strip():
-        from pipeline.workers.extraction_worker import (
-            fetch_with_retry, injection_filter, remove_boilerplate,
-        )
-        try:
-            raw, _strategy = await fetch_with_retry(body.jd_url.strip())
-            text = injection_filter(remove_boilerplate(raw)).strip()
-        except Exception:
-            raise HTTPException(
-                status_code=422,
-                detail="Could not fetch the job posting URL — paste the JD text instead.",
-            )
-        if len(text) < 200:
-            raise HTTPException(
-                status_code=422,
-                detail="The job posting page yielded almost no text (likely behind "
-                       "a login or rendered by JavaScript) — paste the JD text instead.",
-            )
-        return text[:30_000], body.jd_url.strip()
+        return await _fetch_job_description(body.jd_url.strip()), body.jd_url.strip()
     return "", ""
 
 
-def _resolve_resume_input(body: ResumeCreateRequest) -> tuple[str, StructuredResume | None]:
+async def _resolve_resume_input(body: ResumeCreateRequest) -> tuple[str, StructuredResume | None]:
     """Returns (resume_text, structure). structure is non-None only for a
     JSON Resume upload, which needs no LLM extraction."""
     if body.resume_text.strip():
@@ -2093,6 +2788,10 @@ def _resolve_resume_input(body: ResumeCreateRequest) -> tuple[str, StructuredRes
         except (binascii.Error, ValueError):
             raise HTTPException(status_code=422, detail="resume_file_b64 is not valid base64")
         if (body.resume_filename or "").lower().endswith(".json"):
+            if len(data) > 1_000_000:
+                raise HTTPException(
+                    status_code=422,
+                    detail="That JSON Resume file is larger than 1 MB.")
             try:
                 structured = from_jsonresume(json.loads(data.decode("utf-8")))
             except Exception:
@@ -2102,11 +2801,26 @@ def _resolve_resume_input(body: ResumeCreateRequest) -> tuple[str, StructuredRes
                            "(jsonresume.org format).",
                 )
             return render_markdown(structured), structured
-        try:
-            return parse_resume(data, body.resume_filename), None
-        except ResumeParseError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
+        return await _parse_upload(data, body.resume_filename), None
     raise HTTPException(status_code=422, detail="Provide a resume (file upload or pasted text)")
+
+
+def _report_extraction_audit(doc: ResumeDoc) -> None:
+    """The extracted structure is what every honesty check later treats as
+    the candidate's record, and it was written by a model. Anything in it
+    that the uploaded text does not contain is put in front of the user
+    now, as a finding to correct, rather than trusted."""
+    if doc.structured is None or doc.review is None:
+        return
+    for finding in audit_extraction(doc.original_text, doc.structured)[:8]:
+        doc.review.issues.insert(0, ResumeIssue(
+            category="red-flag",
+            detail=(f"Reading your resume produced {finding}, which does not "
+                    "appear in the text you uploaded."),
+            fix=("Check this against your document. If the parse got it wrong, "
+                 "correct or remove it in edit mode before tailoring, because "
+                 "tailoring treats the parsed resume as your record."),
+        ))
 
 
 async def _finish_resume_analysis(resume_id: str) -> None:
@@ -2117,7 +2831,20 @@ async def _finish_resume_analysis(resume_id: str) -> None:
         doc = _load_resume_doc(resume_id)
     except HTTPException:
         return  # deleted before the task ran
-    client, preset = _client_for_session({}, "resume")
+
+    def failed(message: str):
+        def apply(current: ResumeDoc) -> None:
+            current.status, current.error = "error", message
+        return apply
+
+    try:
+        client, preset = _client_for_session({}, "resume")
+    except ProviderUnavailable as exc:
+        # Raised outside any handler, this would leave the document saying
+        # "analyzing" for ever. The checklist that already shipped is real;
+        # the review is simply not available, and the reason is shown.
+        _merge_background_result(resume_id, failed(str(exc)))
+        return
 
     async def _extract() -> StructuredResume | None:
         try:
@@ -2125,7 +2852,7 @@ async def _finish_resume_analysis(resume_id: str) -> None:
         except Exception:
             # A failed extraction degrades to text-only checks — the report
             # still ships, minus the structure-aware rows and tailoring.
-            logging.exception("Resume extraction failed; continuing text-only")
+            _log_failure("Resume extraction failed; continuing text-only")
             return None
 
     try:
@@ -2144,22 +2871,36 @@ async def _finish_resume_analysis(resume_id: str) -> None:
         doc.report = run_ats_checks(
             doc.original_text, doc.jd_text or None, doc.structured
         )
-        doc.status, doc.error = "ready", ""
+        _report_extraction_audit(doc)
+    except ProviderUnavailable as exc:
+        _merge_background_result(resume_id, failed(str(exc)))
+        return
     except Exception:
-        logging.exception("Resume review failed")
-        doc.status = "error"
-        doc.error = ("The recruiter review failed — check your provider in "
-                     "Settings and re-analyze. The checklist above is still valid.")
-    if _resume_path(resume_id).is_file():  # deleted mid-analysis → discard
-        _save_resume_doc(doc)
+        _log_failure("Resume review failed")
+        _merge_background_result(resume_id, failed(
+            "The recruiter review failed. Check your provider in Settings "
+            "and analyze again. The checklist above is still valid."))
+        return
+
+    def apply(current: ResumeDoc) -> None:
+        current.structured, current.review = doc.structured, doc.review
+        current.report = doc.report
+        current.status, current.error = "ready", ""
+
+    _merge_background_result(resume_id, apply)
 
 
-@app.post("/resumes", response_model=ResumeDoc)
+@app.post("/resumes", response_model=ResumeDoc, dependencies=PROVIDER)
 async def create_resume(
     body: ResumeCreateRequest, background_tasks: BackgroundTasks
 ) -> ResumeDoc:
-    resume_text, structured = _resolve_resume_input(body)
-    jd_text, jd_label = await _resolve_resume_jd(body)
+    slot = RESUME_GATE.enter()
+    try:
+        resume_text, structured = await _resolve_resume_input(body)
+        jd_text, jd_label = await _resolve_resume_jd(body)
+    except BaseException:
+        slot.leave()
+        raise
 
     # Everything deterministic ships in THIS response, sub-second: the
     # user sees a real report immediately while the LLM phase runs behind.
@@ -2172,8 +2913,40 @@ async def create_resume(
         jd_label=jd_label,
         report=run_ats_checks(resume_text, jd_text or None, structured),
     )
+    _RESUME_WORK.add(doc.resume_id)
     _save_resume_doc(doc)
-    background_tasks.add_task(_finish_resume_analysis, doc.resume_id)
+    background_tasks.add_task(_gated, slot, _finish_resume_analysis, doc.resume_id)
+    return doc
+
+
+async def _gated(slot, work, resume_id: str) -> None:
+    """Run background work on one resume, and give its slot back however
+    it ends. While it runs the resume is listed as being worked on, which
+    is how a status left by a dead server is told from a live one."""
+    _RESUME_WORK.add(resume_id)
+    try:
+        await work(resume_id)
+    finally:
+        _RESUME_WORK.discard(resume_id)
+        slot.leave()
+
+
+@app.post("/resumes/{resume_id}/analyze", response_model=ResumeDoc, dependencies=PROVIDER)
+async def analyze_resume_again(
+    resume_id: str, background_tasks: BackgroundTasks
+) -> ResumeDoc:
+    """Run the analysis again on a resume whose analysis failed or was
+    interrupted. Only ever started by the user: it is two paid calls."""
+    doc = _load_resume_doc(resume_id)
+    if doc.status == "analyzing":
+        raise HTTPException(status_code=409, detail="Analysis is already running.")
+    if doc.tailor_status == "tailoring":
+        raise HTTPException(status_code=409, detail="Tailoring is still running.")
+    slot = RESUME_GATE.enter()
+    doc.status, doc.error = "analyzing", ""
+    _RESUME_WORK.add(resume_id)          # before the save, so the load in the
+    _save_resume_doc(doc)                # task does not read it as interrupted
+    background_tasks.add_task(_gated, slot, _finish_resume_analysis, resume_id)
     return doc
 
 
@@ -2221,10 +2994,15 @@ async def _finish_resume_tailor(resume_id: str) -> None:
         doc = _load_resume_doc(resume_id)
     except HTTPException:
         return
-    client, preset = _client_for_session({}, "resume")
+
+    def failed(message: str):
+        def apply(current: ResumeDoc) -> None:
+            current.tailor_status, current.tailor_error = "error", message
+        return apply
+
     try:
-        previous = doc.tailored.model_copy(deep=True) if doc.tailored else None
-        doc.tailored = await tailor_resume(
+        client, preset = _client_for_session({}, "resume")
+        tailored = await tailor_resume(
             structured=doc.structured,
             jd_text=doc.jd_text,
             review=doc.review,
@@ -2232,24 +3010,30 @@ async def _finish_resume_tailor(resume_id: str) -> None:
             client=client,
             preset=preset,
         )
-        if previous is not None:
-            _push_tailored_history(doc, previous)
         # Before/after on identical footing: re-run the same deterministic
         # checks on the tailored structure's canonical rendering.
-        doc.tailored_report = run_ats_checks(
-            render_markdown(doc.tailored.resume), doc.jd_text, doc.tailored.resume
+        tailored_report = run_ats_checks(
+            render_markdown(tailored.resume), doc.jd_text, tailored.resume
         )
-        doc.tailor_status, doc.tailor_error = "idle", ""
+    except ProviderUnavailable as exc:
+        _merge_background_result(resume_id, failed(str(exc)))
+        return
     except Exception:
-        logging.exception("Resume tailoring failed")
-        doc.tailor_status = "error"
-        doc.tailor_error = ("Tailoring failed — check your provider in Settings "
-                            "and try again.")
-    if _resume_path(resume_id).is_file():
-        _save_resume_doc(doc)
+        _log_failure("Resume tailoring failed")
+        _merge_background_result(resume_id, failed(
+            "Tailoring failed. Check your provider in Settings and try again."))
+        return
+
+    def apply(current: ResumeDoc) -> None:
+        if current.tailored is not None:
+            _push_tailored_history(current, current.tailored.model_copy(deep=True))
+        current.tailored, current.tailored_report = tailored, tailored_report
+        current.tailor_status, current.tailor_error = "idle", ""
+
+    _merge_background_result(resume_id, apply)
 
 
-@app.post("/resumes/{resume_id}/tailor", response_model=ResumeDoc)
+@app.post("/resumes/{resume_id}/tailor", response_model=ResumeDoc, dependencies=PROVIDER)
 async def tailor_resume_endpoint(
     resume_id: str, background_tasks: BackgroundTasks
 ) -> ResumeDoc:
@@ -2271,9 +3055,11 @@ async def tailor_resume_endpoint(
         )
     if doc.tailor_status == "tailoring":
         raise HTTPException(status_code=409, detail="Tailoring is already running.")
+    slot = RESUME_GATE.enter()
     doc.tailor_status, doc.tailor_error = "tailoring", ""
+    _RESUME_WORK.add(resume_id)
     _save_resume_doc(doc)
-    background_tasks.add_task(_finish_resume_tailor, resume_id)
+    background_tasks.add_task(_gated, slot, _finish_resume_tailor, resume_id)
     return doc
 
 
@@ -2285,6 +3071,7 @@ class MetricFillRequest(BaseModel):
 
 @app.post("/resumes/{resume_id}/fill-metrics", response_model=ResumeDoc)
 async def fill_resume_metrics(resume_id: str, body: MetricFillRequest) -> ResumeDoc:
+    _refuse_if_busy(resume_id)
     doc = _load_resume_doc(resume_id)
     if doc.tailored is None:
         raise HTTPException(status_code=422, detail="No tailored version to fill yet.")
@@ -2373,6 +3160,7 @@ async def edit_tailored_endpoint(
     resume_id: str, body: TailoredEditRequest
 ) -> ResumeDoc:
     """The user's own text edits to the tailored resume, by where-path."""
+    _refuse_if_busy(resume_id)
     doc = _load_resume_doc(resume_id)
     if doc.tailored is None:
         raise HTTPException(status_code=422, detail="No tailored version to edit yet.")
@@ -2455,6 +3243,7 @@ def _bullet_path(parent: str) -> str:
 @app.post("/resumes/{resume_id}/add", response_model=ResumeDoc)
 async def add_to_resume(resume_id: str, body: ResumeAddRequest) -> ResumeDoc:
     """Add a bullet, an entry, or a whole section. The user's own words."""
+    _refuse_if_busy(resume_id)
     doc = _load_resume_doc(resume_id)
     if doc.tailor_status == "tailoring":
         raise HTTPException(status_code=409, detail="Tailoring is still running.")
@@ -2517,23 +3306,27 @@ class ResumeRemoveRequest(BaseModel):
 async def remove_from_resume(resume_id: str, body: ResumeRemoveRequest) -> ResumeDoc:
     """Drop a whole entry from both copies. Anything addable is removable,
     or a mistyped section would be permanent."""
+    _refuse_if_busy(resume_id)
     doc = _load_resume_doc(resume_id)
     if doc.tailor_status == "tailoring":
         raise HTTPException(status_code=409, detail="Tailoring is still running.")
     shown, other = _resume_pair(doc)
     snapshot = doc.tailored.model_copy(deep=True) if doc.tailored else None
+    kind = body.path.split("[")[0]
+    index = re.fullmatch(r"(?:work|projects|education|custom)\[(\d+)\]", body.path)
+    doomed = None
+    if index and int(index.group(1)) < len(getattr(shown, kind, [])):
+        doomed = getattr(shown, kind)[int(index.group(1))].model_copy(deep=True)
     try:
         name = remove_resume_entry(shown, body.path)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    if other is not None:
-        kind = body.path.split("[")[0]
-        items = getattr(other, kind)
-        for i, item in enumerate(items):
-            their = item.institution if kind == "education" else item.name
-            if their == name:
-                items.pop(i)
-                break
+    if other is not None and doomed is not None:
+        # By identity: two roles at one employer share a name, and removing
+        # "the one called Acme" would take whichever came first.
+        theirs = counterpart_index(other, kind, doomed)
+        if theirs is not None:
+            getattr(other, kind).pop(theirs)
     if snapshot is not None:
         _push_tailored_history(doc, snapshot)
         doc.tailored.changes.append(ResumeChange(
@@ -2555,7 +3348,7 @@ class ResumeAdviceRequest(BaseModel):
     history: list[dict] = []
 
 
-@app.post("/resumes/{resume_id}/advise")
+@app.post("/resumes/{resume_id}/advise", dependencies=PROVIDER)
 async def advise_resume_endpoint(
     resume_id: str, body: ResumeAdviceRequest
 ) -> dict:
@@ -2573,7 +3366,7 @@ async def advise_resume_endpoint(
             client=client, preset=preset,
         )
     except Exception:
-        logging.exception("Resume advice failed")
+        _log_failure("Resume advice failed")
         raise HTTPException(
             status_code=502,
             detail="The coach is unavailable — check your provider in Settings.",
@@ -2588,14 +3381,26 @@ class ResumeInstructionRequest(BaseModel):
     history: list[dict] = []
 
 
-@app.post("/resumes/{resume_id}/request-edit", response_model=ResumeDoc)
+@app.post("/resumes/{resume_id}/request-edit", response_model=ResumeDoc, dependencies=PROVIDER)
 async def request_tailored_edit(
     resume_id: str, body: ResumeInstructionRequest
 ) -> ResumeDoc:
     """Apply one natural-language instruction to the tailored resume via
     the LLM, behind the same honesty guard as tailoring. The prior
     version lands on the undo stack."""
+    _refuse_if_busy(resume_id)
+    # Held for the whole edit, model call included. It is the only change
+    # to a resume that waits on a model between reading the document and
+    # writing it back, which is exactly the gap a second change falls into.
+    async with _resume_lock(resume_id):
+        return await _apply_instructed_edit(resume_id, body)
+
+
+async def _apply_instructed_edit(
+    resume_id: str, body: ResumeInstructionRequest
+) -> ResumeDoc:
     doc = _load_resume_doc(resume_id)
+    loaded_at = doc.updated_at
     if doc.tailored is None or doc.structured is None:
         raise HTTPException(status_code=422, detail="No tailored version to edit yet.")
     if doc.tailor_status == "tailoring":
@@ -2627,7 +3432,7 @@ async def request_tailored_edit(
             client=client, preset=preset, conversation=history,
         )
     except Exception:
-        logging.exception("Instructed resume edit failed")
+        _log_failure("Instructed resume edit failed")
         raise HTTPException(
             status_code=502,
             detail="The edit did not go through — check your provider in Settings "
@@ -2635,10 +3440,11 @@ async def request_tailored_edit(
         )
     # Belts behind the model: invented numbers revert, and the change log
     # is reconciled against the real diff so the UI never under-reports.
-    user_text = body.instruction + " " + " ".join(
-        m.get("content", "") for m in history
-    )
-    edited = guard_edited_numbers_and_log(snapshot, edited, user_text)
+    # Only the USER's turns count as the user's words: a figure the coach
+    # proposed is model output, and would launder itself otherwise.
+    user_text = users_own_words(body.instruction, history)
+    edited = guard_edited_numbers_and_log(
+        snapshot, edited, user_text, original=doc.structured)
     # Belt for the prompt's warnings/note separation: a status message
     # that slipped into warnings is not a durable honesty note — move it.
     status_like = [
@@ -2652,6 +3458,19 @@ async def request_tailored_edit(
     # The change log is the document's full history: a pass appends its
     # entries, it never replaces what earlier passes recorded.
     edited.changes = snapshot.changes + edited.changes
+    # The lock covers this process. This covers anything it does not: if
+    # the saved document is not the one this edit was computed from, the
+    # edit is thrown away rather than written over someone's newer work.
+    try:
+        now = _load_resume_doc(resume_id)
+    except HTTPException:
+        raise HTTPException(status_code=409, detail="This resume was deleted "
+                            "while the edit was being made.")
+    if now.updated_at != loaded_at:
+        raise HTTPException(
+            status_code=409,
+            detail="This resume changed while the edit was being made, so the "
+                   "edit was not applied. Nothing was lost. Try it again.")
     _push_tailored_history(doc, snapshot)
     doc.tailored = edited
     _refresh_tailored_report(doc)
@@ -2663,6 +3482,7 @@ async def request_tailored_edit(
 async def undo_tailored_endpoint(resume_id: str) -> ResumeDoc:
     """Step the tailored resume back to the version before the last
     mutation (metric fill, manual edit, instructed edit, or re-tailor)."""
+    _refuse_if_busy(resume_id)
     doc = _load_resume_doc(resume_id)
     if doc.tailor_status == "tailoring":
         raise HTTPException(status_code=409, detail="Tailoring is still running.")
@@ -2685,18 +3505,79 @@ _RESUME_DOWNLOADS = {
 }
 
 
+def _export_refusal(doc: ResumeDoc) -> str | None:
+    """Why the tailored resume cannot leave yet, or None when it can.
+
+    This is the same rule the packaging button shows, enforced where it
+    cannot be walked around: the button is disabled in one browser, and
+    the URL behind it answers anyone."""
+    unresolved = unresolved_placeholders(doc.tailored.resume)
+    if unresolved:
+        return (
+            "This resume is not finished: a [METRIC] placeholder is still in "
+            + "; ".join(unresolved)
+            + ". Type the real number into each one and save, or reword the "
+            "line so it does not need one. To download it unfinished, ask for "
+            "a draft."
+        )
+    # A resume tailored by the earlier guard may hold a name the rewrite
+    # added, with a note beside it that nothing required anyone to read.
+    added = unanswered_additions(doc.structured, doc.tailored)
+    if added:
+        return (
+            "This resume is not finished: an earlier rewrite added "
+            + "; ".join(added)
+            + ", which your original resume does not mention. If it is true, "
+            "add it to your resume yourself (as a skill, for example). If it "
+            "is not, edit the line to take it out. To download it as it "
+            "stands, ask for a draft."
+        )
+    return None
+
+
 @app.get("/resumes/{resume_id}/download")
 async def download_resume(
-    resume_id: str, fmt: str = "md", version: str = "original"
+    resume_id: str, fmt: str = "md", version: str = "original",
+    draft: bool = False, expect: str = "",
 ) -> Response:
+    """Three kinds of export, each labelled in the X-Scrivio-Export header
+    and the filename so one cannot be mistaken for another:
+
+    - original: the resume as parsed. Always available.
+    - final:    the tailored resume, only once nothing is unresolved.
+    - draft:    the tailored resume as it stands, placeholders and all,
+                and only when explicitly requested.
+
+    `expect` is the updated_at of the version the page is showing. When it
+    is sent and the saved document has moved on, the export is refused:
+    the server cannot see unsaved text in a browser, but it can decline to
+    hand over a different version from the one on screen."""
     if fmt not in _RESUME_DOWNLOADS:
         raise HTTPException(status_code=422, detail="fmt must be pdf, docx, md, or json")
     if version not in ("original", "tailored"):
         raise HTTPException(status_code=422, detail="version must be original or tailored")
     doc = _load_resume_doc(resume_id)
+    if expect and expect != doc.updated_at.isoformat():
+        raise HTTPException(
+            status_code=409,
+            detail="This resume has changed since the page loaded it. Reload "
+                   "the page so the preview and the download are the same "
+                   "document, then export again.",
+        )
+    kind = "original"
     if version == "tailored":
         if doc.tailored is None:
             raise HTTPException(status_code=404, detail="No tailored version yet")
+        if doc.tailor_status == "tailoring":
+            raise HTTPException(
+                status_code=409,
+                detail="Tailoring is still running. Export once it has finished.",
+            )
+        kind = "draft" if draft else "final"
+        if not draft:
+            refusal = _export_refusal(doc)
+            if refusal:
+                raise HTTPException(status_code=409, detail=refusal)
         structured = doc.tailored.resume
     else:
         if doc.structured is None:
@@ -2711,11 +3592,16 @@ async def download_resume(
         payload = render_docx(structured)
     else:
         payload = json.dumps(to_jsonresume(structured), indent=2).encode("utf-8")
-    filename = f"resume-{version}-{resume_id}.{ext}"
+    label = "tailored-DRAFT" if kind == "draft" else version
+    filename = f"resume-{label}-{resume_id}.{ext}"
     return Response(
         content=payload,
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Scrivio-Export": kind,
+            "Cache-Control": "no-store",
+        },
     )
 
 
@@ -2751,11 +3637,14 @@ def _openai_audio_client():
     """Factory for both transcription (/transcribe) and speech (/speak) so
     tests can monkeypatch server._openai_audio_client (same seam pattern as
     server._anthropic_client). Returns None when no key is configured — the
-    endpoints map that to 503."""
-    if not os.environ.get("OPENAI_API_KEY"):
+    endpoints map that to 503.
+
+    None in demo mode whatever is configured. A key in the settings file
+    used to be enough for a demonstration to send speech to OpenAI."""
+    if demo_mode() or not os.environ.get("OPENAI_API_KEY"):
         return None
-    import openai
-    return openai.AsyncOpenAI()
+    from pipeline.providers.clients import openai_client
+    return openai_client()
 
 
 async def _openai_transcribe(client, audio: bytes, mime_type: str) -> str:
@@ -2769,7 +3658,7 @@ async def _openai_transcribe(client, audio: bytes, mime_type: str) -> str:
     return (result.text or "").strip()
 
 
-@app.post("/transcribe", response_model=TranscribeResponse)
+@app.post("/transcribe", response_model=TranscribeResponse, dependencies=PROVIDER)
 async def transcribe_audio(body: TranscribeRequest) -> TranscribeResponse:
     try:
         audio = base64.b64decode(body.audio_b64, validate=True)
@@ -2786,7 +3675,7 @@ async def transcribe_audio(body: TranscribeRequest) -> TranscribeResponse:
     if client is None:
         raise HTTPException(
             status_code=503,
-            detail=(
+            detail=DEMO_NO_VOICE if demo_mode() else (
                 "High-accuracy transcription requires OPENAI_API_KEY on the "
                 "server. Use browser dictation or type your answer."
             ),
@@ -2873,7 +3762,7 @@ def list_speak_voices() -> dict:
     }
 
 
-@app.post("/speak")
+@app.post("/speak", dependencies=PROVIDER)
 async def speak(body: SpeakRequest) -> Response:
     text = body.text.strip()
     if not text:
@@ -2892,7 +3781,8 @@ async def speak(body: SpeakRequest) -> Response:
     if client is None:
         raise HTTPException(
             status_code=503,
-            detail="Natural voice requires OPENAI_API_KEY; falling back to browser voice.",
+            detail=DEMO_NO_VOICE if demo_mode() else
+            "Natural voice requires OPENAI_API_KEY; falling back to browser voice.",
         )
     model = os.environ.get("TTS_MODEL", "gpt-4o-mini-tts")
     kwargs: dict = {"model": model, "voice": voice, "input": text}
@@ -2935,11 +3825,31 @@ if _UI_DIR.exists():
         return RedirectResponse("/classic/")
 
     app.mount("/classic", StaticFiles(directory=str(_UI_DIR), html=True), name="classic")
+boundary.modern_interface_at_root = _DESK_DIR.exists()
 if _DESK_DIR.exists():
     app.mount("/studio", StaticFiles(directory=str(_DESK_DIR), html=True), name="studio")
     app.mount("/desk", StaticFiles(directory=str(_DESK_DIR), html=True), name="desk")
     # Root goes LAST so every API route above wins the match first.
     app.mount("/", StaticFiles(directory=str(_DESK_DIR), html=True), name="app")
 elif _UI_DIR.exists():
-    # No React build on disk (fresh clone, no npm): classic UI still works.
+    # No build on disk. The older interface is served so that there is
+    # something to look at, and it is said plainly, here and on the page:
+    # a fresh clone that quietly shows a different application from the
+    # one in the README looks like a broken install.
     app.mount("/", StaticFiles(directory=str(_UI_DIR), html=True), name="ui")
+
+
+def _say_which_interface() -> None:
+    if boundary.modern_interface_at_root:
+        return
+    print(
+        "\n  The interface has not been built, so the older classic interface\n"
+        "  is being served instead. It is missing features described in the\n"
+        "  README. To build the current one:\n\n"
+        "      cd web && npm ci && npm run build\n\n"
+        "  then start the server again.\n",
+        file=sys.stderr, flush=True,
+    )
+
+
+app.router.on_startup.append(_say_which_interface)

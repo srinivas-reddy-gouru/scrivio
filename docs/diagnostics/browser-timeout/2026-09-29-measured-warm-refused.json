@@ -1,0 +1,60 @@
+{
+ "mode": "warm",
+ "fonts": "refused",
+ "dev_server_answering_after_s": 0.96,
+ "loads": [
+  {
+   "n": 1,
+   "goto": "loaded",
+   "goto_took_s": 0.183,
+   "domcontentloaded": 0.179,
+   "load": 0.183,
+   "main_frame_navigations_at_s": [
+    0.052
+   ],
+   "requests": 39,
+   "by_host": {
+    "127.0.0.1:<port>": {
+     "requests": 38,
+     "slowest_s": 0.041,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.googleapis.com": {
+     "requests": 1,
+     "slowest_s": 0.012,
+     "failed": 1,
+     "unfinished": 0
+    }
+   },
+   "unfinished": [],
+   "five_slowest": [
+    [
+     0.041,
+     "finished",
+     "/"
+    ],
+    [
+     0.04,
+     "finished",
+     "/node_modules/vite/dist/client/env.mjs"
+    ],
+    [
+     0.038,
+     "finished",
+     "/src/desk.css"
+    ],
+    [
+     0.035,
+     "finished",
+     "/node_modules/.vite/deps/chunk-EQCVQC35.js?v=de8cc2f7"
+    ],
+    [
+     0.034,
+     "finished",
+     "/resumes"
+    ]
+   ]
+  }
+ ]
+}

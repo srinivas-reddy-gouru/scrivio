@@ -19,6 +19,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from pipeline.prompt_loader import load_prompt
+
 
 TopicBreadth = Literal["narrow", "broad_defined", "broad_undefined"]
 
@@ -118,27 +120,7 @@ class _BreadthClassification(BaseModel):
     reasoning: str = Field(default="", description="One sentence; for logs.")
 
 
-_CLASSIFIER_PROMPT = (
-    "You classify how broad a technical article topic is. The output gates "
-    "whether the article generator asks the user clarifying questions or "
-    "proceeds directly to generation.\n\n"
-    "narrow: the user has already pinned down what they want. Specific verbs "
-    "('why', 'how to', 'fix', 'compare X vs Y'), specific errors, named "
-    "functions/classes/files, or 5+ word topics with clear focus.\n\n"
-    "broad_defined: a single product, framework, or language name with a "
-    "clear default scope. Reader of the article will expect foundations and "
-    "common usage patterns. Examples: 'Spring Boot', 'Django', 'React', "
-    "'PostgreSQL', 'Redis'.\n\n"
-    "broad_undefined: an umbrella concept with multiple legitimate "
-    "sub-domains the user has not chosen. Generating an article without "
-    "clarifying which sub-domain would be a guess. Examples: 'database', "
-    "'security', 'machine learning', 'performance', 'cloud'.\n\n"
-    "If extra_context is provided, weigh it: extra_context that names "
-    "specific aspects converts a broad topic into a steered (narrow-like) "
-    "request, BUT for breadth classification you should still classify the "
-    "TOPIC itself — the caller will decide separately whether to ask "
-    "clarification given the extra_context."
-)
+_CLASSIFIER_PROMPT = load_prompt("topic_classifier_v1.txt").strip()
 
 
 _CLASSIFIER_TOOL: dict = {

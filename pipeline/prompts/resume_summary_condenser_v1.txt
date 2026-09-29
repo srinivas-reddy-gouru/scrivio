@@ -1,0 +1,1 @@
+Condense the resume summary you are given to 55 words or fewer. Keep the claims most relevant to the job description; cut the weakest ones entirely. Never add a skill, title, or claim that is not already in the summary. No em or en dashes. Reply with the condensed summary text only.

@@ -218,7 +218,7 @@ header {
 .tray textarea { flex: 1; resize: vertical; min-height: 260px; }
 .tray textarea.jd-box { min-height: 170px; }
 .tray .hint { font-size: 0.7rem; color: var(--text-faint); margin-top: 0.55rem; }
-.go-row { display: flex; justify-content: center; margin-top: 1.6rem; gap: 0.8rem; }
+.go-row { display: flex; justify-content: center; flex-wrap: wrap; margin-top: 1.6rem; gap: 0.8rem; }
 
 /* Progress */
 .working { text-align: center; margin-top: 3.2rem; }
@@ -1296,6 +1296,11 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
 }
 .studio-tile b { font-family: "Space Grotesk"; font-size: 0.98rem; }
 .st-what { font-size: 0.75rem; color: var(--text-dim); line-height: 1.5; }
+.st-step { font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); }
+.studio-tile.aside { border-style: dashed; }
+.first-look { font-size: 0.84rem; color: var(--text-dim); margin-top: 0.9rem; line-height: 1.5; }
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--teal); text-decoration: underline; cursor: pointer; }
+.linklike:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 2px; }
 .st-state {
   font-size: 0.68rem; color: var(--text-faint); margin-top: 0.35rem;
   font-family: "JetBrains Mono", monospace;
@@ -1351,3 +1356,67 @@ kbd { font-family: "JetBrains Mono"; font-size: 0.62rem; border: 1px solid var(-
   font-family: "JetBrains Mono", monospace; font-size: 0.8rem; line-height: 1.6;
   tab-size: 4; white-space: pre; overflow-x: auto;
 }
+
+/* Pairing: the one screen that exists before the app does. */
+.pair-wrap { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
+.pair-card {
+  width: min(27rem, 100%); background: var(--chrome-solid); border: 1px solid var(--stroke);
+  border-radius: 16px; padding: 2rem; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+}
+.pair-card h1 { font-size: 1.35rem; margin-bottom: 0.6rem; color: var(--text); }
+.pair-card p { color: var(--text-dim); font-size: 0.92rem; line-height: 1.55; margin-bottom: 1.3rem; }
+.pair-card label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.35rem; }
+.pair-card input {
+  width: 100%; font: inherit; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 1.15rem; letter-spacing: 0.14em; color: var(--text);
+  background: var(--input-bg, rgba(255, 255, 255, 0.05)); border: 1px solid var(--stroke);
+  border-radius: 10px; padding: 0.65rem 0.8rem; margin-bottom: 0.9rem;
+}
+.pair-card input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(32, 184, 205, 0.22); }
+.pair-card input[aria-invalid="true"] { border-color: var(--redpen); }
+.pair-problem { color: var(--redpen); font-size: 0.85rem; min-height: 1.4em; margin-top: 0.8rem; }
+
+/* Mode banners: demo and not-ready are states the whole app is in, so they
+   sit above everything and do not scroll away. */
+.mode-banner {
+  position: sticky; top: 0; z-index: 60;
+  padding: 0.55rem 1.2rem; font-size: 0.84rem; line-height: 1.45; text-align: center;
+}
+.mode-banner.demo { background: #E5B04C; color: #2A1E05; }
+.mode-banner.blocked { background: #E06A55; color: #2A0B06; }
+.mode-banner b { font-weight: 700; }
+.link-btn {
+  background: none; border: none; padding: 0; font: inherit; font-weight: 700;
+  color: inherit; text-decoration: underline; cursor: pointer;
+}
+.what-runs { margin-bottom: 1.2rem; }
+.what-runs dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.2rem; margin: 0.4rem 0 0.7rem; }
+.what-runs dt { color: var(--text-dim); font-size: 0.82rem; }
+.what-runs dd { color: var(--text); font-size: 0.86rem; margin: 0; }
+
+/* Your data */
+.data-panel { margin-top: 1.2rem; }
+.data-statement { font-size: 0.9rem; color: var(--text); margin: 0.3rem 0 0.9rem; line-height: 1.5; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-bottom: 0.9rem; }
+.data-table th, .data-table td { text-align: left; padding: 0.35rem 0.6rem 0.35rem 0; border-bottom: 1px solid var(--stroke); }
+.data-table thead th { color: var(--text-dim); font-weight: 600; font-size: 0.72rem; }
+.data-table tbody th { font-weight: 500; color: var(--text); }
+.data-table .folder { color: var(--text-dim); word-break: break-all; font-size: 0.74rem; }
+.sent-list div { padding: 0.4rem 0; border-bottom: 1px solid var(--stroke); }
+.sent-list dt { font-weight: 600; font-size: 0.8rem; color: var(--text); }
+.sent-list dd { margin: 0.15rem 0 0; font-size: 0.8rem; color: var(--text-dim); line-height: 1.45; }
+.data-actions { display: flex; gap: 0.6rem; margin: 0.9rem 0; flex-wrap: wrap; }
+.fold.danger summary { color: var(--redpen); }
+.fold.danger label { display: block; font-size: 0.8rem; margin: 0.7rem 0 0.3rem; color: var(--text-dim); }
+.fold.danger input {
+  font: inherit; font-size: 0.86rem; width: min(20rem, 100%); padding: 0.4rem 0.55rem;
+  border-radius: 8px; border: 1px solid var(--stroke); background: var(--input-bg, rgba(255,255,255,0.05));
+  color: var(--text); margin-right: 0.6rem;
+}
+.fold.danger ul { margin: 0.4rem 0 0 1.1rem; font-size: 0.8rem; color: var(--text-dim); line-height: 1.5; }
+.btn-danger { background: var(--redpen); color: #2A0B06; border-color: transparent; }
+.btn-danger:disabled { opacity: 0.45; }
+.sample-note { font-size: 0.82rem; color: var(--text); margin-top: 0.9rem; line-height: 1.5; max-width: 46rem;
+  padding: 0.55rem 0.8rem; border: 1px solid var(--stroke); border-left: 3px solid var(--amber); border-radius: 6px; background: var(--surface-2); }
+.sent-note { font-size: 0.78rem; color: var(--text-dim); margin-top: 0.9rem; line-height: 1.5; max-width: 46rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

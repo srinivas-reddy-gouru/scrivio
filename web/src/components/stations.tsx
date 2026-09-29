@@ -10,6 +10,7 @@ import { countMetrics, displayNote, noteHeadline, noteIndex } from "../marks";
 import type { PaperNote } from "../marks";
 import type { ChatTurn, JobProfileSummary, ResumeDoc, ResumeSummaryItem } from "../types";
 import { Paper } from "./Paper";
+import { SAMPLE_JD, SAMPLE_NAME, SAMPLE_RESUME, takeSampleRequest } from "../sample";
 
 /* ── Shared bits ── */
 
@@ -163,6 +164,24 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<"" | "resume" | "jd">("");
   const fileInput = useRef<HTMLInputElement>(null);
+  // Said before the resume is sent, not in a policy afterwards.
+  const [sentTo, setSentTo] = useState("");
+  useEffect(() => {
+    api.mode().then((m) => setSentTo(
+      m.demo ? "demo"
+        : m.writing === "claude-cli" ? `the ${m.cli.cli} command-line assistant's provider`
+        : m.writing === "anthropic" ? "Anthropic" : m.writing === "openai" ? "OpenAI" : ""))
+      .catch(() => setSentTo(""));
+  }, []);
+
+  // An invented resume and posting, so that a first look does not cost
+  // anyone their own. Said on the page for as long as it is what is there.
+  const useSample = () => {
+    setFile(null); setProfileId(""); setJdUrl(""); setError("");
+    setResumeText(SAMPLE_RESUME); setJdText(SAMPLE_JD);
+  };
+  useEffect(() => { if (takeSampleRequest()) useSample(); }, []);
+  const sampleLoaded = !file && resumeText === SAMPLE_RESUME;
 
   const refreshLists = () => {
     api.listJobProfiles().then(setProfiles).catch(() => {});
@@ -207,7 +226,7 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
     <div>
       <div className="trays">
         <h1 className="bar-tick">Put your resume <em>on the desk</em></h1>
-        <p className="sub">Scrivio reads it like a recruiter, marks it like an editor, and never writes a word that is not true.</p>
+        <p className="sub">You get a checklist score with the reason for each row, then a rewrite in which every number, employer, title, and date is checked against your original.</p>
         <div className="tray-grid">
           <div
             className={"tray" + (dragging ? " dragging" : "")}
@@ -307,11 +326,32 @@ export function TargetStation({ onDoc }: { onDoc: (d: ResumeDoc) => void }) {
           </div>
         </div>
         {error && <div className="errbox" style={{ marginTop: "1rem" }}>{error}</div>}
+        {sampleLoaded && (
+          <p className="sample-note" role="status">
+            <b>Sample loaded.</b> {SAMPLE_NAME} and this posting are invented.
+            {sentTo === "demo"
+              ? " In demo mode the results are canned examples too."
+              : sentTo ? " What comes back is a real reading of an invented resume." : ""}
+          </p>
+        )}
+        {sentTo && (
+          <p className="sent-note">
+            {sentTo === "demo"
+              ? "Demo mode: nothing you enter here is sent anywhere."
+              : <>Your resume and the job description are stored on this machine and sent
+                  to <b>{sentTo}</b> to be read. Do not include anything you would not send them.</>}
+          </p>
+        )}
         <div className="go-row">
           <button className="btn" onClick={analyze}
             disabled={!resumeText.trim() && !file && !profileId}>
             Read my resume
           </button>
+          {!sampleLoaded && (
+            <button className="btn btn-quiet" onClick={useSample}>
+              Use a sample resume and posting
+            </button>
+          )}
         </div>
       </div>
 
@@ -836,7 +876,7 @@ export function TailorStation({ doc, onDoc, onSend }: {
               <summary>{remaining} number{remaining > 1 ? "s" : ""} still to type on the paper</summary>
               <p>
                 The amber chips are your numbers, right where they will print.
-                Scrivio never invents metrics; blanks ship as [METRIC] until you fill them.
+                A number that is not in your original is not written for you. It stays as [METRIC] until you fill it in.
               </p>
               <button className="btn" onClick={save} disabled={saving || typed === 0}>
                 {saving ? "Saving…" : `Save ${typed || ""} number${typed === 1 ? "" : "s"}`}
@@ -1069,12 +1109,38 @@ function CoachDock({ doc, onDoc }: {
 export function SendStation({ doc }: { doc: ResumeDoc }) {
   const t = doc.tailored!;
   const remaining = countMetrics(t.resume);
-  const dl = (fmt: string) => api.downloadUrl(doc.resume_id, fmt, "tailored");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  // The server can refuse for a reason this page cannot count for itself,
+  // and its refusal offers a draft. So the page has to be able to give one.
+  const [refused, setRefused] = useState(false);
+
+  /** The server decides whether this may leave, not this component: the
+   * count above only chooses which buttons to offer. `expect` makes the
+   * server refuse if the saved resume is no longer the one on screen. */
+  const download = async (fmt: string, draft = false) => {
+    setBusy(fmt + (draft ? "-draft" : "")); setError("");
+    try {
+      await api.downloadResume(doc.resume_id, fmt, {
+        version: "tailored", draft, expect: doc.updated_at,
+      });
+    } catch (e) {
+      setError((e as Error).message);
+      if (!draft && (e as { status?: number }).status === 409) setRefused(true);
+    }
+    finally { setBusy(""); }
+  };
+  const formats: Array<[string, string]> = [
+    ["pdf", "PDF"], ["docx", "Word"], ["md", "Markdown"], ["json", "JSON Resume"],
+  ];
+
   return (
     <div className="send-wrap">
-      <h1 className="font-display bar-tick">Ready to send</h1>
+      <h1 className="font-display bar-tick">
+        {remaining > 0 ? "Not ready to send yet" : "Ready to send"}
+      </h1>
       <div className="package">
-        <span className="stamp">TAILORED · HONEST</span>
+        <span className="stamp">{remaining > 0 ? "DRAFT" : "TAILORED · CHECKED"}</span>
         <b style={{ fontSize: "0.62rem" }}>{t.resume.basics.name}</b><br />
         <span style={{ color: "var(--ink-dim)" }}>{t.resume.basics.label}</span>
         <hr style={{ border: "none", borderTop: "1px solid #D8D2C2", margin: "0.4rem 0" }} />
@@ -1082,35 +1148,65 @@ export function SendStation({ doc }: { doc: ResumeDoc }) {
           <span key={i}>{h.slice(0, 60)}…<br /></span>
         ))}
       </div>
-      {remaining > 0 && (
-        <p className="fill-count" style={{ marginBottom: "0.6rem" }}>
-          ⚠ {remaining} [METRIC] still unfilled; downloads include the placeholders.
-        </p>
+      {remaining > 0 ? (
+        <>
+          <p className="fill-count" style={{ marginBottom: "0.6rem" }}>
+            {remaining} number{remaining > 1 ? "s are" : " is"} still a [METRIC] placeholder.
+            Go back to Tailor and type the real figure, or reword the line so it does not need one.
+          </p>
+          <div className="dl-row">
+            {formats.map(([fmt, label]) => (
+              <button key={fmt} className="btn btn-quiet" disabled={!!busy}
+                onClick={() => download(fmt, true)}>
+                {busy === `${fmt}-draft` ? "Preparing…" : `Draft ${label}`}
+              </button>
+            ))}
+          </div>
+          <p style={{ fontSize: "0.74rem", color: "var(--text-faint)", marginTop: "0.5rem" }}>
+            Drafts keep the placeholders and are named DRAFT, so one cannot be sent by mistake.
+          </p>
+        </>
+      ) : (
+        <div className="dl-row">
+          {formats.map(([fmt, label], i) => (
+            <button key={fmt} className={"btn" + (i ? " btn-quiet" : "")} disabled={!!busy}
+              onClick={() => download(fmt)}>
+              {busy === fmt ? "Preparing…" : i ? label : `Download ${label}`}
+            </button>
+          ))}
+        </div>
       )}
-      <div className="dl-row">
-        <a className="btn" href={dl("pdf")} download>Download PDF</a>
-        <a className="btn btn-quiet" href={dl("docx")} download>Word</a>
-        <a className="btn btn-quiet" href={dl("md")} download>Markdown</a>
-        <a className="btn btn-quiet" href={dl("json")} download>JSON Resume</a>
-      </div>
+      {error && <div className="errbox" role="alert" style={{ margin: "0.8rem auto", maxWidth: 560 }}>{error}</div>}
+      {refused && remaining === 0 && (
+        <div className="dl-row">
+          {formats.map(([fmt, label]) => (
+            <button key={fmt} className="btn btn-quiet" disabled={!!busy}
+              onClick={() => download(fmt, true)}>
+              {busy === `${fmt}-draft` ? "Preparing…" : `Draft ${label}`}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="recap">
         <div style={{ "--i": 0 } as React.CSSProperties}>
           <span className="mono" style={{ color: "var(--green)" }}>
             {doc.report?.score} → {doc.tailored_report?.score}
           </span>
-          <span className="lbl">ATS readiness</span>
+          <span className="lbl">checklist score</span>
         </div>
         <div style={{ "--i": 1 } as React.CSSProperties}>
           <span className="mono" style={{ color: "var(--teal)" }}>{t.changes.length}</span>
-          <span className="lbl">honest rewrites</span>
+          <span className="lbl">changes logged</span>
         </div>
         <div style={{ "--i": 2 } as React.CSSProperties}>
-          <span className="mono" style={{ color: "var(--amber)" }}>0</span>
-          <span className="lbl">facts invented</span>
+          <span className="mono" style={{ color: "var(--amber)" }}>{t.warnings.length}</span>
+          <span className="lbl">notes to review</span>
         </div>
       </div>
       <p style={{ fontSize: "0.74rem", color: "var(--text-faint)", marginTop: "1.6rem" }}>
-        Every employer, title, and date on this page is byte-identical to your original. That is the point.
+        Employers, titles, dates, degrees, skills, and contact details were checked against your
+        original, and each figure against the claim it came from. Wording is not something a
+        program can verify: read it before you send it.
       </p>
     </div>
   );

@@ -1,0 +1,28 @@
+{
+ "id": "usajobs-868076000",
+ "source": "USAJOBS",
+ "source_url": "https://www.usajobs.gov/job/868076000",
+ "collected_on": "2026-09-29",
+ "raw_sha256": "f1d481cd82bde1e2af10d0882ca448da1ca6ec86380d1d2033f4f14ea4139159",
+ "licence": "Public domain in the United States",
+ "licence_basis": "A work of the United States Government (17 U.S.C. 105).",
+ "publisher": "Legislative Branch",
+ "title": "Senior Cloud Engineer",
+ "sections_kept": [
+  "title",
+  "summary",
+  "duties",
+  "qualifications"
+ ],
+ "sections_left_out": [
+  "conditions of employment",
+  "additional information",
+  "how to apply",
+  "required documents",
+  "agency contact information",
+  "benefits"
+ ],
+ "text": "Senior Cloud Engineer\n\nThe Office of the Clerk serves as the official record keeper of the US House of Representatives, and supports the nonpartisan legislative functions of the institution, including disseminating legislative information and supporting technological advancement. With an abiding dedication to service, transparency, and accessibility Legislative Computer Systems is building the next generation of applications to support this mission and provide information to our government partners and to the public.\n\nDuties\nThe Legislative Computer Systems (LCS) division within the Office of the Clerk is seeking a Senior Cloud Engineer to join our Network Operations team. This is a mid-senior level position where you can use your expertise to help us deploy next level cloud applications for our stakeholders. You will be a key technical resource implementing architectural designs, managing configurations and installation of cloud-based applications, and providing operational support of cloud infrastructures.\n\nRESPONSIBILITIES\n\n- Integrate and operate cloud environments for multiple applications.\n\n- Assist with deployment and operational support of cloud infrastructure.\n\n- Monitor, support and troubleshoot cloud environments for multiple applications.\n\n- Work with engineering, security, and operations staff to ensure cloud deployments are secure, observable, and stable.\n\n- Deploy and operate cloud-based systems that are secure, robust, and scalable.\n\n- Implement and monitor enterprise integrations such as networking and security monitoring to ensure security and stability.\n\n- Research cloud solutions and prototype platform and infrastructure solutions in coordination with engineering teams.\n\n- Collaborate with the engineering, operations, security, and enterprise teams to improve the performance, security, and cost-effectiveness of cloud applications.\n\n- Monitor service usage and costs and propose more efficient and cost-effective solutions.\n\n- Be available for on-call support as needed. Understand and support other services of LCS and assist in coordinating efforts with vendors, other departments, and users in the Clerk’s Office.\n\nThis is a hybrid position with required on-site work on Capitol Hill, Washington, DC. Telework is available. Occasional work outside normal business hours may be required due to the operational needs of the\nHouse.\n\nQualifications\nMINIMUM QUALIFICATIONS\n\n- Minimum of three years of experience providing operational support in Azure, AWS, or Google.\n\n- Have experience writing scripts in Bash or PowerShell.\n\n- Be familiar with DevOps methodology and tools such as Git, Docker, Kubernetes, etc.\n\n- Able to work under pressure and work after hours and weekends on as needed basis.\n\n- A team player with strong analytical skills and the ability to understand and resolve complex problems.\n\n- Excellent communication skills.\n\n- Ability to exercise discretion and independent judgment in fulfillment of all responsibilities.\n\nDESIRED QUALIFICATIONS\n\n- Experience with Azure preferred.\n\n- Sound knowledge of Azure and Terraform.\n\n- Experience with implementing infrastructure utilizing Infrastructure as Code concepts.\n\n- BS/BA in a STEM discipline from an accredited university.",
+ "split": "tuning",
+ "personal_details_found": 0
+}

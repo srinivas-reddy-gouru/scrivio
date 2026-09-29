@@ -8,6 +8,7 @@ import anthropic
 import openai
 from pydantic import BaseModel
 
+from pipeline.prompt_loader import load_prompt
 from pipeline.schemas.models import (
     ArticlePlan,
     ArticleRequest,
@@ -26,6 +27,7 @@ from pipeline.workers.clarification_worker import run_clarification
 from pipeline.workers.compiler_worker import compile_all_levels
 from pipeline.workers.drafting_worker import draft_all_sections
 from pipeline.workers.editor_worker import revise_draft, run_editor_review
+from pipeline.providers import clients
 from pipeline.workers.extraction_worker import process_search_result
 from pipeline.workers.humanization_worker import humanize_article
 from pipeline.workers.planning_worker import find_evidence_gaps, run_planner
@@ -79,12 +81,12 @@ class SearchQueries(BaseModel):
 
 @activity.defn
 async def clarification_activity(prompt: str) -> ClarificationState:
-    return await run_clarification(prompt, openai.AsyncOpenAI())
+    return await run_clarification(prompt, clients.openai_client())
 
 
 @activity.defn
 async def brief_activity(request: ArticleRequest) -> StoryBrief:
-    return await run_brief(request, anthropic.AsyncAnthropic())
+    return await run_brief(request, clients.anthropic_client())
 
 
 @activity.defn
@@ -94,7 +96,7 @@ async def search_activity(
     if not request.web_search:
         return []
 
-    client = openai.AsyncOpenAI()
+    client = clients.openai_client()
     user_content = f"topic: {request.topic}"
     if brief:
         user_content += (
@@ -108,11 +110,7 @@ async def search_activity(
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "Generate exactly three targeted web search queries that will find "
-                    "primary evidence for the given article thesis and angle. "
-                    "Queries must be specific and focused — not generic topic overviews."
-                ),
+                "content": load_prompt("workflow_search_queries_v1.txt").strip(),
             },
             {"role": "user", "content": user_content},
         ],
@@ -156,7 +154,7 @@ async def planning_activity(
     spans: list[EvidenceSpan],
     brief: StoryBrief | None = None,
 ) -> ArticlePlan:
-    return await run_planner(request, spans, anthropic.AsyncAnthropic(), brief=brief)
+    return await run_planner(request, spans, clients.anthropic_client(), brief=brief)
 
 
 @activity.defn
@@ -184,12 +182,12 @@ async def gap_fill_activity(
 async def drafting_activity(
     plan: ArticlePlan, spans: list[EvidenceSpan]
 ) -> DraftPackage:
-    return await draft_all_sections(plan, spans, anthropic.AsyncAnthropic())
+    return await draft_all_sections(plan, spans, clients.anthropic_client())
 
 
 @activity.defn
 async def visual_generation_activity(plan: ArticlePlan) -> list[RenderAsset]:
-    client = openai.AsyncOpenAI()
+    client = clients.openai_client()
     tasks = []
 
     for intent in plan.visual_intents:
@@ -207,14 +205,14 @@ async def visual_generation_activity(plan: ArticlePlan) -> list[RenderAsset]:
 async def verification_activity(
     plan: ArticlePlan, spans: list[EvidenceSpan]
 ) -> tuple[ArticlePlan, list[EvidenceSpan], list[VerificationReport]]:
-    return await run_verification_loop(plan, spans, openai.AsyncOpenAI())
+    return await run_verification_loop(plan, spans, clients.openai_client())
 
 
 @activity.defn
 async def editor_activity(
     plan: ArticlePlan, draft: DraftPackage
 ) -> EditorReport:
-    return await run_editor_review(plan, draft, anthropic.AsyncAnthropic())
+    return await run_editor_review(plan, draft, clients.anthropic_client())
 
 
 @activity.defn
@@ -225,7 +223,7 @@ async def revision_activity(
     editor_report: EditorReport,
 ) -> DraftPackage:
     return await revise_draft(
-        plan, draft, spans, editor_report, anthropic.AsyncAnthropic()
+        plan, draft, spans, editor_report, clients.anthropic_client()
     )
 
 
@@ -238,7 +236,7 @@ async def compilation_activity(
     # Compiling all three when the user asked for one tripled the cost.
     requested = draft.plan.request.explanation_level
     compiled = await compile_all_levels(
-        draft, anthropic.AsyncAnthropic(), levels=(requested,)
+        draft, clients.anthropic_client(), levels=(requested,)
     )
     return {level: article for level, article in compiled.items()}
 
@@ -247,7 +245,7 @@ async def compilation_activity(
 async def humanization_activity(
     article: PublishedArticle, plan: ArticlePlan
 ) -> PublishedArticle:
-    return await humanize_article(article, plan, anthropic.AsyncAnthropic())
+    return await humanize_article(article, plan, clients.anthropic_client())
 
 
 @workflow.defn

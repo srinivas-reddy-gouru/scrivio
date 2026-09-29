@@ -1,0 +1,89 @@
+{
+ "id": "cloud-senior",
+ "synthetic": "Every detail is invented. The address is on example.com and the phone number is in the range reserved for fiction.",
+ "resume": {
+  "basics": {
+   "name": "Tobias Achterberg",
+   "label": "Senior Cloud Engineer",
+   "email": "tobias.achterberg@example.com",
+   "phone": "+1 555 010 2236",
+   "url": "",
+   "location": "Raleigh, NC",
+   "summary": "Infrastructure engineer with nine years running production systems."
+  },
+  "work": [
+   {
+    "name": "Contoso Health",
+    "position": "Senior Cloud Engineer",
+    "startDate": "Jan 2020",
+    "endDate": "Present",
+    "summary": "",
+    "highlights": [
+     "Ran 60 production workloads on AWS across 3 regions",
+     "Wrote the Terraform modules that every team uses to create an account",
+     "Cut the monthly hosting bill by 18% by resizing idle capacity",
+     "Led the response to 14 production incidents and wrote each review"
+    ]
+   },
+   {
+    "name": "Adatum",
+    "position": "Systems Engineer",
+    "startDate": "Aug 2015",
+    "endDate": "Dec 2019",
+    "summary": "",
+    "highlights": [
+     "Maintained 200 Linux servers and their patching schedule",
+     "Automated server builds with Bash and Jenkins"
+    ]
+   }
+  ],
+  "education": [
+   {
+    "institution": "Carolina Technical University",
+    "area": "Information Systems",
+    "studyType": "B.S.",
+    "startDate": "2011",
+    "endDate": "2015",
+    "score": ""
+   }
+  ],
+  "skills": [
+   {
+    "name": "Platforms",
+    "keywords": [
+     "AWS",
+     "Linux"
+    ]
+   },
+   {
+    "name": "Tools",
+    "keywords": [
+     "Terraform",
+     "Bash",
+     "Jenkins",
+     "Git"
+    ]
+   }
+  ],
+  "projects": [],
+  "certificates": []
+ },
+ "honest_rewordings": [
+  {
+   "where": "work[0].highlights[0]",
+   "line": "Operated and monitored 60 production workloads on AWS across 3 regions"
+  },
+  {
+   "where": "work[0].highlights[3]",
+   "line": "Served as incident lead for 14 production incidents, documenting each review"
+  },
+  {
+   "where": "work[1].highlights[0]",
+   "line": "Managed the maintenance and patching of 200 Linux servers"
+  },
+  {
+   "where": "work[0].highlights[2]",
+   "line": "Identified idle capacity and reduced the monthly hosting bill by 18%"
+  }
+ ]
+}

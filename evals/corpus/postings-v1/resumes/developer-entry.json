@@ -1,0 +1,76 @@
+{
+ "id": "developer-entry",
+ "synthetic": "Every detail is invented. The address is on example.com and the phone number is in the range reserved for fiction.",
+ "resume": {
+  "basics": {
+   "name": "Priyanka Moreau",
+   "label": "Software Developer",
+   "email": "priyanka.moreau@example.com",
+   "phone": "+1 555 010 2573",
+   "url": "",
+   "location": "Dayton, OH",
+   "summary": "Recent graduate with one year of experience writing and testing software."
+  },
+  "work": [
+   {
+    "name": "Alpine Ski House",
+    "position": "Software Developer",
+    "startDate": "Jun 2023",
+    "endDate": "Present",
+    "summary": "",
+    "highlights": [
+     "Wrote features for the booking application in Java",
+     "Fixed 85 defects reported by the support team",
+     "Wrote unit tests for the payments module",
+     "Took part in code review and sprint planning"
+    ]
+   }
+  ],
+  "education": [
+   {
+    "institution": "Miami Valley University",
+    "area": "Computer Science",
+    "studyType": "B.S.",
+    "startDate": "2019",
+    "endDate": "2023",
+    "score": ""
+   }
+  ],
+  "skills": [
+   {
+    "name": "Languages",
+    "keywords": [
+     "Java",
+     "SQL"
+    ]
+   },
+   {
+    "name": "Tools",
+    "keywords": [
+     "Git",
+     "JUnit"
+    ]
+   }
+  ],
+  "projects": [],
+  "certificates": []
+ },
+ "honest_rewordings": [
+  {
+   "where": "work[0].highlights[0]",
+   "line": "Developed new features for the booking application in Java"
+  },
+  {
+   "where": "work[0].highlights[1]",
+   "line": "Analyzed and corrected 85 defects reported by the support team"
+  },
+  {
+   "where": "work[0].highlights[3]",
+   "line": "Participated in code review and sprint planning with the team"
+  },
+  {
+   "where": "work[0].highlights[2]",
+   "line": "Designed and wrote unit tests for the payments module"
+  }
+ ]
+}

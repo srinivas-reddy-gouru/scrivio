@@ -1,0 +1,26 @@
+{
+ "id": "tts-login-integration-engineer-2024",
+ "source": "TTS, U.S. General Services Administration",
+ "source_url": "https://github.com/18F/join.tts.gsa.gov/blob/5dfa66db0f4b/positions/login-integration-engineer-2024.md",
+ "collected_on": "2026-09-29",
+ "raw_sha256": "4448b1d6a529aee4b4621ed2eea0b3f045c447aa4e8e30bb0ac0272c39b4905a",
+ "licence": "CC0 1.0 Universal",
+ "licence_basis": "The repository's LICENSE.md dedicates it to the public domain under CC0 1.0.",
+ "publisher": "General Services Administration",
+ "title": "Login.gov: Integration Engineer GS15",
+ "sections_kept": [
+  "title",
+  "role summary",
+  "key objectives",
+  "qualifications"
+ ],
+ "sections_left_out": [
+  "basic information",
+  "how to apply",
+  "information sessions",
+  "the authoring template's instructions"
+ ],
+ "text": "Login.gov: Integration Engineer GS15\n\nRole summary\nLogin.gov is the public’s one account for government, simplifying access to government benefits and services for members of the public by enabling them to reuse one secure account across government agencies, and improving the security of government systems by enabling agencies to leverage a shared technology service to provide strong authentication and identity verification services to their customers. We focus on the complexities of digital identity authentication for the public, so agencies can focus on their mission.\n\nThis opportunity is located in the Technology Transformation Services (TTS) Solutions Division’s Login.gov team. The Login.gov team is a remote organization and is composed of experts across product development, software engineering, cybersecurity, and platform engineering. \n\nAs an Integration Engineer at Login.gov, you will provide technical support to our government partners as they evaluate our services for use at their agencies and as they  integrate Login.gov into their applications. You will work closely with the Login.gov Account Managers and with other members of the Login.gov Partnerships team, and product teams and programs. In addition, you will develop and maintain partner-facing and internal tools and applications to improve the overall partner experience.\n\nKey objectives\n  - Improve the partnership experience for Login.gov partners\n    - Maintain existing systems and tools used by the Partnerships team to manage the integration process.\n    - Develop new partner-facing features to work towards more automated onboarding and integration processes.\n  - Support partners integrating with Login.gov\n    - Provide technical support to partners integrating Login.gov into their applications, help troubleshoot and resolve issues.\n    - Answer technical questions about the Login.gov product and guide partners through technical decisions, e.g selecting an authentication protocol.\n    - Assist partners in debugging SAML and OIDC requests between their applications and ours.\n    - Serve as an escalation point for technical support tickets and facilitate technical consultations with partners.\n    - Facilitate the integration launch and configuration management processes.\n\nQualifications\nProvide as much detail as possible on your resume so that we can evaluate your\nprevious experience. Follow our\n[guidance on creating a federal style resume.](https://join.tts.gsa.gov/resume/)\n\nFailure to provide required information may result in disqualification.\n\nFor each job on your resume, provide:\n\n- The exact dates you held each job (from month/year to month/year or “present”)\n- Number of hours per week you worked (if part time)\n\n**SPECIALIZED EXPERIENCE REQUIREMENTS:**\n\nTo qualify, you must have one (1) year of specialized experience at the next\nlower GS-grade (or equivalent). Specialized experience is defined as follows:\n\n- Experience working in a cross-functional team environment.\n- Experience working with partners, clients, and/or users to troubleshoot and resolve technical issues.\n- Experience working with web technologies such as authentication, web application development, and networking at a high level.\n- Experience developing and maintaining web applications.",
+ "split": "tuning",
+ "personal_details_found": 0
+}

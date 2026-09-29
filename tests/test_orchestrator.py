@@ -133,3 +133,32 @@ def test_workflow_calls_activities_in_expected_order(monkeypatch) -> None:
     assert result == {"intermediate": compiled_article}
     assert result["intermediate"].assets == [asset]
     assert result["intermediate"].verification_reports == [report]
+
+
+# ── Worker registration (review item R15) ────────────────────────────
+
+def test_every_activity_the_workflow_schedules_is_registered() -> None:
+    """Read from the workflow's own source, so an activity added to the
+    workflow and forgotten in the worker fails here rather than in the
+    middle of someone's run."""
+    import inspect
+    import re
+
+    from pipeline.orchestrator import article_workflow
+    from pipeline.orchestrator.run_worker import all_activities
+
+    source = inspect.getsource(article_workflow.ArticleGenerationWorkflow)
+    scheduled = set(re.findall(r"_execute_activity\(\s*(\w+_activity)", source))
+    registered = {fn.__name__ for fn in all_activities()}
+
+    assert len(scheduled) >= 10, "the scan found too few: it is probably broken"
+    assert scheduled - registered == set()
+
+
+def test_the_five_that_were_missing_are_now_registered() -> None:
+    from pipeline.orchestrator.run_worker import all_activities
+
+    registered = {fn.__name__ for fn in all_activities()}
+
+    assert {"brief_activity", "gap_fill_activity", "editor_activity",
+            "revision_activity", "humanization_activity"} <= registered

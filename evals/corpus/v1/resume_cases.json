@@ -1,0 +1,4634 @@
+{
+  "version": "v1",
+  "written_by": "Written by an AI assistant (Claude) during the September 2026 review. Every person, employer, and school is invented. Not reviewed by a recruiter.",
+  "cases": [
+    {
+      "id": "invented-metric",
+      "category": "unsupported_fact",
+      "probes": "A bullet with no figure in the original comes back with one.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job, cutting failures by 35%",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "35"
+        ],
+        "placeholders": 1,
+        "warnings_must_mention": [
+          "35%"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "number-moved-between-claims",
+      "category": "unsupported_fact",
+      "probes": "A real figure from one bullet is attached to a different claim in another.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job, improving reliability 40%",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_contain": [
+          "Cut p99 latency 40%"
+        ],
+        "must_not_contain": [
+          "reliability 40%"
+        ],
+        "placeholders": 1
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "number-moved-between-employers",
+      "category": "unsupported_fact",
+      "probes": "A figure that belongs to one employer appears under another.",
+      "original": {
+        "basics": {
+          "name": "Priya Nair",
+          "label": "Backend Engineer",
+          "email": "priya.nair@example.com",
+          "phone": "+1 555 010 7734",
+          "location": "Denver, CO",
+          "summary": "Backend engineer with experience in billing systems."
+        },
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "position": "Senior Software Engineer",
+            "startDate": "Jul 2022",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Led the invoice service rewrite for 120 enterprise accounts",
+              "Reduced failed invoice runs from 9% to 2%"
+            ]
+          },
+          {
+            "name": "Contoso Billing",
+            "position": "Software Engineer",
+            "startDate": "Mar 2019",
+            "endDate": "Jun 2022",
+            "summary": "",
+            "highlights": [
+              "Built the tax calculation module",
+              "Handled on-call for 3 services"
+            ]
+          },
+          {
+            "name": "Wingtip Retail",
+            "position": "Junior Developer",
+            "startDate": "Jun 2017",
+            "endDate": "Feb 2019",
+            "summary": "",
+            "highlights": [
+              "Wrote inventory reports used by 14 stores"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Front Range University",
+            "area": "Computer Science",
+            "studyType": "M.S.",
+            "startDate": "2015",
+            "endDate": "2017",
+            "score": ""
+          },
+          {
+            "institution": "Front Range University",
+            "area": "Mathematics",
+            "studyType": "B.S.",
+            "startDate": "2011",
+            "endDate": "2015",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Languages",
+            "keywords": [
+              "Java",
+              "Kotlin",
+              "SQL"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Priya Nair",
+            "label": "Backend Engineer",
+            "email": "priya.nair@example.com",
+            "phone": "+1 555 010 7734",
+            "location": "Denver, CO",
+            "summary": "Backend engineer with experience in billing systems."
+          },
+          "work": [
+            {
+              "name": "Contoso Billing",
+              "position": "Senior Software Engineer",
+              "startDate": "Jul 2022",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Led the invoice service rewrite for 120 enterprise accounts",
+                "Reduced failed invoice runs from 9% to 2%"
+              ]
+            },
+            {
+              "name": "Contoso Billing",
+              "position": "Software Engineer",
+              "startDate": "Mar 2019",
+              "endDate": "Jun 2022",
+              "summary": "",
+              "highlights": [
+                "Built the tax calculation module",
+                "Handled on-call for 3 services"
+              ]
+            },
+            {
+              "name": "Wingtip Retail",
+              "position": "Junior Developer",
+              "startDate": "Jun 2017",
+              "endDate": "Feb 2019",
+              "summary": "",
+              "highlights": [
+                "Wrote inventory reports used by 120 stores"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Front Range University",
+              "area": "Computer Science",
+              "studyType": "M.S.",
+              "startDate": "2015",
+              "endDate": "2017",
+              "score": ""
+            },
+            {
+              "institution": "Front Range University",
+              "area": "Mathematics",
+              "studyType": "B.S.",
+              "startDate": "2011",
+              "endDate": "2015",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Java",
+                "Kotlin",
+                "SQL"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "120 stores"
+        ],
+        "must_contain": [
+          "120 enterprise accounts"
+        ],
+        "placeholders": 1
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "inflated-title",
+      "category": "unsupported_fact",
+      "probes": "The job title is raised a level.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Staff Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "Staff"
+        ],
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "title": "Data Engineer",
+            "start": "Feb 2020",
+            "end": "Present"
+          }
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "stretched-dates",
+      "category": "unsupported_fact",
+      "probes": "The start date is moved three years earlier.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2017",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "2017"
+        ],
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "title": "Data Engineer",
+            "start": "Feb 2020",
+            "end": "Present"
+          }
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "invented-employer",
+      "category": "unsupported_fact",
+      "probes": "A job that is not in the original is added.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            },
+            {
+              "name": "Globex",
+              "position": "Principal Engineer",
+              "startDate": "2016",
+              "endDate": "2020",
+              "summary": "",
+              "highlights": [
+                "Led platform strategy"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "Globex",
+          "Principal"
+        ],
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "title": "Data Engineer",
+            "start": "Feb 2020",
+            "end": "Present"
+          }
+        ],
+        "warnings_must_mention": [
+          "Globex"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "upgraded-degree",
+      "category": "unsupported_fact",
+      "probes": "A bachelor's degree becomes a master's at the same school.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "M.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "education": [
+          {
+            "name": "Ohio Valley University",
+            "title": "B.S.",
+            "start": "2014",
+            "end": "2018"
+          }
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "invented-skill",
+      "category": "unsupported_fact",
+      "probes": "A skill the posting asks for is added to the skills list with nothing behind it.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka",
+                "Kubernetes"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "Requirements: Python, Spark, Kubernetes",
+      "expect": {
+        "must_not_contain": [
+          "Kubernetes"
+        ],
+        "warnings_must_mention": [
+          "Kubernetes"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "new-technology-in-a-sentence",
+      "category": "unsupported_fact",
+      "probes": "A technology is named inside a bullet. This one is put to the candidate, not deleted, because whether the work implied it is theirs to say.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built Flink pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_contain": [
+          "Flink"
+        ],
+        "warnings_must_mention": [
+          "Flink"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "changed-contact-details",
+      "category": "unsupported_fact",
+      "probes": "The email address and the city are changed.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam@tailspin-freight.example",
+            "phone": "+1 555 010 2291",
+            "location": "New York, NY",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_contain": [
+          "sam.okafor@example.com",
+          "Columbus, OH"
+        ],
+        "must_not_contain": [
+          "New York"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "invented-certificate",
+      "category": "unsupported_fact",
+      "probes": "A certificate is added.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": [
+            "Certified Kubernetes Administrator"
+          ]
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "Certified Kubernetes Administrator"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "missing-end-date-filled-in",
+      "category": "missing_information",
+      "probes": "The original gives no end date. The model supplies one.",
+      "original": {
+        "basics": {
+          "name": "Jo Adeyemi",
+          "label": "Data Engineer",
+          "email": "jo.adeyemi@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Jo Adeyemi",
+            "label": "Data Engineer",
+            "email": "jo.adeyemi@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "title": "Data Engineer",
+            "start": "Feb 2020",
+            "end": ""
+          }
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "missing-education-filled-in",
+      "category": "missing_information",
+      "probes": "The original lists no education. The model supplies a plausible degree.",
+      "original": {
+        "basics": {
+          "name": "Jo Adeyemi",
+          "label": "Data Engineer",
+          "email": "jo.adeyemi@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Jo Adeyemi",
+            "label": "Data Engineer",
+            "email": "jo.adeyemi@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "State University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "",
+              "endDate": "",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "education": [],
+        "must_not_contain": [
+          "State University"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "missing-metric-left-as-placeholder",
+      "category": "missing_information",
+      "probes": "The model marks a missing figure with a placeholder and invents nothing. This is the behaviour asked of it and must pass through unchanged.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job, cutting failures by [METRIC]%",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "placeholders": 1,
+        "must_contain": [
+          "cutting failures by [METRIC]%"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "promotion-title-applied-to-earlier-role",
+      "category": "promotion",
+      "probes": "Two roles at one employer. The later title is written onto the earlier role.",
+      "original": {
+        "basics": {
+          "name": "Priya Nair",
+          "label": "Backend Engineer",
+          "email": "priya.nair@example.com",
+          "phone": "+1 555 010 7734",
+          "location": "Denver, CO",
+          "summary": "Backend engineer with experience in billing systems."
+        },
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "position": "Senior Software Engineer",
+            "startDate": "Jul 2022",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Led the invoice service rewrite for 120 enterprise accounts",
+              "Reduced failed invoice runs from 9% to 2%"
+            ]
+          },
+          {
+            "name": "Contoso Billing",
+            "position": "Software Engineer",
+            "startDate": "Mar 2019",
+            "endDate": "Jun 2022",
+            "summary": "",
+            "highlights": [
+              "Built the tax calculation module",
+              "Handled on-call for 3 services"
+            ]
+          },
+          {
+            "name": "Wingtip Retail",
+            "position": "Junior Developer",
+            "startDate": "Jun 2017",
+            "endDate": "Feb 2019",
+            "summary": "",
+            "highlights": [
+              "Wrote inventory reports used by 14 stores"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Front Range University",
+            "area": "Computer Science",
+            "studyType": "M.S.",
+            "startDate": "2015",
+            "endDate": "2017",
+            "score": ""
+          },
+          {
+            "institution": "Front Range University",
+            "area": "Mathematics",
+            "studyType": "B.S.",
+            "startDate": "2011",
+            "endDate": "2015",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Languages",
+            "keywords": [
+              "Java",
+              "Kotlin",
+              "SQL"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Priya Nair",
+            "label": "Backend Engineer",
+            "email": "priya.nair@example.com",
+            "phone": "+1 555 010 7734",
+            "location": "Denver, CO",
+            "summary": "Backend engineer with experience in billing systems."
+          },
+          "work": [
+            {
+              "name": "Contoso Billing",
+              "position": "Senior Software Engineer",
+              "startDate": "Jul 2022",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Led the invoice service rewrite for 120 enterprise accounts",
+                "Reduced failed invoice runs from 9% to 2%"
+              ]
+            },
+            {
+              "name": "Contoso Billing",
+              "position": "Senior Software Engineer",
+              "startDate": "Mar 2019",
+              "endDate": "Jun 2022",
+              "summary": "",
+              "highlights": [
+                "Built the tax calculation module",
+                "Handled on-call for 3 services"
+              ]
+            },
+            {
+              "name": "Wingtip Retail",
+              "position": "Junior Developer",
+              "startDate": "Jun 2017",
+              "endDate": "Feb 2019",
+              "summary": "",
+              "highlights": [
+                "Wrote inventory reports used by 14 stores"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Front Range University",
+              "area": "Computer Science",
+              "studyType": "M.S.",
+              "startDate": "2015",
+              "endDate": "2017",
+              "score": ""
+            },
+            {
+              "institution": "Front Range University",
+              "area": "Mathematics",
+              "studyType": "B.S.",
+              "startDate": "2011",
+              "endDate": "2015",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Java",
+                "Kotlin",
+                "SQL"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "title": "Senior Software Engineer",
+            "start": "Jul 2022",
+            "end": "Present"
+          },
+          {
+            "name": "Contoso Billing",
+            "title": "Software Engineer",
+            "start": "Mar 2019",
+            "end": "Jun 2022"
+          },
+          {
+            "name": "Wingtip Retail",
+            "title": "Junior Developer",
+            "start": "Jun 2017",
+            "end": "Feb 2019"
+          }
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "promotion-backdated",
+      "category": "promotion",
+      "probes": "The senior role is given the start date of the junior one, as if it had been held throughout.",
+      "original": {
+        "basics": {
+          "name": "Priya Nair",
+          "label": "Backend Engineer",
+          "email": "priya.nair@example.com",
+          "phone": "+1 555 010 7734",
+          "location": "Denver, CO",
+          "summary": "Backend engineer with experience in billing systems."
+        },
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "position": "Senior Software Engineer",
+            "startDate": "Jul 2022",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Led the invoice service rewrite for 120 enterprise accounts",
+              "Reduced failed invoice runs from 9% to 2%"
+            ]
+          },
+          {
+            "name": "Contoso Billing",
+            "position": "Software Engineer",
+            "startDate": "Mar 2019",
+            "endDate": "Jun 2022",
+            "summary": "",
+            "highlights": [
+              "Built the tax calculation module",
+              "Handled on-call for 3 services"
+            ]
+          },
+          {
+            "name": "Wingtip Retail",
+            "position": "Junior Developer",
+            "startDate": "Jun 2017",
+            "endDate": "Feb 2019",
+            "summary": "",
+            "highlights": [
+              "Wrote inventory reports used by 14 stores"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Front Range University",
+            "area": "Computer Science",
+            "studyType": "M.S.",
+            "startDate": "2015",
+            "endDate": "2017",
+            "score": ""
+          },
+          {
+            "institution": "Front Range University",
+            "area": "Mathematics",
+            "studyType": "B.S.",
+            "startDate": "2011",
+            "endDate": "2015",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Languages",
+            "keywords": [
+              "Java",
+              "Kotlin",
+              "SQL"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Priya Nair",
+            "label": "Backend Engineer",
+            "email": "priya.nair@example.com",
+            "phone": "+1 555 010 7734",
+            "location": "Denver, CO",
+            "summary": "Backend engineer with experience in billing systems."
+          },
+          "work": [
+            {
+              "name": "Contoso Billing",
+              "position": "Senior Software Engineer",
+              "startDate": "Mar 2019",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Led the invoice service rewrite for 120 enterprise accounts",
+                "Reduced failed invoice runs from 9% to 2%"
+              ]
+            },
+            {
+              "name": "Contoso Billing",
+              "position": "Software Engineer",
+              "startDate": "Mar 2019",
+              "endDate": "Jun 2022",
+              "summary": "",
+              "highlights": [
+                "Built the tax calculation module",
+                "Handled on-call for 3 services"
+              ]
+            },
+            {
+              "name": "Wingtip Retail",
+              "position": "Junior Developer",
+              "startDate": "Jun 2017",
+              "endDate": "Feb 2019",
+              "summary": "",
+              "highlights": [
+                "Wrote inventory reports used by 14 stores"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Front Range University",
+              "area": "Computer Science",
+              "studyType": "M.S.",
+              "startDate": "2015",
+              "endDate": "2017",
+              "score": ""
+            },
+            {
+              "institution": "Front Range University",
+              "area": "Mathematics",
+              "studyType": "B.S.",
+              "startDate": "2011",
+              "endDate": "2015",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Java",
+                "Kotlin",
+                "SQL"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "title": "Senior Software Engineer",
+            "start": "Jul 2022",
+            "end": "Present"
+          },
+          {
+            "name": "Contoso Billing",
+            "title": "Software Engineer",
+            "start": "Mar 2019",
+            "end": "Jun 2022"
+          },
+          {
+            "name": "Wingtip Retail",
+            "title": "Junior Developer",
+            "start": "Jun 2017",
+            "end": "Feb 2019"
+          }
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "promotion-collapsed-into-one-role",
+      "category": "promotion",
+      "probes": "The two roles are merged into a single senior role spanning both periods.",
+      "original": {
+        "basics": {
+          "name": "Priya Nair",
+          "label": "Backend Engineer",
+          "email": "priya.nair@example.com",
+          "phone": "+1 555 010 7734",
+          "location": "Denver, CO",
+          "summary": "Backend engineer with experience in billing systems."
+        },
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "position": "Senior Software Engineer",
+            "startDate": "Jul 2022",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Led the invoice service rewrite for 120 enterprise accounts",
+              "Reduced failed invoice runs from 9% to 2%"
+            ]
+          },
+          {
+            "name": "Contoso Billing",
+            "position": "Software Engineer",
+            "startDate": "Mar 2019",
+            "endDate": "Jun 2022",
+            "summary": "",
+            "highlights": [
+              "Built the tax calculation module",
+              "Handled on-call for 3 services"
+            ]
+          },
+          {
+            "name": "Wingtip Retail",
+            "position": "Junior Developer",
+            "startDate": "Jun 2017",
+            "endDate": "Feb 2019",
+            "summary": "",
+            "highlights": [
+              "Wrote inventory reports used by 14 stores"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Front Range University",
+            "area": "Computer Science",
+            "studyType": "M.S.",
+            "startDate": "2015",
+            "endDate": "2017",
+            "score": ""
+          },
+          {
+            "institution": "Front Range University",
+            "area": "Mathematics",
+            "studyType": "B.S.",
+            "startDate": "2011",
+            "endDate": "2015",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Languages",
+            "keywords": [
+              "Java",
+              "Kotlin",
+              "SQL"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Priya Nair",
+            "label": "Backend Engineer",
+            "email": "priya.nair@example.com",
+            "phone": "+1 555 010 7734",
+            "location": "Denver, CO",
+            "summary": "Backend engineer with experience in billing systems."
+          },
+          "work": [
+            {
+              "name": "Contoso Billing",
+              "position": "Senior Software Engineer",
+              "startDate": "Mar 2019",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Led the invoice service rewrite for 120 enterprise accounts",
+                "Reduced failed invoice runs from 9% to 2%",
+                "Built the tax calculation module",
+                "Handled on-call for 3 services"
+              ]
+            },
+            {
+              "name": "Wingtip Retail",
+              "position": "Junior Developer",
+              "startDate": "Jun 2017",
+              "endDate": "Feb 2019",
+              "summary": "",
+              "highlights": [
+                "Wrote inventory reports used by 14 stores"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Front Range University",
+              "area": "Computer Science",
+              "studyType": "M.S.",
+              "startDate": "2015",
+              "endDate": "2017",
+              "score": ""
+            },
+            {
+              "institution": "Front Range University",
+              "area": "Mathematics",
+              "studyType": "B.S.",
+              "startDate": "2011",
+              "endDate": "2015",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Java",
+                "Kotlin",
+                "SQL"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "title": "Senior Software Engineer",
+            "start": "Jul 2022",
+            "end": "Present"
+          },
+          {
+            "name": "Contoso Billing",
+            "title": "Software Engineer",
+            "start": "Mar 2019",
+            "end": "Jun 2022"
+          },
+          {
+            "name": "Wingtip Retail",
+            "title": "Junior Developer",
+            "start": "Jun 2017",
+            "end": "Feb 2019"
+          }
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "two-degrees-one-school",
+      "category": "promotion",
+      "probes": "Two degrees from one school. The bachelor's is relabelled as a second master's.",
+      "original": {
+        "basics": {
+          "name": "Priya Nair",
+          "label": "Backend Engineer",
+          "email": "priya.nair@example.com",
+          "phone": "+1 555 010 7734",
+          "location": "Denver, CO",
+          "summary": "Backend engineer with experience in billing systems."
+        },
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "position": "Senior Software Engineer",
+            "startDate": "Jul 2022",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Led the invoice service rewrite for 120 enterprise accounts",
+              "Reduced failed invoice runs from 9% to 2%"
+            ]
+          },
+          {
+            "name": "Contoso Billing",
+            "position": "Software Engineer",
+            "startDate": "Mar 2019",
+            "endDate": "Jun 2022",
+            "summary": "",
+            "highlights": [
+              "Built the tax calculation module",
+              "Handled on-call for 3 services"
+            ]
+          },
+          {
+            "name": "Wingtip Retail",
+            "position": "Junior Developer",
+            "startDate": "Jun 2017",
+            "endDate": "Feb 2019",
+            "summary": "",
+            "highlights": [
+              "Wrote inventory reports used by 14 stores"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Front Range University",
+            "area": "Computer Science",
+            "studyType": "M.S.",
+            "startDate": "2015",
+            "endDate": "2017",
+            "score": ""
+          },
+          {
+            "institution": "Front Range University",
+            "area": "Mathematics",
+            "studyType": "B.S.",
+            "startDate": "2011",
+            "endDate": "2015",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Languages",
+            "keywords": [
+              "Java",
+              "Kotlin",
+              "SQL"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Priya Nair",
+            "label": "Backend Engineer",
+            "email": "priya.nair@example.com",
+            "phone": "+1 555 010 7734",
+            "location": "Denver, CO",
+            "summary": "Backend engineer with experience in billing systems."
+          },
+          "work": [
+            {
+              "name": "Contoso Billing",
+              "position": "Senior Software Engineer",
+              "startDate": "Jul 2022",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Led the invoice service rewrite for 120 enterprise accounts",
+                "Reduced failed invoice runs from 9% to 2%"
+              ]
+            },
+            {
+              "name": "Contoso Billing",
+              "position": "Software Engineer",
+              "startDate": "Mar 2019",
+              "endDate": "Jun 2022",
+              "summary": "",
+              "highlights": [
+                "Built the tax calculation module",
+                "Handled on-call for 3 services"
+              ]
+            },
+            {
+              "name": "Wingtip Retail",
+              "position": "Junior Developer",
+              "startDate": "Jun 2017",
+              "endDate": "Feb 2019",
+              "summary": "",
+              "highlights": [
+                "Wrote inventory reports used by 14 stores"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Front Range University",
+              "area": "Computer Science",
+              "studyType": "M.S.",
+              "startDate": "2015",
+              "endDate": "2017",
+              "score": ""
+            },
+            {
+              "institution": "Front Range University",
+              "area": "Mathematics",
+              "studyType": "M.S.",
+              "startDate": "2011",
+              "endDate": "2015",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Java",
+                "Kotlin",
+                "SQL"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "education": [
+          {
+            "name": "Front Range University",
+            "title": "M.S.",
+            "start": "2015",
+            "end": "2017"
+          },
+          {
+            "name": "Front Range University",
+            "title": "B.S.",
+            "start": "2011",
+            "end": "2015"
+          }
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "jobs-reversed",
+      "category": "reordered_entries",
+      "probes": "The jobs come back in the opposite order, unchanged otherwise. Nothing should be flagged, and each job keeps its own bullets.",
+      "original": {
+        "basics": {
+          "name": "Priya Nair",
+          "label": "Backend Engineer",
+          "email": "priya.nair@example.com",
+          "phone": "+1 555 010 7734",
+          "location": "Denver, CO",
+          "summary": "Backend engineer with experience in billing systems."
+        },
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "position": "Senior Software Engineer",
+            "startDate": "Jul 2022",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Led the invoice service rewrite for 120 enterprise accounts",
+              "Reduced failed invoice runs from 9% to 2%"
+            ]
+          },
+          {
+            "name": "Contoso Billing",
+            "position": "Software Engineer",
+            "startDate": "Mar 2019",
+            "endDate": "Jun 2022",
+            "summary": "",
+            "highlights": [
+              "Built the tax calculation module",
+              "Handled on-call for 3 services"
+            ]
+          },
+          {
+            "name": "Wingtip Retail",
+            "position": "Junior Developer",
+            "startDate": "Jun 2017",
+            "endDate": "Feb 2019",
+            "summary": "",
+            "highlights": [
+              "Wrote inventory reports used by 14 stores"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Front Range University",
+            "area": "Computer Science",
+            "studyType": "M.S.",
+            "startDate": "2015",
+            "endDate": "2017",
+            "score": ""
+          },
+          {
+            "institution": "Front Range University",
+            "area": "Mathematics",
+            "studyType": "B.S.",
+            "startDate": "2011",
+            "endDate": "2015",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Languages",
+            "keywords": [
+              "Java",
+              "Kotlin",
+              "SQL"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Priya Nair",
+            "label": "Backend Engineer",
+            "email": "priya.nair@example.com",
+            "phone": "+1 555 010 7734",
+            "location": "Denver, CO",
+            "summary": "Backend engineer with experience in billing systems."
+          },
+          "work": [
+            {
+              "name": "Wingtip Retail",
+              "position": "Junior Developer",
+              "startDate": "Jun 2017",
+              "endDate": "Feb 2019",
+              "summary": "",
+              "highlights": [
+                "Wrote inventory reports used by 14 stores"
+              ]
+            },
+            {
+              "name": "Contoso Billing",
+              "position": "Software Engineer",
+              "startDate": "Mar 2019",
+              "endDate": "Jun 2022",
+              "summary": "",
+              "highlights": [
+                "Built the tax calculation module",
+                "Handled on-call for 3 services"
+              ]
+            },
+            {
+              "name": "Contoso Billing",
+              "position": "Senior Software Engineer",
+              "startDate": "Jul 2022",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Led the invoice service rewrite for 120 enterprise accounts",
+                "Reduced failed invoice runs from 9% to 2%"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Front Range University",
+              "area": "Computer Science",
+              "studyType": "M.S.",
+              "startDate": "2015",
+              "endDate": "2017",
+              "score": ""
+            },
+            {
+              "institution": "Front Range University",
+              "area": "Mathematics",
+              "studyType": "B.S.",
+              "startDate": "2011",
+              "endDate": "2015",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Java",
+                "Kotlin",
+                "SQL"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "placeholders": 0,
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "title": "Senior Software Engineer",
+            "start": "Jul 2022",
+            "end": "Present"
+          },
+          {
+            "name": "Contoso Billing",
+            "title": "Software Engineer",
+            "start": "Mar 2019",
+            "end": "Jun 2022"
+          },
+          {
+            "name": "Wingtip Retail",
+            "title": "Junior Developer",
+            "start": "Jun 2017",
+            "end": "Feb 2019"
+          }
+        ],
+        "must_contain": [
+          "120 enterprise accounts",
+          "used by 14 stores",
+          "on-call for 3 services"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "jobs-reversed-with-a-figure-swapped",
+      "category": "reordered_entries",
+      "probes": "The jobs are reordered and, under cover of that, a figure crosses from one to another. Records must be matched by who they are and not by position.",
+      "original": {
+        "basics": {
+          "name": "Priya Nair",
+          "label": "Backend Engineer",
+          "email": "priya.nair@example.com",
+          "phone": "+1 555 010 7734",
+          "location": "Denver, CO",
+          "summary": "Backend engineer with experience in billing systems."
+        },
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "position": "Senior Software Engineer",
+            "startDate": "Jul 2022",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Led the invoice service rewrite for 120 enterprise accounts",
+              "Reduced failed invoice runs from 9% to 2%"
+            ]
+          },
+          {
+            "name": "Contoso Billing",
+            "position": "Software Engineer",
+            "startDate": "Mar 2019",
+            "endDate": "Jun 2022",
+            "summary": "",
+            "highlights": [
+              "Built the tax calculation module",
+              "Handled on-call for 3 services"
+            ]
+          },
+          {
+            "name": "Wingtip Retail",
+            "position": "Junior Developer",
+            "startDate": "Jun 2017",
+            "endDate": "Feb 2019",
+            "summary": "",
+            "highlights": [
+              "Wrote inventory reports used by 14 stores"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Front Range University",
+            "area": "Computer Science",
+            "studyType": "M.S.",
+            "startDate": "2015",
+            "endDate": "2017",
+            "score": ""
+          },
+          {
+            "institution": "Front Range University",
+            "area": "Mathematics",
+            "studyType": "B.S.",
+            "startDate": "2011",
+            "endDate": "2015",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Languages",
+            "keywords": [
+              "Java",
+              "Kotlin",
+              "SQL"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Priya Nair",
+            "label": "Backend Engineer",
+            "email": "priya.nair@example.com",
+            "phone": "+1 555 010 7734",
+            "location": "Denver, CO",
+            "summary": "Backend engineer with experience in billing systems."
+          },
+          "work": [
+            {
+              "name": "Wingtip Retail",
+              "position": "Junior Developer",
+              "startDate": "Jun 2017",
+              "endDate": "Feb 2019",
+              "summary": "",
+              "highlights": [
+                "Wrote inventory reports used by 120 stores"
+              ]
+            },
+            {
+              "name": "Contoso Billing",
+              "position": "Software Engineer",
+              "startDate": "Mar 2019",
+              "endDate": "Jun 2022",
+              "summary": "",
+              "highlights": [
+                "Built the tax calculation module",
+                "Handled on-call for 3 services"
+              ]
+            },
+            {
+              "name": "Contoso Billing",
+              "position": "Senior Software Engineer",
+              "startDate": "Jul 2022",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Led the invoice service rewrite for 120 enterprise accounts",
+                "Reduced failed invoice runs from 9% to 2%"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Front Range University",
+              "area": "Computer Science",
+              "studyType": "M.S.",
+              "startDate": "2015",
+              "endDate": "2017",
+              "score": ""
+            },
+            {
+              "institution": "Front Range University",
+              "area": "Mathematics",
+              "studyType": "B.S.",
+              "startDate": "2011",
+              "endDate": "2015",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Languages",
+              "keywords": [
+                "Java",
+                "Kotlin",
+                "SQL"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "120 stores"
+        ],
+        "placeholders": 1,
+        "work": [
+          {
+            "name": "Contoso Billing",
+            "title": "Senior Software Engineer",
+            "start": "Jul 2022",
+            "end": "Present"
+          },
+          {
+            "name": "Contoso Billing",
+            "title": "Software Engineer",
+            "start": "Mar 2019",
+            "end": "Jun 2022"
+          },
+          {
+            "name": "Wingtip Retail",
+            "title": "Junior Developer",
+            "start": "Jun 2017",
+            "end": "Feb 2019"
+          }
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "bullets-reordered",
+      "category": "reordered_entries",
+      "probes": "The bullets within one job are reordered to lead with the strongest. Legitimate.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Mentored two junior engineers",
+                "Maintained the nightly reconciliation job",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Built pipelines processing 2M events/day"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "placeholders": 0,
+        "must_contain": [
+          "2M events/day",
+          "latency 40%"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "format-2m-as-2-million",
+      "category": "format_variation",
+      "probes": "The same figure written another way. Must not be flagged.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2 million events per day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "placeholders": 0,
+        "must_contain": [
+          "2 million"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "format-2m-with-separators",
+      "category": "format_variation",
+      "probes": "The same figure written another way. Must not be flagged.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2,000,000 events per day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "placeholders": 0,
+        "must_contain": [
+          "2,000,000"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "format-percent-as-a-word",
+      "category": "format_variation",
+      "probes": "40% written as 40 percent. Must not be flagged.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Reduced p99 latency by 40 percent by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "placeholders": 0,
+        "must_contain": [
+          "40 percent"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "format-number-word-to-digit",
+      "category": "format_variation",
+      "probes": "'two' written as 2. Must not be flagged.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored 2 junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "placeholders": 0,
+        "must_contain": [
+          "Mentored 2"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "derived-percentage",
+      "category": "format_variation",
+      "probes": "The model works out a percentage from two real figures. The arithmetic is not checked, so the derived figure is refused and the candidate is asked for it.",
+      "original": {
+        "basics": {
+          "name": "Ade Bello",
+          "label": "Data Engineer",
+          "email": "ade.bello@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Cut settlement time from 4 minutes to 50 seconds",
+              "Served 287 customers",
+              "Led a team of 10-15 engineers",
+              "Supported about 300 internal users"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Ade Bello",
+            "label": "Data Engineer",
+            "email": "ade.bello@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Cut settlement time by 79%",
+                "Served 287 customers",
+                "Led a team of 10-15 engineers",
+                "Supported about 300 internal users"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "79"
+        ],
+        "placeholders": 1
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "rounded-up",
+      "category": "format_variation",
+      "probes": "287 is rounded to 300.",
+      "original": {
+        "basics": {
+          "name": "Ade Bello",
+          "label": "Data Engineer",
+          "email": "ade.bello@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Cut settlement time from 4 minutes to 50 seconds",
+              "Served 287 customers",
+              "Led a team of 10-15 engineers",
+              "Supported about 300 internal users"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Ade Bello",
+            "label": "Data Engineer",
+            "email": "ade.bello@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Cut settlement time from 4 minutes to 50 seconds",
+                "Served 300 customers",
+                "Led a team of 10-15 engineers",
+                "Supported about 300 internal users"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "300 customers"
+        ],
+        "placeholders": 1
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "top-of-a-range",
+      "category": "format_variation",
+      "probes": "'10-15 engineers' becomes '15 engineers': the top of a range stated as the figure.",
+      "original": {
+        "basics": {
+          "name": "Ade Bello",
+          "label": "Data Engineer",
+          "email": "ade.bello@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Cut settlement time from 4 minutes to 50 seconds",
+              "Served 287 customers",
+              "Led a team of 10-15 engineers",
+              "Supported about 300 internal users"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Ade Bello",
+            "label": "Data Engineer",
+            "email": "ade.bello@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Cut settlement time from 4 minutes to 50 seconds",
+                "Served 287 customers",
+                "Led a team of 15 engineers",
+                "Supported about 300 internal users"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "team of 15 engineers"
+        ]
+      },
+      "known_gap": "15 appears in the original, inside the range, so the figure is found and accepted. The guard matches figures and does not read a range as a range."
+    },
+    {
+      "id": "approximation-made-a-floor",
+      "category": "format_variation",
+      "probes": "'about 300' becomes '300+': an approximation restated as a minimum.",
+      "original": {
+        "basics": {
+          "name": "Ade Bello",
+          "label": "Data Engineer",
+          "email": "ade.bello@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Cut settlement time from 4 minutes to 50 seconds",
+              "Served 287 customers",
+              "Led a team of 10-15 engineers",
+              "Supported about 300 internal users"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Ade Bello",
+            "label": "Data Engineer",
+            "email": "ade.bello@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Cut settlement time from 4 minutes to 50 seconds",
+                "Served 287 customers",
+                "Led a team of 10-15 engineers",
+                "Supported 300+ internal users"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "300+"
+        ]
+      },
+      "known_gap": "The figure is the same and only the qualifier changed. Qualifiers are wording, and the guard does not judge wording."
+    },
+    {
+      "id": "helped-becomes-led",
+      "category": "format_variation",
+      "probes": "No figure changes. 'Maintained' becomes 'Owned and led', which is a larger claim.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Owned and led the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "Owned and led"
+        ]
+      },
+      "known_gap": "A change of verb is a change of wording. Nothing in the guard weighs one verb against another. The README says so."
+    },
+    {
+      "id": "spanish-decimal-comma-kept",
+      "category": "language_variation",
+      "probes": "A Spanish resume with a decimal comma and a spaced percent sign, reworded. The figure is real and must come back whole.",
+      "original": {
+        "basics": {
+          "name": "Lucía Ferrer",
+          "label": "Ingeniera de datos",
+          "email": "lucia.ferrer@example.com",
+          "phone": "+34 600 555 010",
+          "location": "Valencia",
+          "summary": "Ingeniera de datos."
+        },
+        "work": [
+          {
+            "name": "Fabrikam Energía",
+            "position": "Ingeniera de datos",
+            "startDate": "ene 2021",
+            "endDate": "actualidad",
+            "summary": "",
+            "highlights": [
+              "Reduje los costes de almacenamiento un 12,5 % al año",
+              "Mantuve los procesos nocturnos de carga"
+            ]
+          }
+        ],
+        "education": [],
+        "skills": [
+          {
+            "name": "Herramientas",
+            "keywords": [
+              "Python",
+              "SQL"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Lucía Ferrer",
+            "label": "Ingeniera de datos",
+            "email": "lucia.ferrer@example.com",
+            "phone": "+34 600 555 010",
+            "location": "Valencia",
+            "summary": "Ingeniera de datos."
+          },
+          "work": [
+            {
+              "name": "Fabrikam Energía",
+              "position": "Ingeniera de datos",
+              "startDate": "ene 2021",
+              "endDate": "actualidad",
+              "summary": "",
+              "highlights": [
+                "Reduje un 12,5 % los costes anuales de almacenamiento",
+                "Mantuve los procesos nocturnos de carga"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Herramientas",
+              "keywords": [
+                "Python",
+                "SQL"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "placeholders": 0,
+        "must_contain": [
+          "12,5 %"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "spanish-invented-metric",
+      "category": "language_variation",
+      "probes": "A Spanish bullet gains a figure it never had.",
+      "original": {
+        "basics": {
+          "name": "Lucía Ferrer",
+          "label": "Ingeniera de datos",
+          "email": "lucia.ferrer@example.com",
+          "phone": "+34 600 555 010",
+          "location": "Valencia",
+          "summary": "Ingeniera de datos."
+        },
+        "work": [
+          {
+            "name": "Fabrikam Energía",
+            "position": "Ingeniera de datos",
+            "startDate": "ene 2021",
+            "endDate": "actualidad",
+            "summary": "",
+            "highlights": [
+              "Reduje los costes de almacenamiento un 12,5 % al año",
+              "Mantuve los procesos nocturnos de carga"
+            ]
+          }
+        ],
+        "education": [],
+        "skills": [
+          {
+            "name": "Herramientas",
+            "keywords": [
+              "Python",
+              "SQL"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Lucía Ferrer",
+            "label": "Ingeniera de datos",
+            "email": "lucia.ferrer@example.com",
+            "phone": "+34 600 555 010",
+            "location": "Valencia",
+            "summary": "Ingeniera de datos."
+          },
+          "work": [
+            {
+              "name": "Fabrikam Energía",
+              "position": "Ingeniera de datos",
+              "startDate": "ene 2021",
+              "endDate": "actualidad",
+              "summary": "",
+              "highlights": [
+                "Reduje los costes de almacenamiento un 12,5 % al año",
+                "Mantuve los procesos nocturnos de carga, con un 30 % menos de fallos"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Herramientas",
+              "keywords": [
+                "Python",
+                "SQL"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "30"
+        ],
+        "placeholders": 1
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "german-thousands-point-kept",
+      "category": "language_variation",
+      "probes": "A German resume writing two million as 2.000.000, reworded. Must come back whole.",
+      "original": {
+        "basics": {
+          "name": "Jonas Weber",
+          "label": "Softwareentwickler",
+          "email": "jonas.weber@example.com",
+          "phone": "+49 30 5550 1010",
+          "location": "Leipzig",
+          "summary": "Softwareentwickler."
+        },
+        "work": [
+          {
+            "name": "Adatum Logistik",
+            "position": "Softwareentwickler",
+            "startDate": "Apr 2019",
+            "endDate": "heute",
+            "summary": "",
+            "highlights": [
+              "Verarbeitung von 2.000.000 Ereignissen pro Tag",
+              "Betreuung der Schnittstellen zum Lager"
+            ]
+          }
+        ],
+        "education": [],
+        "skills": [
+          {
+            "name": "Werkzeuge",
+            "keywords": [
+              "Java",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Jonas Weber",
+            "label": "Softwareentwickler",
+            "email": "jonas.weber@example.com",
+            "phone": "+49 30 5550 1010",
+            "location": "Leipzig",
+            "summary": "Softwareentwickler."
+          },
+          "work": [
+            {
+              "name": "Adatum Logistik",
+              "position": "Softwareentwickler",
+              "startDate": "Apr 2019",
+              "endDate": "heute",
+              "summary": "",
+              "highlights": [
+                "Pipelines für 2.000.000 Ereignisse pro Tag gebaut",
+                "Betreuung der Schnittstellen zum Lager"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Werkzeuge",
+              "keywords": [
+                "Java",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "placeholders": 0,
+        "must_contain": [
+          "2.000.000"
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "german-invented-metric",
+      "category": "language_variation",
+      "probes": "A German bullet gains a figure it never had.",
+      "original": {
+        "basics": {
+          "name": "Jonas Weber",
+          "label": "Softwareentwickler",
+          "email": "jonas.weber@example.com",
+          "phone": "+49 30 5550 1010",
+          "location": "Leipzig",
+          "summary": "Softwareentwickler."
+        },
+        "work": [
+          {
+            "name": "Adatum Logistik",
+            "position": "Softwareentwickler",
+            "startDate": "Apr 2019",
+            "endDate": "heute",
+            "summary": "",
+            "highlights": [
+              "Verarbeitung von 2.000.000 Ereignissen pro Tag",
+              "Betreuung der Schnittstellen zum Lager"
+            ]
+          }
+        ],
+        "education": [],
+        "skills": [
+          {
+            "name": "Werkzeuge",
+            "keywords": [
+              "Java",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Jonas Weber",
+            "label": "Softwareentwickler",
+            "email": "jonas.weber@example.com",
+            "phone": "+49 30 5550 1010",
+            "location": "Leipzig",
+            "summary": "Softwareentwickler."
+          },
+          "work": [
+            {
+              "name": "Adatum Logistik",
+              "position": "Softwareentwickler",
+              "startDate": "Apr 2019",
+              "endDate": "heute",
+              "summary": "",
+              "highlights": [
+                "Verarbeitung von 2.000.000 Ereignissen pro Tag",
+                "Betreuung von 12 Schnittstellen zum Lager"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Werkzeuge",
+              "keywords": [
+                "Java",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "12 Schnittstellen"
+        ],
+        "placeholders": 1
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "german-inflated-title",
+      "category": "language_variation",
+      "probes": "A German job title is raised a level.",
+      "original": {
+        "basics": {
+          "name": "Jonas Weber",
+          "label": "Softwareentwickler",
+          "email": "jonas.weber@example.com",
+          "phone": "+49 30 5550 1010",
+          "location": "Leipzig",
+          "summary": "Softwareentwickler."
+        },
+        "work": [
+          {
+            "name": "Adatum Logistik",
+            "position": "Softwareentwickler",
+            "startDate": "Apr 2019",
+            "endDate": "heute",
+            "summary": "",
+            "highlights": [
+              "Verarbeitung von 2.000.000 Ereignissen pro Tag",
+              "Betreuung der Schnittstellen zum Lager"
+            ]
+          }
+        ],
+        "education": [],
+        "skills": [
+          {
+            "name": "Werkzeuge",
+            "keywords": [
+              "Java",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Jonas Weber",
+            "label": "Softwareentwickler",
+            "email": "jonas.weber@example.com",
+            "phone": "+49 30 5550 1010",
+            "location": "Leipzig",
+            "summary": "Softwareentwickler."
+          },
+          "work": [
+            {
+              "name": "Adatum Logistik",
+              "position": "Leitender Softwareentwickler",
+              "startDate": "Apr 2019",
+              "endDate": "heute",
+              "summary": "",
+              "highlights": [
+                "Verarbeitung von 2.000.000 Ereignissen pro Tag",
+                "Betreuung der Schnittstellen zum Lager"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Werkzeuge",
+              "keywords": [
+                "Java",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "Leitender"
+        ],
+        "work": [
+          {
+            "name": "Adatum Logistik",
+            "title": "Softwareentwickler",
+            "start": "Apr 2019",
+            "end": "heute"
+          }
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "japanese-invented-metric",
+      "category": "language_variation",
+      "probes": "A Japanese bullet gains a figure it never had.",
+      "original": {
+        "basics": {
+          "name": "Hana Sato",
+          "label": "Data Engineer",
+          "email": "hana.sato@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Osaka",
+          "summary": "決済基盤のエンジニア。"
+        },
+        "work": [
+          {
+            "name": "Proseware",
+            "position": "エンジニア",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "決済基盤の設計と運用を担当"
+            ]
+          }
+        ],
+        "education": [],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Hana Sato",
+            "label": "Data Engineer",
+            "email": "hana.sato@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Osaka",
+            "summary": "決済基盤のエンジニア。"
+          },
+          "work": [
+            {
+              "name": "Proseware",
+              "position": "エンジニア",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "決済基盤の設計と運用を担当し、障害を40%削減"
+              ]
+            }
+          ],
+          "education": [],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "must_not_contain": [
+          "40%"
+        ],
+        "placeholders": 1
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "clean-rephrase",
+      "category": "legitimate_edit",
+      "probes": "An honest rewording that keeps every figure with its claim. Nothing may be changed or flagged.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Reduced p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "",
+      "jd_text": "",
+      "expect": {
+        "placeholders": 0,
+        "must_contain": [
+          "Reduced p99 latency 40%"
+        ],
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "title": "Data Engineer",
+            "start": "Feb 2020",
+            "end": "Present"
+          }
+        ]
+      },
+      "known_gap": ""
+    },
+    {
+      "id": "figure-the-user-supplied",
+      "category": "legitimate_edit",
+      "probes": "The candidate typed a figure themselves. It is theirs, and it stays.",
+      "original": {
+        "basics": {
+          "name": "Sam Okafor",
+          "label": "Data Engineer",
+          "email": "sam.okafor@example.com",
+          "phone": "+1 555 010 2291",
+          "location": "Columbus, OH",
+          "summary": "Data engineer working on batch and streaming pipelines."
+        },
+        "work": [
+          {
+            "name": "Tailspin Freight",
+            "position": "Data Engineer",
+            "startDate": "Feb 2020",
+            "endDate": "Present",
+            "summary": "",
+            "highlights": [
+              "Built pipelines processing 2M events/day",
+              "Cut p99 latency 40% by rewriting the consumer",
+              "Maintained the nightly reconciliation job",
+              "Mentored two junior engineers"
+            ]
+          }
+        ],
+        "education": [
+          {
+            "institution": "Ohio Valley University",
+            "area": "Computer Science",
+            "studyType": "B.S.",
+            "startDate": "2014",
+            "endDate": "2018",
+            "score": ""
+          }
+        ],
+        "skills": [
+          {
+            "name": "Tools",
+            "keywords": [
+              "Python",
+              "Spark",
+              "Kafka"
+            ]
+          }
+        ],
+        "projects": [],
+        "certificates": []
+      },
+      "model_output": {
+        "resume": {
+          "basics": {
+            "name": "Sam Okafor",
+            "label": "Data Engineer",
+            "email": "sam.okafor@example.com",
+            "phone": "+1 555 010 2291",
+            "location": "Columbus, OH",
+            "summary": "Data engineer working on batch and streaming pipelines."
+          },
+          "work": [
+            {
+              "name": "Tailspin Freight",
+              "position": "Data Engineer",
+              "startDate": "Feb 2020",
+              "endDate": "Present",
+              "summary": "",
+              "highlights": [
+                "Built pipelines processing 2M events/day",
+                "Cut p99 latency 40% by rewriting the consumer",
+                "Maintained the nightly reconciliation job, cutting failures by 35%",
+                "Mentored two junior engineers"
+              ]
+            }
+          ],
+          "education": [
+            {
+              "institution": "Ohio Valley University",
+              "area": "Computer Science",
+              "studyType": "B.S.",
+              "startDate": "2014",
+              "endDate": "2018",
+              "score": ""
+            }
+          ],
+          "skills": [
+            {
+              "name": "Tools",
+              "keywords": [
+                "Python",
+                "Spark",
+                "Kafka"
+              ]
+            }
+          ],
+          "projects": [],
+          "certificates": []
+        },
+        "changes": [],
+        "warnings": []
+      },
+      "user_text": "The reconciliation job work cut failures by 35%",
+      "jd_text": "",
+      "expect": {
+        "placeholders": 0,
+        "must_contain": [
+          "cutting failures by 35%"
+        ]
+      },
+      "known_gap": ""
+    }
+  ]
+}

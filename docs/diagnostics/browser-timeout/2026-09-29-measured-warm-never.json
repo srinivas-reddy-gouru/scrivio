@@ -1,0 +1,60 @@
+{
+ "mode": "warm",
+ "fonts": "never-answers",
+ "dev_server_answering_after_s": 0.97,
+ "loads": [
+  {
+   "n": 1,
+   "goto": "Page.goto: Timeout 30000ms exceeded.",
+   "goto_took_s": 30.05,
+   "main_frame_navigations_at_s": [
+    0.046
+   ],
+   "requests": 29,
+   "by_host": {
+    "127.0.0.1:<port>": {
+     "requests": 28,
+     "slowest_s": 0.041,
+     "failed": 0,
+     "unfinished": 0
+    },
+    "fonts.googleapis.com": {
+     "requests": 1,
+     "slowest_s": 30.301,
+     "failed": 0,
+     "unfinished": 1
+    }
+   },
+   "unfinished": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grote"
+   ],
+   "five_slowest": [
+    [
+     30.301,
+     "NEVER FINISHED",
+     "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grote"
+    ],
+    [
+     0.041,
+     "finished",
+     "/@react-refresh"
+    ],
+    [
+     0.041,
+     "finished",
+     "/"
+    ],
+    [
+     0.028,
+     "finished",
+     "/src/desk.css"
+    ],
+    [
+     0.026,
+     "finished",
+     "/node_modules/vite/dist/client/env.mjs"
+    ]
+   ]
+  }
+ ]
+}

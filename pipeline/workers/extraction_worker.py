@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 import httpx
+
+from pipeline import net_guard
 from bs4 import BeautifulSoup
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -152,26 +154,31 @@ def _get_semaphore() -> asyncio.Semaphore:
     return _fetch_semaphore
 
 
+class BlockedFetchError(FetchError):
+    """Refused by the outbound policy (pipeline/net_guard.py). Not a
+    failure to retry and not one to route around: a fallback fetcher
+    given a refused URL would be the way past the policy."""
+
+    @property
+    def is_permanent(self) -> bool:
+        return True
+
+
+async def _guarded(url: str, headers: dict[str, str], label: str = "") -> str:
+    """Every outbound fetch of an outside URL goes through here."""
+    try:
+        fetched = await net_guard.guarded_get(url, headers=headers)
+    except net_guard.BlockedFetch as exc:
+        raise BlockedFetchError(str(exc)) from exc
+    except net_guard.FetchFailed as exc:
+        raise FetchError(f"{label}{exc}", status_code=exc.status_code) from exc
+    return fetched.text
+
+
 async def fetch_page(url: str) -> str:
     """Fetch a URL with a browser-like User-Agent, respecting the concurrency cap."""
     async with _get_semaphore():
-        try:
-            async with httpx.AsyncClient(
-                headers=_HEADERS, timeout=12, follow_redirects=True
-            ) as client:
-                response = await client.get(url)
-        except httpx.TimeoutException as exc:
-            raise FetchError(f"Timed out fetching {url}") from exc
-        except httpx.RequestError as exc:
-            raise FetchError(f"Request error for {url}: {exc}") from exc
-
-    if response.status_code != 200:
-        raise FetchError(
-            f"Fetch failed for {url} with status {response.status_code}",
-            status_code=response.status_code,
-        )
-
-    return response.text
+        return await _guarded(url, _HEADERS)
 
 
 # Circuit breaker for keyless Jina calls. Jina Reader returns 401 without an
@@ -194,6 +201,11 @@ async def fetch_page_jina(url: str) -> str:
             status_code=401,
         )
 
+    # The reader fetches the page from ITS network, not ours, but a URL we
+    # would refuse to fetch is still not one to hand to a third party: it
+    # may name something internal, and naming it is already a leak.
+    await check_outbound(url)
+
     jina_url = f"{_JINA_BASE}{url}"
     headers = dict(_HEADERS)
     headers["Accept"] = "text/plain"
@@ -202,27 +214,29 @@ async def fetch_page_jina(url: str) -> str:
 
     async with _get_semaphore():
         try:
-            async with httpx.AsyncClient(
-                headers=headers, timeout=20, follow_redirects=True
-            ) as client:
-                response = await client.get(jina_url)
-        except (httpx.TimeoutException, httpx.RequestError) as exc:
-            raise FetchError(f"Jina fetch failed for {url}: {exc}") from exc
+            return await _guarded(jina_url, headers, label="Jina: ")
+        except BlockedFetchError:
+            raise
+        except FetchError as exc:
+            if exc.status_code == 401 and not jina_key:
+                _jina_auth_failed = True
+                logging.info(
+                    "Jina Reader requires an API key (got 401 keyless). "
+                    "Set JINA_API_KEY in Settings to enable the fallback fetcher; "
+                    "skipping Jina for the rest of this run."
+                )
+            raise
 
-    if response.status_code != 200:
-        if response.status_code == 401 and not jina_key:
-            _jina_auth_failed = True
-            logging.info(
-                "Jina Reader requires an API key (got 401 keyless). "
-                "Set JINA_API_KEY in Settings to enable the fallback fetcher; "
-                "skipping Jina for the rest of this run."
-            )
-        raise FetchError(
-            f"Jina fetch failed for {url} with status {response.status_code}",
-            status_code=response.status_code,
-        )
 
-    return response.text
+async def check_outbound(url: str) -> None:
+    """Shape and address only, no request. Raises BlockedFetchError."""
+    try:
+        target = net_guard.check_url(url)
+        await net_guard.resolve_public(target.host, target.port)
+    except net_guard.BlockedFetch as exc:
+        raise BlockedFetchError(str(exc)) from exc
+    except net_guard.FetchFailed as exc:
+        raise FetchError(str(exc)) from exc
 
 
 async def fetch_with_retry(url: str, max_attempts: int = 2) -> tuple[str, str]:
@@ -250,6 +264,8 @@ async def fetch_with_retry(url: str, max_attempts: int = 2) -> tuple[str, str]:
             try:
                 text = await fetch_fn(url)
                 return text, name
+            except BlockedFetchError:
+                raise           # policy, not luck: no retry, no other route
             except FetchError as exc:
                 last_exc = exc
                 # Permanent client errors: stop retrying this strategy and try
@@ -437,6 +453,11 @@ async def process_search_result(
 
     filtered_text = injection_filter(text)
     chunks = chunk_text(filtered_text)
+    # The page body is filtered above. The title is external text too: it
+    # comes from the search index, is written by the page's author, and
+    # ends up in the article's reference list.
+    if REDACTION_TEXT in injection_filter(title or ""):
+        title = ""
     return build_evidence_spans(
         url,
         title,

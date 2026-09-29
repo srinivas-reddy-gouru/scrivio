@@ -1,13 +1,15 @@
-/** Home: what to do next, then the four studios with their real state.
+/** Home: what to do next, then the path from resume to interview.
  *
  * The rule this page follows: propose the next action rather than
  * displaying data and leaving the reader to work it out. One computed
- * "do this next" band, four studio cards that double as status, and a
+ * "do this next" band, the three steps of a job application as cards that
+ * double as status, articles beside them, and a
  * recent list that says what each item still needs. No second column of
  * shortcuts duplicating the cards.
  */
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { requestSample } from "../sample";
 import { scoreTone } from "../components/stations";
 import type { RoomId } from "../components/Shell";
 import type {
@@ -84,7 +86,7 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
     };
     return {
       eyebrow: "Start here", headline: "Check your resume against a real posting",
-      detail: "Paste your resume and a job description. You get an explainable ATS score first, then an honest rewrite you can defend line by line.",
+      detail: "Paste your resume and a job description. You get a checklist score with the reason for each row, then a rewrite checked against your original, line by line.",
       cta: "Check my resume", room: "desk",
     };
   };
@@ -95,7 +97,7 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
   }> = [
     {
       room: "desk", name: "Resume", cta: lastResume ? "Open the desk" : "Check my resume",
-      what: "An explainable ATS score, then a rewrite that refuses to invent facts.",
+      what: "A checklist score with reasons, then a rewrite checked against your original.",
       state: lastResume
         ? `Last: ${lastResume.score ?? "-"}${lastResume.tailored_score != null ? ` to ${lastResume.tailored_score}` : ""}${lastResume.jd_label ? ` vs ${prettyTarget(lastResume.jd_label)}` : ""}`
         : "Nothing checked yet",
@@ -103,7 +105,7 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
     },
     {
       room: "job", name: "Job prep", cta: "Open job prep",
-      what: "A role-specific mock screen and a recruiter-grade scorecard.",
+      what: "Where you fit the posting, a mock screen for it, and a scorecard by competency.",
       state: sessions.some((s) => s.mode === "job")
         ? `${sessions.filter((s) => s.mode === "job").length} screen${sessions.filter((s) => s.mode === "job").length === 1 ? "" : "s"} taken`
         : "No targets yet",
@@ -111,7 +113,7 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
     },
     {
       room: "interview", name: "Interviews", cta: "Start practicing",
-      what: "Spoken practice graded against a rubric written before you answer.",
+      what: "Spoken practice, graded against a rubric written before you answer.",
       state: stats?.total_sessions
         ? `${stats.total_sessions} session${stats.total_sessions === 1 ? "" : "s"}${stats.average_score != null ? ` · avg ${stats.average_score}/10` : ""}`
         : "No sessions yet",
@@ -119,7 +121,7 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
     },
     {
       room: "newsroom", name: "Articles", cta: "Write an article",
-      what: "Sourced technical writing, every claim verified before it ships.",
+      what: "Technical writing with sources. Claims are checked against them before drafting.",
       state: articles.length ? `${articles.length} in the library` : "Nothing written yet",
       icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>,
     },
@@ -154,8 +156,9 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
         <h1>Learn it. <span className="grad-text">Prove it.</span> Get the job.</h1>
         <div className="bar" />
         <p>
-          Scrivio researches like a journalist, interviews like a senior engineer,
-          and gives feedback like a hiring panel, all on your own AI subscription.
+          For people applying to jobs. Bring your resume and a posting: see how
+          the two match, tailor the resume without adding anything untrue, then
+          practise the interview for that role.
         </p>
       </div>
 
@@ -169,12 +172,25 @@ export function Floor({ go }: { go: (r: RoomId) => void }) {
         <span className="na-cta">{next.cta} →</span>
       </button>
 
-      <p className="eyebrow" style={{ marginTop: "2rem" }}>The four studios</p>
+      {nothingYet && (
+        <p className="first-look">
+          Not ready to use your own?{" "}
+          <button className="linklike" onClick={() => { requestSample(); go("desk"); }}>
+            Try it with a sample resume
+          </button>
+          . The person and the posting are invented.
+        </p>
+      )}
+
+      <p className="eyebrow" style={{ marginTop: "2rem" }}>Resume, job match, interview</p>
       <div className="studio-grid">
         {STUDIOS.map((s, i) => (
-          <button key={s.room} className="studio-tile" style={{ "--i": i } as React.CSSProperties}
+          <button key={s.room} className={"studio-tile" + (s.room === "newsroom" ? " aside" : "")}
+            style={{ "--i": i } as React.CSSProperties}
             onClick={() => go(s.room)}>
             <span className="st-icon">{s.icon}</span>
+            {i < 3 && <span className="st-step">Step {i + 1}</span>}
+            {s.room === "newsroom" && <span className="st-step">Also here</span>}
             <b>{s.name}</b>
             <span className="st-what">{s.what}</span>
             <span className="st-state">{s.state}</span>

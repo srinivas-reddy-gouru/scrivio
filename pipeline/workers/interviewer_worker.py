@@ -13,6 +13,9 @@ import re
 from pipeline.model_config import get_model
 from pipeline.workers.citation_utils import scrub_dashes_in_model
 from pipeline.prompt_loader import load_prompt
+from pipeline.workers.external_context import (
+    external_block, filter_external, filter_external_text,
+)
 from pipeline.schemas.models import InterviewQuestionSet
 from pipeline.workers.search_worker import multi_search
 
@@ -81,9 +84,9 @@ async def find_real_question_patterns(topic: str, level: str) -> list[str]:
         text = " — ".join(p for p in (r.title.strip(), r.snippet.strip()) if p)
         if text:
             patterns.append(text)
-        if len(patterns) >= _MAX_PATTERNS:
-            break
-    return patterns
+    # Filter BEFORE the cap, so a page of hostile results cannot crowd
+    # the honest ones out of the few slots there are.
+    return filter_external(patterns)[:_MAX_PATTERNS]
 
 
 async def generate_interview_questions(
@@ -103,20 +106,22 @@ async def generate_interview_questions(
     article_markdown=None → topic-only mode (questions grounded in the
     model's knowledge plus the searched question patterns).
     """
-    patterns = question_patterns or []
-    patterns_block = (
-        "\n".join(f"- {p}" for p in patterns) if patterns else "none"
-    )
-
+    # Filtered here as well as where they were gathered: this is the one
+    # place every route to the model passes through, and a caller may be
+    # holding patterns from a cache or from a session saved before the
+    # filter existed.
     parts = [
         f"topic: {topic}",
         f"level: {level}",
         f"session_mode: {mode}",
         f"num_questions: {num_questions}",
-        f"real_question_patterns:\n{patterns_block}",
+        external_block("real_question_patterns", question_patterns),
     ]
     if article_markdown is not None:
-        findings = verified_findings or []
+        # An article was written by a model from web evidence, which makes
+        # it derived external content rather than a trusted instruction.
+        article_markdown = filter_external_text(article_markdown)
+        findings = filter_external(verified_findings)
         findings_block = (
             "\n".join(f"{i + 1}. {f}" for i, f in enumerate(findings))
             if findings

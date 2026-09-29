@@ -1,0 +1,130 @@
+# Runs on every push and pull request. Needs no provider key, no secret,
+# and no network access beyond installing dependencies: every model call in
+# the suite is made to a canned client.
+#
+# Jobs that would need real infrastructure are not here on purpose:
+#   - live provider evaluation (costs money; run by hand, see evals/)
+#   - Temporal integration (needs a Temporal server; see README, "Temporal")
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Belt and braces. The suite isolates itself from provider settings, and
+  # none are configured here to leak in the first place.
+  ANTHROPIC_API_KEY: ""
+  OPENAI_API_KEY: ""
+  TAVILY_API_KEY: ""
+
+jobs:
+  python:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            requirements*.txt
+            constraints.txt
+      - run: pip install -r requirements-dev.txt -c constraints.txt
+      - name: Tests (the browser and restart tests run in their own job)
+        run: python -m pytest tests/ -q --ignore=tests/browser --ignore=tests/live
+      - name: Resume fact preservation (deterministic, calls no model)
+        run: python -m evals.resume_guard_eval
+
+  frontend:
+    name: Interface, Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22"]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit -p tsconfig.json
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        if: matrix.node == '22'
+        with:
+          name: interface
+          path: web/dist
+          retention-days: 3
+
+  browser:
+    name: Browser, security, and restart tests
+    runs-on: ubuntu-latest
+    needs: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements*.txt
+            constraints.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: pip install -r requirements-dev.txt -c constraints.txt
+      - run: playwright install --with-deps chromium
+      # Built here rather than downloaded: the dev-server tests need
+      # node_modules as well as the build.
+      - run: npm ci && npm run build
+        working-directory: web
+      - name: Browser tests (rendering safety, and the workflows end to end)
+        run: python -m pytest tests/browser -q
+      - name: Restart tests (a real server, killed mid-run)
+        run: python -m pytest tests/live -q
+      # When a browser test fails, what each page was waiting for and the
+      # end of each server's log are written here (tests/browser/conftest.py).
+      - name: Keep what a failed browser test left behind
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-diagnostics
+          path: .scrivio/test-diagnostics
+          if-no-files-found: ignore
+          include-hidden-files: true
+          retention-days: 14
+
+  install:
+    name: Clean install, following the README
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: scripts/smoke_install.sh "${RUNNER_TEMP}/scrivio"

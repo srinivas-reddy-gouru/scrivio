@@ -1,17 +1,33 @@
-anthropic
-beautifulsoup4
-fastapi
-httpx
-langchain-text-splitters
-lxml
-openai
-pydantic
-python-dotenv
-qdrant-client
-readability-lxml
-temporalio
-uvicorn[standard]
-pytest
-pypdf
-python-docx
-fpdf2
+# What Scrivio needs to run. Nothing here is for testing or development:
+# see requirements-dev.txt for that.
+#
+# These are the direct dependencies, as ranges. The exact versions of
+# everything, including what these pull in, are pinned in constraints.txt.
+# Install with both, so that two machines resolve to the same set:
+#
+#     pip install -r requirements.txt -c constraints.txt
+#
+# To move to newer versions deliberately, see "Upgrading dependencies" in
+# the README.
+
+# The API and its server
+fastapi>=0.110,<1
+uvicorn[standard]>=0.29,<1
+pydantic>=2.6,<3
+python-dotenv>=1.0,<2
+
+# Model providers, through their own SDKs
+anthropic>=0.49,<1
+openai>=1.68,<2
+
+# Fetching and reading web pages
+httpx>=0.27,<1
+beautifulsoup4>=4.12,<5
+lxml>=5.1,<7
+readability-lxml>=0.8.1,<1
+langchain-text-splitters>=0.3,<2
+
+# Reading uploaded resumes and writing exports
+pypdf>=4.2,<7
+python-docx>=1.1,<2
+fpdf2>=2.7.9,<3

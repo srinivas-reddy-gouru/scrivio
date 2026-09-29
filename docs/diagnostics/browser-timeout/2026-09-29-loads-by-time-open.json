@@ -1,0 +1,38 @@
+{
+ "what": "how long Scrivio's home page took to load, by how long the browser had been open, from a demo server on a store of its own",
+ "at": "2026-09-29T11:35:51-0500",
+ "machine": {
+  "system": "Darwin 24.4.0",
+  "browser": "Google Chrome 154.0.8037.58",
+  "playwright": "1.55.0",
+  "browser_is": "the installed Google Chrome, on a new profile each time it is started"
+ },
+ "parts": [
+  {
+   "from_s": 0,
+   "to_s": 15,
+   "loads": 20,
+   "median_s": 0.26,
+   "slowest_s": 0.45
+  },
+  {
+   "from_s": 15,
+   "to_s": 45,
+   "loads": 81,
+   "median_s": 0.2,
+   "slowest_s": 0.37
+  },
+  {
+   "from_s": 45,
+   "to_s": 60,
+   "loads": 40,
+   "median_s": 0.2,
+   "slowest_s": 0.31
+  }
+ ],
+ "load_average": [
+  5.9,
+  4.82,
+  4.26
+ ]
+}

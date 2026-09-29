@@ -1,0 +1,26 @@
+{
+ "id": "tts-tts-research-ops-lead-april2024",
+ "source": "TTS, U.S. General Services Administration",
+ "source_url": "https://github.com/18F/join.tts.gsa.gov/blob/5dfa66db0f4b/positions/TTS-Research-Ops-Lead-April2024.md",
+ "collected_on": "2026-09-29",
+ "raw_sha256": "684f020fffd194ca750968eda63469d7d70f6bbd1f4c69bc1dd2817d8dd3571b",
+ "licence": "CC0 1.0 Universal",
+ "licence_basis": "The repository's LICENSE.md dedicates it to the public domain under CC0 1.0.",
+ "publisher": "General Services Administration",
+ "title": "TTS Research Operations Lead",
+ "sections_kept": [
+  "title",
+  "role summary",
+  "key objectives",
+  "qualifications"
+ ],
+ "sections_left_out": [
+  "basic information",
+  "how to apply",
+  "information sessions",
+  "the authoring template's instructions"
+ ],
+ "text": "TTS Research Operations Lead\n\nRole summary\nTTS improves the public’s experience with the government by helping federal agencies build, buy and share technology that allows them to be more accessible, efficient, and effective. Our goal is a world of to provide easy-to-use, effective, and secure digital government products and services for the American people. You’ll make a difference by bringing your leadership and creativity to a talented and passionate community while creating impactful initiatives that will directly affect the American public.\nTTS has not previously had centralized support for conducting research. This is an opportunity to identify approaches to supporting user research at scale at TTS. The TTS Research Ops Program Manager will work collaboratively with the Senior Advisor, Technology and the Public, and TTS Delivery/Program teams to manage participant recruitment for UX studies. The Program manager will also drive process improvement in research operations at TTS in order for delivery to be driven fundamentally by the voice of the public/customer through human-centered design methodologies and empirical customer research. They will establish and maintain partnerships with federal leaders in UX research, community engagement and public participation. This role is permanent.\n\nQualifications\nProvide as much detail as possible on your resume so that we can evaluate your\nprevious experience. Follow our\n[guidance on creating a federal style resume.](https://join.tts.gsa.gov/resume/)\n\nFailure to provide required information may result in disqualification.\n\nFor each job on your resume, provide:\n\n- The exact dates you held each job (from month/year to month/year or “present”)\n- Number of hours per week you worked (if part time)\n\n**SPECIALIZED EXPERIENCE REQUIREMENTS:**\n\nTo qualify, you must have one (1) year of specialized experience at the next\nlower GS-grade (or equivalent). Specialized experience is defined as follows:\n\n- Strong communication, coordination and collaboration skills\n- Experience synthesizing data and findings into high-level reports for leadership and other stakeholders\n- Experience with the Paperwork Reduction Act (PRA) or similar research compliance processes\n- Experience in the field of UX Research with a proven understanding of quantitative and qualitative research methods\n- Experience with scheduling sessions and communicating with internal and external participants/stakeholders\n- Experience regularly managing multiple research projects at a time",
+ "split": "held_out",
+ "personal_details_found": 0
+}

@@ -1,0 +1,255 @@
+Resume guard against real postings, corpus postings-v1, guard at a3c1a9d
+
+Constructed rewrites against real public postings and invented resumes. No model wrote anything here. These are rates over constructed cases and say nothing about how often a real model makes these mistakes.
+
+== tuning: 17 postings
+
+  Recognising the posting's names
+    names the guard did not collect           18 of  122
+    ordinary words it took for names         168 of  977
+
+  UNSUPPORTED CLAIMS RETAINED (a claim nobody made, still on the resume)
+    every constructed claim                  134 of  672  ( 19.9%)
+    of which
+    names that are not also words             80 of  592  ( 13.5%)
+      as the posting writes it                  24 of  148  ( 16.2%)
+      lower case, mid-sentence                  22 of  148  ( 14.9%)
+      lower case, first word                    22 of  148  ( 14.9%)
+      upper case, mid-sentence                  12 of  148  (  8.1%)
+    names that are also words                 54 of   80  ( 67.5%)
+
+  SUPPORTED OR HONEST LINES REVERTED (a line that was fine, put back)
+    a name that is on the resume               0 of  212  (  0.0%)
+    an ordinary word from the posting        364 of 2484  ( 14.7%)
+    a line reworded by hand                    2 of  136  (  1.5%)
+
+  names not collected:
+    tts-data-analytics-product-managers: agile
+    tts-login-devops-supervisor-2023: agile
+    tts-login-engineer-2023: Unix-like
+    tts-login-engineer-2023: agile
+    tts-login-engineer-2023: scrum
+    tts-login-engineer-2023: kanban
+    tts-login-engineer-2023: IT
+    tts-login-fraud-analyst-2023: agile
+    tts-login-security-supervisor-2024: NIST-800-53
+    tts-login-security-supervisor-2024: agile
+    usajobs-853186500: IT
+    usajobs-856081400: IT
+    usajobs-863191600: It
+    usajobs-863708900: IT
+    usajobs-863816700: I/O
+    usajobs-863816700: It
+    usajobs-883061500: Agile
+    usajobs-884897900: AI/ML
+
+  ordinary words taken for names:
+    tts-data-analytics-product-managers: Portfolio
+    tts-data-analytics-product-managers: Federal
+    tts-data-analytics-product-managers: Decisive
+    tts-data-analytics-product-managers: Failure
+    tts-fedramp-technical-lead-2024: Cyber
+    tts-fedramp-technical-lead-2024: Since
+    tts-fedramp-technical-lead-2024: White
+    tts-fedramp-technical-lead-2024: House
+    tts-fedramp-technical-lead-2024: Marketplace
+    tts-fedramp-technical-lead-2024: Failure
+    tts-login-devops-supervisor-2023: Supervisory
+    tts-login-devops-supervisor-2023: Supervisor
+    tts-login-devops-supervisor-2023: measuresLead
+    tts-login-engineer-2023: Failure
+    tts-login-fraud-analyst-2023: Failure
+    tts-login-integration-engineer-2024: Account
+    tts-login-integration-engineer-2024: Partnerships
+    tts-login-integration-engineer-2024: Failure
+    tts-login-security-supervisor-2024: Supervisor
+    tts-login-security-supervisor-2024: Failure
+    tts-login-security-supervisor-2024: Certificate
+    tts-login-security-supervisor-2024: Center
+    usajobs-853186500: Click
+    usajobs-853186500: Defense
+    usajobs-853186500: Civilian
+    usajobs-853186500: Personnel
+    usajobs-853186500: Expresses
+    usajobs-853186500: CONDITIONS
+    usajobs-853186500: CONT
+    usajobs-853186500: Sensitive
+    usajobs-853186500: Special
+    usajobs-853186500: Secret
+    usajobs-853186500: SAP
+    usajobs-853186500: Air
+    usajobs-853186500: Force
+    usajobs-853186500: TDP
+    usajobs-853186500: Illegal
+    usajobs-853186500: IAW
+    usajobs-853186500: Refers
+    usajobs-853186500: National
+    usajobs-853186500: Peace
+    usajobs-853186500: Corps
+    usajobs-856081400: Human
+    usajobs-856081400: Centers
+    usajobs-856081400: MET
+    usajobs-856081400: DATE
+    usajobs-856081400: Expresses
+    usajobs-856081400: Federal
+    usajobs-856081400: National
+    usajobs-856081400: Peace
+    usajobs-856081400: Corps
+    usajobs-856081400: Click
+    usajobs-856081400: ViewQuestionnaire
+    usajobs-863191600: Workforce
+    usajobs-863191600: Bureau
+    usajobs-863191600: Human
+    usajobs-863191600: Grade
+    usajobs-863191600: Federal
+    usajobs-863191600: Subpart
+    usajobs-863191600: Courses
+    usajobs-863708900: Defense
+    usajobs-863708900: Human
+    usajobs-863708900: Branch
+    usajobs-863708900: JFHQ
+    usajobs-863708900: DODIN
+    usajobs-863708900: Zero
+    usajobs-863708900: Cyber
+    usajobs-863708900: Account
+    usajobs-863708900: Exceptions
+    usajobs-863708900: EndPoint
+    usajobs-863708900: File
+    usajobs-863708900: Container
+    usajobs-863708900: Federal
+    usajobs-863708900: Milestones
+    usajobs-863708900: Directives
+    usajobs-863708900: Instructions
+    usajobs-863708900: Regulations
+    usajobs-863708900: National
+    usajobs-863708900: Peace
+    usajobs-863708900: Corps
+    usajobs-863708900: Occupational
+    usajobs-863708900: Expresses
+    usajobs-863816700: Veteran
+    usajobs-863816700: Click
+    usajobs-863816700: Personnel
+    usajobs-863816700: Science
+    usajobs-863816700: Series
+    usajobs-863816700: OCCUPATIONAL
+    usajobs-863816700: Due
+    usajobs-863816700: Object
+    usajobs-863816700: Refers
+    usajobs-863816700: National
+    usajobs-863816700: Peace
+    usajobs-863816700: Corps
+    usajobs-863816700: Official
+    usajobs-868076000: Clerk
+    usajobs-868076000: House
+    usajobs-868076000: Representatives
+    usajobs-868076000: Legislative
+    usajobs-868076000: Hill
+    usajobs-868076000: Telework
+    usajobs-868076000: Occasional
+    usajobs-868076000: Sound
+    usajobs-870949400: Secretary
+    usajobs-870949400: Chief
+    usajobs-870949400: Officer
+    usajobs-870949400: Assistant
+    usajobs-870949400: Collect
+    usajobs-870949400: Power
+    usajobs-870949400: Personnel
+    usajobs-870949400: Handbook
+    usajobs-870949400: Occupational
+    usajobs-870949400: Series
+    usajobs-870949400: Federal
+    usajobs-870949400: National
+    usajobs-870949400: Peace
+    usajobs-870949400: Corps
+    usajobs-870949400: Mathematics
+    usajobs-870949400: ApplicationOfStds
+    usajobs-870949400: Special
+    usajobs-870949400: Instructions
+    usajobs-870949400: Foreign
+    usajobs-870949400: Failure
+    usajobs-883061500: National
+    usajobs-883061500: America
+    usajobs-883061500: Gatekeeper
+    usajobs-883061500: Interface
+    usajobs-883061500: Interfaces
+    usajobs-883061500: Artificial
+    usajobs-883061500: Institute
+    usajobs-883061500: Secretary
+    usajobs-883061500: Defense
+    usajobs-883061500: Science
+    usajobs-883061500: Mathematics
+    usajobs-883061500: Cyber
+    usajobs-883061500: Civilian
+    usajobs-883061500: Personnel
+    usajobs-883061500: Table
+    usajobs-883061500: Failure
+    usajobs-883061500: Series
+    usajobs-883061500: Federal
+    usajobs-884897900: Science
+    usajobs-884897900: Mathematics
+    usajobs-884897900: Statistics
+    usajobs-884897900: Artificial
+    usajobs-884897900: Physical
+    usajobs-884897900: Biological
+    usajobs-884897900: Sciences
+    usajobs-884897900: Doctoral
+    usajobs-885123300: Intern
+    usajobs-885123300: District
+    usajobs-885123300: Absent
+    usajobs-885123300: Board
+    usajobs-885123300: Federal
+    usajobs-885123300: ICT
+    usajobs-885123300: ICTS
+    usajobs-885123300: Personnel
+    usajobs-885123300: Handbook
+    usajobs-885123300: Occupational
+    usajobs-885123300: Series
+    usajobs-885123300: National
+    usajobs-885123300: Peace
+    usajobs-885123300: Corps
+    usajobs-885123300: Section
+    usajobs-885123300: Special
+    usajobs-885123300: Instructions
+    usajobs-885123300: Foreign
+    usajobs-885123300: Failure
+
+  unsupported claims retained:
+    agile (as the posting writes it)
+    agile (lower case, first word)
+    agile (lower case, mid-sentence)
+    ai (as the posting writes it)
+    ai (upper case, mid-sentence)
+    ba (as the posting writes it)
+    ba (upper case, mid-sentence)
+    bs (as the posting writes it)
+    bs (lower case, first word)
+    bs (lower case, mid-sentence)
+    bs (upper case, mid-sentence)
+    chef (lower case, first word)
+    chef (lower case, mid-sentence)
+    fe (as the posting writes it)
+    fe (upper case, mid-sentence)
+    go (lower case, first word)
+    go (lower case, mid-sentence)
+    go (upper case, mid-sentence)
+    i/o (as the posting writes it)
+    i/o (lower case, first word)
+    i/o (lower case, mid-sentence)
+    i/o (upper case, mid-sentence)
+    it (as the posting writes it)
+    it (lower case, first word)
+    it (lower case, mid-sentence)
+    it (upper case, mid-sentence)
+    oracle (lower case, first word)
+    oracle (lower case, mid-sentence)
+    pe (as the posting writes it)
+    pe (upper case, mid-sentence)
+    ruby (lower case, first word)
+    ruby (lower case, mid-sentence)
+    scrum (as the posting writes it)
+    scrum (lower case, first word)
+    scrum (lower case, mid-sentence)
+
+  honest rewordings reverted:
+    usajobs-853186500: work[0].highlights[2]
+

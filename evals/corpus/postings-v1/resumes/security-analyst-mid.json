@@ -1,0 +1,78 @@
+{
+ "id": "security-analyst-mid",
+ "synthetic": "Every detail is invented. The address is on example.com and the phone number is in the range reserved for fiction.",
+ "resume": {
+  "basics": {
+   "name": "Rohan Castellanos",
+   "label": "Information Security Analyst",
+   "email": "rohan.castellanos@example.com",
+   "phone": "+1 555 010 3056",
+   "url": "",
+   "location": "San Antonio, TX",
+   "summary": "Security analyst focused on vulnerability management and audit readiness."
+  },
+  "work": [
+   {
+    "name": "Woodgrove Bank",
+    "position": "Information Security Analyst",
+    "startDate": "Feb 2019",
+    "endDate": "Present",
+    "summary": "",
+    "highlights": [
+     "Ran the monthly vulnerability scans across 1,200 hosts and tracked each finding to closure",
+     "Prepared the evidence for 3 annual audits against NIST controls",
+     "Wrote detection rules in Splunk for the security operations team",
+     "Trained 150 staff in recognising phishing"
+    ]
+   }
+  ],
+  "education": [
+   {
+    "institution": "Alamo Technical College",
+    "area": "Cybersecurity",
+    "studyType": "B.S.",
+    "startDate": "2015",
+    "endDate": "2019",
+    "score": ""
+   }
+  ],
+  "skills": [
+   {
+    "name": "Frameworks",
+    "keywords": [
+     "NIST"
+    ]
+   },
+   {
+    "name": "Tools",
+    "keywords": [
+     "Splunk",
+     "Nessus",
+     "Linux"
+    ]
+   }
+  ],
+  "projects": [],
+  "certificates": [
+   "CompTIA Security+"
+  ]
+ },
+ "honest_rewordings": [
+  {
+   "where": "work[0].highlights[0]",
+   "line": "Conducted monthly vulnerability scanning across 1,200 hosts, tracking each finding to closure"
+  },
+  {
+   "where": "work[0].highlights[1]",
+   "line": "Supported 3 annual audits by preparing evidence of compliance with NIST controls"
+  },
+  {
+   "where": "work[0].highlights[3]",
+   "line": "Delivered security awareness training on phishing to 150 staff"
+  },
+  {
+   "where": "work[0].highlights[2]",
+   "line": "Developed detection rules in Splunk in support of the security operations team"
+  }
+ ]
+}

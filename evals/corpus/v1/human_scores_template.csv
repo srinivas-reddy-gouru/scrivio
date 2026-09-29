@@ -1,0 +1,13 @@
+case_id,score,judged_by
+rebalance-complete,,
+rebalance-short-and-complete,,
+rebalance-partial,,
+rebalance-long-and-empty,,
+rebalance-confident-and-wrong,,
+rebalance-hedged-and-correct,,
+rebalance-instructs-the-grader,,
+rebalance-buzzwords,,
+rebalance-empty,,
+index-complete,,
+index-partial,,
+index-wrong,,

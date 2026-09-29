@@ -16,6 +16,7 @@ import re
 
 from pipeline.model_config import get_model
 from pipeline.prompt_loader import load_prompt
+from pipeline.workers.external_context import external_block, filter_external
 from pipeline.schemas.models import (
     CompetencyScore,
     InterviewQuestionSet,
@@ -107,9 +108,7 @@ async def research_job_questions(profile: JobProfile) -> list[str]:
         text = " — ".join(p for p in (r.title.strip(), r.snippet.strip()) if p)
         if text:
             patterns.append(text)
-        if len(patterns) >= 14:
-            break
-    return patterns
+    return filter_external(patterns)[:14]
 
 
 async def generate_job_interview(
@@ -122,13 +121,12 @@ async def generate_job_interview(
     preset: str = "balanced",
 ) -> InterviewQuestionSet:
     num_questions = QUESTIONS_FOR_DURATION.get(duration_minutes, 13)
-    patterns_block = "\n".join(f"- {p}" for p in patterns) if patterns else "none"
     user_content = (
         f"{_profile_block(profile)}\n\n"
         f"duration_minutes: {duration_minutes}\n"
         f"num_questions: {num_questions}\n\n"
         f"job_analysis:\n{analysis.model_dump_json(indent=1)}\n\n"
-        f"real_question_patterns:\n{patterns_block}"
+        + external_block("real_question_patterns", patterns)
     )
     response = await client.messages.create(
         model=get_model("interviewer", preset),
@@ -221,9 +219,13 @@ async def build_study_plan(
             reverse=True,
         )
         for r in ranked[:_STUDY_LINKS_PER_COMPETENCY]:
+            # The title is shown to the user and saved with the scorecard,
+            # which puts it within reach of any later prompt that includes
+            # the scorecard. A title the filter rejects falls back to the URL.
+            title = next(iter(filter_external([r.title])), "")
             plan.append(StudyResource(
                 competency=cs.name,
-                title=r.title or r.url,
+                title=title or r.url,
                 url=r.url,
                 trust_score=round(score_url(r.url), 2),
             ))
@@ -276,7 +278,9 @@ async def generate_job_scorecard(
         hire_signal, debrief_text = debrief.hire_signal, debrief.debrief
         coverage = debrief.requirement_coverage
     except Exception:
-        logging.exception("Job debrief failed; scorecard continues without it")
+        # No traceback: a validation error quotes the text it rejected,
+        # which here is drawn from the candidate's own answers.
+        logging.error("Job debrief failed; scorecard continues without it")
 
     study_plan = await build_study_plan(competency_scores, profile.role_title)
 

@@ -187,7 +187,7 @@ async def corrective_search(
         messages=[
             {
                 "role": "system",
-                "content": "Rewrite the claim as a concise web search query.",
+                "content": load_prompt("claim_search_query_v1.txt").strip(),
             },
             {"role": "user", "content": claim.text},
         ],

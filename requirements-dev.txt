@@ -1,0 +1,8 @@
+# For running the tests and the scripts. Not needed to run Scrivio.
+#
+#     pip install -r requirements-dev.txt -c constraints.txt
+#     playwright install chromium        # once, for the browser tests
+-r requirements.txt
+-r requirements-temporal.txt
+pytest>=7.4,<9
+playwright>=1.44,<2
