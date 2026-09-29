@@ -45,6 +45,35 @@ _OPEN: list = []                 # pages opened by the test that is running
 _LOGS: dict[str, Path] = {}      # server logs, by what they are
 
 
+SLOW = 5.0                       # seconds. Longer than this is written down
+
+
+class timed:
+    """How long a step of setting up or taking down took. One that takes
+    longer than SLOW is written to the diagnostics folder with the time
+    of day, so that a slow start or a slow stop can be set beside
+    whatever else was going on. It changes nothing about the step."""
+
+    def __init__(self, what: str) -> None:
+        self.what = what
+
+    def __enter__(self):
+        self.began = time.monotonic()
+        return self
+
+    def __exit__(self, *failure) -> None:
+        took = round(time.monotonic() - self.began, 2)
+        if took < SLOW:
+            return
+        DIAGNOSTICS.mkdir(parents=True, exist_ok=True)
+        with open(DIAGNOSTICS / "slow-steps.jsonl", "a", encoding="utf-8") as out:
+            out.write(json.dumps({
+                "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "step": self.what,
+                "seconds": took, "during": os.environ.get("PYTEST_CURRENT_TEST", ""),
+                "load_average": list(os.getloadavg()) if hasattr(os, "getloadavg") else None,
+                "failed": failure[0].__name__ if failure[0] else None}) + "\n")
+
+
 def watch(page):
     """Keep an account of every request `page` makes."""
     page.traffic = {}
@@ -136,27 +165,31 @@ playwright_api = pytest.importorskip(
 def browser():
     with playwright_api.sync_playwright() as p:
         launched = None
-        for options in ({}, {"channel": "chrome"}):
-            try:
-                launched = p.chromium.launch(**options)
-                break
-            except Exception:
-                continue
+        with timed("starting the browser"):
+            for options in ({}, {"channel": "chrome"}):
+                try:
+                    launched = p.chromium.launch(**options)
+                    break
+                except Exception:
+                    continue
         if launched is None:
             pytest.skip("no Chromium or Chrome available to drive")
         yield launched
-        launched.close()
+        with timed("closing the browser"):
+            launched.close()
 
 
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     if not DIST.is_file():
         pytest.skip("web/dist is not built: run `npm ci && npm run build` in web/")
-    live = LiveServer(tmp_path_factory.mktemp("scrivio-browser")).start()
+    with timed("starting the API server"):
+        live = LiveServer(tmp_path_factory.mktemp("scrivio-browser")).start()
     try:
         yield live
     finally:
-        live.stop()
+        with timed("stopping the API server"):
+            live.stop()
 
 
 @pytest.fixture
@@ -179,11 +212,13 @@ def demo_server(tmp_path_factory):
     the workflows can be driven end to end without a provider."""
     if not DIST.is_file():
         pytest.skip("web/dist is not built: run `npm ci && npm run build` in web/")
-    live = LiveServer(tmp_path_factory.mktemp("scrivio-demo"), demo=True).start()
+    with timed("starting the demo API server"):
+        live = LiveServer(tmp_path_factory.mktemp("scrivio-demo"), demo=True).start()
     try:
         yield live
     finally:
-        live.stop()
+        with timed("stopping the demo API server"):
+            live.stop()
 
 
 @pytest.fixture(scope="module")
@@ -226,11 +261,12 @@ def dev_server(demo_server):
             pytest.fail("the Vite dev server did not start")
         yield base
     finally:
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
+        with timed("stopping the Vite development server"):
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
 
 
 def paired_page(browser, server, base=None):

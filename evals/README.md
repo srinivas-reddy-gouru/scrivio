@@ -240,15 +240,15 @@ model changes make the ARTICLES better or worse.
 
 ## Workflow
 
-1. **Generate the golden set** — for each entry in `topics.yaml`, generate an
+1. **Generate the golden set.** For each entry in `topics.yaml`, generate an
    article on the **Best** preset (UI or CLI) and collect the markdown files
    into one directory, named by topic id (e.g. `golden/kafka-design-patterns.md`).
-2. **Grade** — `python -m evals.run_eval golden/`
+2. **Grade.** `python -m evals.run_eval golden/`
    Each article is graded 3× by the strong model against `rubric.md`
    (per-axis median reported, defects quoted), plus the free mechanical
    checks: banned stock phrases and 1-space-indented code blocks.
    Results land in `evals/results/<timestamp>.json` + a markdown summary.
-3. **Compare before merging any prompt change** —
+3. **Compare before merging any prompt change.**
    `python -m evals.run_eval golden-new/ --baseline evals/results/<previous>.json`
    The summary shows per-axis deltas. A change that drops an axis by ≥ 0.5
    median points across the set is a regression: revert or iterate.

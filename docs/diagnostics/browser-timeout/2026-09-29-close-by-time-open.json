@@ -1,0 +1,282 @@
+{
+ "what": "how long closing the browser took, by how long it had been open, with one blank page and nothing of Scrivio's",
+ "at": "2026-09-29T11:42:18-0500",
+ "machine": {
+  "system": "Darwin 24.4.0",
+  "browser": "Google Chrome 154.0.8037.58",
+  "playwright": "1.55.0",
+  "browser_is": "the installed Google Chrome, on a new profile each time it is started"
+ },
+ "rows": [
+  {
+   "held_open_s": 2,
+   "close_s": 0.49,
+   "open_and_close_s": 2.5,
+   "profile": {
+    "megabytes": 6.9,
+    "largest": [
+     {
+      "folder": "GraphiteDawnCache",
+      "megabytes": 5.9
+     },
+     {
+      "folder": "Default",
+      "megabytes": 0.9
+     },
+     {
+      "folder": "segmentation_platform",
+      "megabytes": 0.1
+     }
+    ]
+   },
+   "load_average": [
+    5.5,
+    4.76,
+    4.24
+   ]
+  },
+  {
+   "held_open_s": 8,
+   "close_s": 0.11,
+   "open_and_close_s": 8.1,
+   "profile": {
+    "megabytes": 7.0,
+    "largest": [
+     {
+      "folder": "GraphiteDawnCache",
+      "megabytes": 5.9
+     },
+     {
+      "folder": "Default",
+      "megabytes": 0.9
+     },
+     {
+      "folder": "OptimizationGuideModelsManifest",
+      "megabytes": 0.1
+     }
+    ]
+   },
+   "load_average": [
+    5.14,
+    4.7,
+    4.22
+   ]
+  },
+  {
+   "held_open_s": 15,
+   "close_s": 0.33,
+   "open_and_close_s": 15.3,
+   "profile": {
+    "megabytes": 54.8,
+    "largest": [
+     {
+      "folder": "optimization_guide_model_store",
+      "megabytes": 47.6
+     },
+     {
+      "folder": "GraphiteDawnCache",
+      "megabytes": 5.9
+     },
+     {
+      "folder": "Default",
+      "megabytes": 1.0
+     }
+    ]
+   },
+   "load_average": [
+    5.81,
+    4.89,
+    4.3
+   ]
+  },
+  {
+   "held_open_s": 20,
+   "close_s": 26.45,
+   "open_and_close_s": 46.5,
+   "profile": {
+    "megabytes": 54.8,
+    "largest": [
+     {
+      "folder": "optimization_guide_model_store",
+      "megabytes": 47.6
+     },
+     {
+      "folder": "GraphiteDawnCache",
+      "megabytes": 5.9
+     },
+     {
+      "folder": "Default",
+      "megabytes": 1.0
+     }
+    ]
+   },
+   "load_average": [
+    5.23,
+    4.85,
+    4.32
+   ]
+  },
+  {
+   "held_open_s": 25,
+   "close_s": 20.58,
+   "open_and_close_s": 45.6,
+   "profile": {
+    "megabytes": 54.8,
+    "largest": [
+     {
+      "folder": "optimization_guide_model_store",
+      "megabytes": 47.6
+     },
+     {
+      "folder": "GraphiteDawnCache",
+      "megabytes": 5.9
+     },
+     {
+      "folder": "Default",
+      "megabytes": 1.0
+     }
+    ]
+   },
+   "load_average": [
+    6.36,
+    5.17,
+    4.46
+   ]
+  },
+  {
+   "held_open_s": 30,
+   "close_s": 15.98,
+   "open_and_close_s": 46.0,
+   "profile": {
+    "megabytes": 54.7,
+    "largest": [
+     {
+      "folder": "optimization_guide_model_store",
+      "megabytes": 47.6
+     },
+     {
+      "folder": "GraphiteDawnCache",
+      "megabytes": 5.9
+     },
+     {
+      "folder": "Default",
+      "megabytes": 1.0
+     }
+    ]
+   },
+   "load_average": [
+    6.12,
+    5.23,
+    4.52
+   ]
+  },
+  {
+   "held_open_s": 35,
+   "close_s": 9.28,
+   "open_and_close_s": 44.3,
+   "profile": {
+    "megabytes": 54.7,
+    "largest": [
+     {
+      "folder": "optimization_guide_model_store",
+      "megabytes": 47.6
+     },
+     {
+      "folder": "GraphiteDawnCache",
+      "megabytes": 5.9
+     },
+     {
+      "folder": "Default",
+      "megabytes": 1.0
+     }
+    ]
+   },
+   "load_average": [
+    4.43,
+    4.93,
+    4.45
+   ]
+  },
+  {
+   "held_open_s": 40,
+   "close_s": 4.31,
+   "open_and_close_s": 44.3,
+   "profile": {
+    "megabytes": 54.7,
+    "largest": [
+     {
+      "folder": "optimization_guide_model_store",
+      "megabytes": 47.6
+     },
+     {
+      "folder": "GraphiteDawnCache",
+      "megabytes": 5.9
+     },
+     {
+      "folder": "Default",
+      "megabytes": 1.0
+     }
+    ]
+   },
+   "load_average": [
+    3.6,
+    4.64,
+    4.37
+   ]
+  },
+  {
+   "held_open_s": 50,
+   "close_s": 0.43,
+   "open_and_close_s": 50.4,
+   "profile": {
+    "megabytes": 54.7,
+    "largest": [
+     {
+      "folder": "optimization_guide_model_store",
+      "megabytes": 47.6
+     },
+     {
+      "folder": "GraphiteDawnCache",
+      "megabytes": 5.9
+     },
+     {
+      "folder": "Default",
+      "megabytes": 1.0
+     }
+    ]
+   },
+   "load_average": [
+    2.54,
+    4.15,
+    4.2
+   ]
+  },
+  {
+   "held_open_s": 60,
+   "close_s": 0.41,
+   "open_and_close_s": 60.4,
+   "profile": {
+    "megabytes": 54.7,
+    "largest": [
+     {
+      "folder": "optimization_guide_model_store",
+      "megabytes": 47.6
+     },
+     {
+      "folder": "GraphiteDawnCache",
+      "megabytes": 5.9
+     },
+     {
+      "folder": "Default",
+      "megabytes": 1.0
+     }
+    ]
+   },
+   "load_average": [
+    2.32,
+    3.82,
+    4.07
+   ]
+  }
+ ]
+}

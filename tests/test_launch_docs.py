@@ -12,7 +12,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCH = ROOT / "docs" / "launch"
 PUBLIC = [ROOT / "README.md", ROOT / "CHANGELOG.md", ROOT / "CONTRIBUTING.md",
-          ROOT / "SECURITY.md", *sorted(LAUNCH.glob("*.md"))]
+          ROOT / "SECURITY.md", *sorted(LAUNCH.glob("*.md")),
+          *sorted((ROOT / "docs" / "design").glob("*.md")),
+          *sorted((ROOT / "docs" / "diagnostics").rglob("*.md")),
+          *sorted((ROOT / "evals").rglob("README.md"))]
 
 
 def _tests_defined() -> set[str]:
@@ -105,3 +108,67 @@ def test_no_launch_document_contains_the_owners_details():
     for path in PUBLIC:
         if owner:
             assert owner not in path.read_text(encoding="utf-8"), path.name
+
+
+def test_the_proposals_say_that_nothing_has_been_run_or_built():
+    design = ROOT / "docs" / "design"
+    smoke = (design / "PROVIDER_SMOKE_TEST_PROPOSAL.md").read_text(encoding="utf-8")
+    a1a = (design / "A1A_FACTUAL_CONFIRMATIONS.md").read_text(encoding="utf-8")
+
+    assert "Nothing here has been run, and no provider has" in smoke
+    assert "Nothing here has been built, and no schema has been" in a1a
+    assert "Approving this does not close F03" in a1a
+    assert "It finds no more unsupported claims than are found today" in a1a
+
+
+def test_the_smoke_test_proposal_adds_up():
+    """The figures in it are figures somebody may approve spending on."""
+    text = (ROOT / "docs" / "design" / "PROVIDER_SMOKE_TEST_PROPOSAL.md").read_text(
+        encoding="utf-8")
+    prices = {"Haiku": (1.00, 5.00), "Sonnet": (3.00, 15.00)}
+    rows = re.findall(r"^\| (\d)(, Haiku)? \| ([\d,]+) \| ([\d,]+) \| \$([\d.]+) \|$",
+                      text, re.M)
+
+    assert len(rows) == 8
+    total = 0.0
+    for _step, haiku, tokens_in, tokens_out, stated in rows:
+        price_in, price_out = prices["Haiku" if haiku else "Sonnet"]
+        cost = (price_in * int(tokens_in.replace(",", ""))
+                + price_out * int(tokens_out.replace(",", ""))) / 1e6
+        assert abs(cost - float(stated)) < 0.001, (_step, cost, stated)
+        total += float(stated)
+    assert f"**${total:.2f}**" in text
+    assert "| **Requests at most, counting retries** | **10** |" in text
+    assert "| Retries | 0." in text
+
+
+def test_the_timeout_is_recorded_as_open():
+    text = (ROOT / "docs" / "diagnostics" / "browser-timeout" / "README.md").read_text(
+        encoding="utf-8")
+
+    assert "**Open. The cause has not been established.**" in text
+    assert "No test retries. No limit was raised." in text
+
+
+def test_what_is_said_about_the_slow_close_is_what_was_measured():
+    """An explanation was written here once before it had been measured,
+    and it was wrong. The figures in the account are the figures in the
+    record, and the account does not say the timeout is explained."""
+    import json
+
+    folder = ROOT / "docs" / "diagnostics" / "browser-timeout"
+    text = (folder / "README.md").read_text(encoding="utf-8")
+    closes = json.loads((folder / "2026-09-29-close-by-time-open.json").read_text(
+        encoding="utf-8"))["rows"]
+    loads = json.loads((folder / "2026-09-29-loads-by-time-open.json").read_text(
+        encoding="utf-8"))["parts"]
+
+    assert len(closes) == 10
+    for row in closes:
+        assert (f"| {row['held_open_s']} s | {row['close_s']:.2f} s "
+                f"| {row['open_and_close_s']:.1f} s | {row['profile']['megabytes']} MB |") in text
+    for part in loads:
+        assert (f"| {part['from_s']} to {part['to_s']} | {part['loads']} "
+                f"| {part['median_s']:.2f} s | {part['slowest_s']:.2f} s |") in text
+    assert "**It does not explain the timeout.**" in text
+    assert (folder / "2026-09-29-slow-steps-full-run.jsonl").is_file()

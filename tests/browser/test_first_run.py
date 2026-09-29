@@ -4,9 +4,22 @@ Run in demo mode on a store with nothing in it, which is what a new
 install looks like. The sample resume and posting are invented, so
 nothing here needs a personal document.
 """
+import re
+
 import pytest
+from playwright.sync_api import expect
 
 from conftest import paired_page
+
+
+def holds(field, text: str) -> None:
+    """Wait until the field holds `text`. The sample is put into the
+    field after the page has been drawn, so the field is there, empty,
+    a moment before it is there with the sample in it. These tests
+    used to read the field as soon as it appeared, and one of them
+    failed when the moment was long enough to notice. What is waited
+    for is the thing asserted, and nothing is tried twice."""
+    expect(field).to_have_value(re.compile(re.escape(text)), timeout=10000)
 
 PAGES = ["", "#/desk", "#/job", "#/interview", "#/newsroom", "#/settings"]
 
@@ -82,10 +95,8 @@ def test_the_sample_runs_end_to_end_and_is_labelled_throughout(fresh):
     page.goto(base + "/")
     page.get_by_role("button", name="Try it with a sample resume").click()
 
-    resume = page.get_by_label("Your resume text", exact=True)
-    resume.wait_for()
-    assert "jordan@example.com" in resume.input_value()
-    assert "Payments Platform" in page.get_by_label("Job description text", exact=True).input_value()
+    holds(page.get_by_label("Your resume text", exact=True), "jordan@example.com")
+    holds(page.get_by_label("Job description text", exact=True), "Payments Platform")
     note = page.locator(".sample-note")
     assert "invented" in note.inner_text()
     assert "canned" in note.inner_text(), "in demo mode it says the results are examples too"
@@ -100,14 +111,17 @@ def test_the_sample_does_not_come_back_over_what_was_typed(fresh):
     page.goto(base + "/")
     page.get_by_role("button", name="Try it with a sample resume").click()
     resume = page.get_by_label("Your resume text", exact=True)
-    resume.wait_for()
+    holds(resume, "jordan@example.com")      # the sample first, or there is nothing to come back
     resume.fill("My own resume text")
 
     page.goto(base + "/#/interview")
     page.goto(base + "/#/desk")
     page.get_by_label("Your resume text", exact=True).wait_for()
+    page.wait_for_load_state("networkidle")  # the page has asked for everything it will ask for
+    page.wait_for_timeout(500)               # and has had time to do something with it
 
     assert "jordan@example.com" not in page.get_by_label("Your resume text", exact=True).input_value()
+    assert page.locator(".sample-note").count() == 0
 
 
 def test_the_sample_can_be_reached_and_started_from_the_keyboard(fresh):
@@ -124,8 +138,7 @@ def test_the_sample_can_be_reached_and_started_from_the_keyboard(fresh):
         pytest.fail("sixty presses of Tab never reached the sample button")
     page.keyboard.press("Enter")
 
-    page.get_by_label("Your resume text", exact=True).wait_for()
-    assert "Jordan Rivera" in page.get_by_label("Your resume text", exact=True).input_value()
+    holds(page.get_by_label("Your resume text", exact=True), "Jordan Rivera")
 
 
 @pytest.mark.parametrize("where", PAGES)
