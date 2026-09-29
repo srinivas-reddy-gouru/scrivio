@@ -135,7 +135,7 @@ def test_the_result_on_record_is_the_result(result):
     the guard give. If the guard changes, a new result is recorded beside the
     old one, and this test is pointed at it."""
     report, _ = result
-    recorded = json.loads((posting_pairs_eval.CORPUS / "results"
+    recorded = json.loads((posting_pairs_eval.CORPUS / "on-record"
                            / "2026-09-29-guard-a3c1a9d.json").read_text(encoding="utf-8"))
 
     def figures(splits):
@@ -224,3 +224,17 @@ def test_nothing_under_evals_uses_the_network_but_the_collector():
                      p.read_text(encoding="utf-8"), re.M))
 
     assert reaching == ["collect_postings.py"]
+
+
+def test_the_result_on_record_is_in_the_repository():
+    """It was written to a folder that git ignores, and the test above
+    passed on the machine that wrote it and would have failed on any
+    other. Found after the push, before CI reported it."""
+    import subprocess
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "evals/corpus/postings-v1/on-record"], capture_output=True,
+        text=True, cwd=posting_pairs_eval.CORPUS.parents[2]).stdout.split()
+    if not tracked:
+        pytest.skip("not a git checkout, or nothing committed yet")
+    assert "evals/corpus/postings-v1/on-record/2026-09-29-guard-a3c1a9d.json" in tracked

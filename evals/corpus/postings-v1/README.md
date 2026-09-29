@@ -129,7 +129,7 @@ Offline. No model, no network, no cost.
 
 ## Results on record
 
-In `results/`, named by date and by the commit of the guard that was run.
+In `on-record/`, named by date and by the commit of the guard that was run.
 
 | File | What |
 | --- | --- |

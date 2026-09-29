@@ -1,0 +1,42 @@
+Resume guard against real postings, corpus postings-v1, guard at a3c1a9d
+
+Constructed rewrites against real public postings and invented resumes. No model wrote anything here. These are rates over constructed cases and say nothing about how often a real model makes these mistakes.
+
+== tuning: 17 postings
+
+  Recognising the posting's names
+    names the guard did not collect           18 of  122
+    ordinary words it took for names         168 of  977
+
+  UNSUPPORTED CLAIMS RETAINED (a claim nobody made, still on the resume)
+    all forms                                 80 of  592  ( 13.5%)
+      as the posting writes it                  24 of  148  ( 16.2%)
+      lower case, mid-sentence                  22 of  148  ( 14.9%)
+      lower case, first word                    22 of  148  ( 14.9%)
+      upper case, mid-sentence                  12 of  148  (  8.1%)
+    names that are also words, all forms      54 of   80  ( 67.5%)
+
+  SUPPORTED OR HONEST LINES REVERTED (a line that was fine, put back)
+    a name that is on the resume               0 of  212  (  0.0%)
+    an ordinary word from the posting        364 of 2484  ( 14.7%)
+    a line reworded by hand                    2 of  136  (  1.5%)
+
+== held_out: 8 postings
+
+  Recognising the posting's names
+    names the guard did not collect           13 of  140
+    ordinary words it took for names          91 of  505
+
+  UNSUPPORTED CLAIMS RETAINED (a claim nobody made, still on the resume)
+    all forms                                 32 of  312  ( 10.3%)
+      as the posting writes it                  14 of   78  ( 17.9%)
+      lower case, mid-sentence                   2 of   78  (  2.6%)
+      lower case, first word                     2 of   78  (  2.6%)
+      upper case, mid-sentence                  14 of   78  ( 17.9%)
+    names that are also words, all forms      16 of   16  (100.0%)
+
+  SUPPORTED OR HONEST LINES REVERTED (a line that was fine, put back)
+    a name that is on the resume               0 of  108  (  0.0%)
+    an ordinary word from the posting        198 of 1192  ( 16.6%)
+    a line reworded by hand                    0 of   64  (  0.0%)
+
