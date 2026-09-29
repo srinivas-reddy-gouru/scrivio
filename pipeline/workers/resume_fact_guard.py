@@ -897,27 +897,293 @@ def _looks_named(token: str, sentence_initial: bool) -> bool:
     return token[0].isupper() and not sentence_initial
 
 
-def new_named_terms(text: str, known_squashed: str, jd_text: str = "") -> list[str]:
+# ── Names the posting uses ──────────────────────────────────────────────────
+#
+# A rewrite is an attempt to sound like the posting, so the posting is
+# where an unsupported name comes from. The check above goes by capital
+# letters and digits, and a model that wrote "kubernetes" got it past.
+# So the names the posting uses are collected, and a rewrite is searched
+# for them whatever their case and wherever they fall.
+#
+# The work is in deciding which of the posting's words are names. A
+# posting capitalises the first word of every line and most of every
+# heading: "Design and build", "Responsibilities", "Nice To Have". Taking
+# those for names refuses ordinary prose, and did: the first word of a
+# sentence was compared with every capitalised word in the posting.
+#
+#   always a name      a digit or a capital inside it: S3, gRPC, PostgreSQL
+#   a name             capitalised in the middle of a sentence
+#   a name, unless     capitalised only where anything would be (the start
+#                      of a line or sentence, a heading), and then not if
+#                      the posting also writes it in lower case
+#   never              an ordinary word, by the list below or by its ending
+#
+# The list of ordinary words is a list, and a list has an end. A word that
+# is not on it, that a posting capitalises, is taken for a name. The cost
+# is a line put back that was fine, with a note naming the word.
+
+_ORDINARY = frozenset("""
+ability able about above accept access accountable accountability achieve across
+act action active activity adapt add additional address adopt advance advanced
+advocate agile align all also ambitious analyse analysis analyst analytical
+analyze and annual answer any applicant application apply approach appropriate
+architect architecture are area around art as assess assist associate assurance
+at attention audit automate availability available award aware awareness
+
+bachelor back backend background balance base based basic be become benefit
+benefits best better between big bonus both brand bring broad budget build
+builder building business but by
+
+calendar call can candidate capable capacity care career case cause challenge
+champion change channel check choose clear client close cloud coach code
+collaborate collaboration collaborative colleague come comfortable commercial
+commit commitment communicate communication community company compensation
+competitive complete complex compliance component comprehensive computer
+concept conduct confident configure connect consider consistent consult
+consultant contact content continue continuous contract contribute
+contribution control coordinate core corporate cost costs create creative
+critical cross culture curious current customer customers cycle
+
+daily data day deadline debug decision dedicated deep define degree deliver
+delivery demonstrate department depend deploy deployment describe design
+designer desirable desired detail determine develop developer development
+diagnose different digital direct director discipline discover discuss
+distributed diverse diversity do document documentation domain drive driven
+duties duty dynamic
+
+each early education effective efficient effort either eligible embrace
+employee employer employment empower enable end engage engagement engineer
+engineering engineers enhance ensure enterprise entry environment equal
+equity equivalent essential establish estimate evaluate every evolve
+examine example excellent execute executive exercise existing expand
+expect experience experienced expert expertise explore extensive external
+
+facilitate familiar familiarity fast feature feedback field find first fit
+flexible focus follow for foster foundation framework frontend full
+fullstack function functional fundamental future
+
+gain gather general generate get give global goal good govern governance
+graduate great group grow growth guide
+
+hand handle hands have head health help here high highly hire hiring hold
+holiday home hours how hybrid
+
+idea ideal identify impact implement implementation important improve
+improvement in incident include including increase independent individual
+industry influence inform information infrastructure initiative innovate
+innovation innovative insight inspire install insurance integrate
+integration integrity interest interested internal international interview
+into investigate involve issue it its
+
+job join junior
+
+keep key know knowledge
+
+language large launch lead leader leadership learn learning leave level
+leverage life lifecycle like limited line listen live local location long
+look love
+
+machine maintain maintenance major make manage management manager many
+market master may measure mechanism meet member mentor mentoring method
+methodology metric mid migrate migration minimum mission mobile model modern
+monitor monitoring more most motivated move multiple must
+
+navigate need network new next nice no not note now number
+
+objective of offer office on onboard one ongoing online only open operate
+operation operational operations opportunity optimise optimize optional or
+order organisation organise organization organize other our out outcome
+outstanding over overall overview own owner ownership
+
+package paid parental part participate partner passion passionate pay peer
+people per perform performance perks person personal phase pipeline place
+plan planning platform play please plus point policy position positive
+possess potential practical practice preferred prepare present principal
+principle prior priority proactive problem procedure process produce product
+production professional proficiency proficient program programme programming
+progress project promote propose protect proven provide public purpose
+pursue put
+
+qualification qualifications quality quarter query question quick
+
+range rapid reach read ready real recommend record recruit reduce refine
+regular related relationship release relevant reliability reliable remote
+report reporting represent require required requirement requirements
+research resolve resource respect respond response responsibilities
+responsibility responsible result results review reward right rigorous risk
+roadmap robust role roles run
+
+safe safety salary scale schedule scientist scope search secure security
+see seek select self senior serve service services set setup several shape
+share ship should show sick sign significant similar site size skill
+skilled skills small software solid solution solve some source speak
+specialist specific specification sponsor sprint staff stage stakeholder
+stand standard start startup state stay step strategic strategy strength
+strong structure study style subject success successful suitable summary
+supervise support sure system systems
+
+take talent talented target task team teams tech technical technique
+technology tell term test testing that the their them then there these
+they thing think this those thrive through time title to today together
+tool tooling tools top total track train training transform translate
+travel troubleshoot trust try type
+
+under understand understanding unique unit university up update upgrade
+us use user users using
+
+validate value values variety various verify version very via vision
+visit visa
+
+want we web week welcome well what when where which while who why wide
+will willing with within without work workflow working workplace world
+would write writing written
+
+year years yes you your yourself
+""".split()) | frozenset("""
+accelerate administer advise allocate amplify anticipate articulate assemble
+automate benchmark boost bootstrap bridge broaden capture catalyse catalyze
+clarify coordinate craft cultivate curate debug decide decompose delegate
+demystify derive devise differentiate dig direct dive draft earn elevate
+eliminate embed emphasise emphasize encourage enforce enrich envision
+escalate evangelise evangelize exceed experiment extend forecast forge
+formulate harden harness ideate illustrate incubate instrument interpret
+iterate juggle liaise map maximise maximize mediate minimise minimize
+mitigate modernise modernize negotiate nurture orchestrate overhaul oversee
+pair pilot pioneer prioritise prioritize probe prototype prune push raise
+rebuild redesign refactor reimagine reinforce remove rethink revamp revise
+rewrite simplify spearhead spot stabilise stabilize standardise standardize
+steer stream streamline strengthen stretch supervise surface sustain tackle
+tailor teach tighten triage tune uncover unblock unify unlock uphold uplift
+""".split()) | frozenset("""
+accounting advertising aerospace agriculture analytics automotive aviation
+banking billing biotech checkout commerce construction consumer credit
+dental ecommerce energy entertainment fashion finance financial fintech
+fitness food fraud gaming government healthcare hospitality housing identity
+insurance investment legal lending logistics manufacturing marketing media
+medical mobility mortgage music payments payroll pharma pharmaceutical
+procurement publishing retail robotics sales shipping sports telecom trading
+transport transportation travel treasury utilities vision wealth wellness
+monday tuesday wednesday thursday friday saturday sunday january february
+march april june july august september october november december
+""".split())
+
+# Names that are also words. In lower case there is no telling "react to
+# incidents" from a claim to know React, so in lower case they are left
+# alone. Capitalised in the middle of a sentence they are caught by the
+# rule that was already there.
+_ALSO_A_WORD = frozenset("""
+go react spark swift rust flask helm vault consul ruby dart chef puppet salt
+nest next express unity spring slack notion zoom word excel outlook oracle
+meta apple amazon box square stripe gin ember backbone jasmine mocha cucumber
+hive pig presto storm beam pulsar composer gradle maven ant make bash shell
+git sentry segment mixpanel looker tableau elastic splunk nomad packer falcon
+bottle tornado pyramid hug click rich celery flux argo harbor rancher crystal
+julia lisp scheme racket basic pascal ada
+""".split())
+
+_ORDINARY_ENDINGS = ("ing", "ed", "tion", "sion", "ment", "ness", "ity", "ly",
+                     "ance", "ence", "ship", "ies")
+_LINE_MARK = re.compile(r"^[\s>*•·‣◦▪\-–—]*(?:\(?\d{1,2}[.)]\s+)?")
+_SENTENCE = re.compile(r"(?<=[.!?;:])\s+")
+
+
+def _ordinary(key: str) -> bool:
+    if key in _STOPWORDS or key in _ORDINARY:
+        return True
+    if key.endswith("s") and key[:-1] in _ORDINARY:
+        return True
+    return any(key.endswith(e) and len(key) - len(e) >= 4 for e in _ORDINARY_ENDINGS)
+
+
+def _pieces(token: str) -> list[str]:
+    """"AWS/GCP" and "Kubernetes-based" are each more than one word.
+    "Node.js" is one."""
+    whole = token.strip(".-/")
+    parts = [p for p in re.split(r"[/-]", whole) if p]
+    return parts if len(parts) > 1 else [whole]
+
+
+def _heading(tokens: list[str], line: str) -> bool:
+    """Every word capitalised and no sentence in it: "Nice To Have",
+    "Senior Platform Engineer", and also "Kubernetes, Terraform"."""
+    words = [t for t in tokens if t.casefold() not in _STOPWORDS]
+    if len(tokens) < 2 or not words or re.search(r"[.!?]\s", line):
+        return False
+    return all(t[0].isupper() for t in words)
+
+
+def posting_names(jd_text: str) -> set[str]:
+    """The names a posting uses, casefolded."""
+    always: set[str] = set()
+    in_a_sentence: set[str] = set()
+    where_anything_would_be: set[str] = set()
+    in_lower_case: set[str] = set()
+
+    for raw in (jd_text or "").splitlines():
+        line = _LINE_MARK.sub("", raw).strip()
+        if not line:
+            continue
+        everything = [p for m in _TERM_RE.finditer(line) for p in _pieces(m.group())]
+        heading = _heading(everything, line)
+        for sentence in _SENTENCE.split(line):
+            first = True
+            for m in _TERM_RE.finditer(sentence):
+                for piece in _pieces(m.group()):
+                    at_the_start, first = first, False
+                    if len(piece) < 2:
+                        continue
+                    key = piece.casefold()
+                    if any(ch.isdigit() for ch in piece):
+                        always.add(key)
+                    elif piece.islower():
+                        in_lower_case.add(key)
+                    elif any(ch.isupper() for ch in piece[1:]) and not piece.isupper():
+                        always.add(key)                      # gRPC, PostgreSQL
+                    elif piece.isupper() or at_the_start or heading:
+                        where_anything_would_be.add(key)     # AWS, and also REQUIREMENTS
+                    else:
+                        in_a_sentence.add(key)
+    names = set(always)
+    names |= {k for k in in_a_sentence if not _ordinary(k)}
+    names |= {k for k in where_anything_would_be
+              if not _ordinary(k) and k not in in_lower_case}
+    return names
+
+
+def new_named_terms(text: str, known_squashed: str, jd_text: str = "",
+                    known_names: set[str] | None = None) -> list[str]:
     """Named terms in `text` that appear nowhere in what the candidate gave.
 
-    A capitalised first word is usually a verb ('Built'), so it counts only
-    when the job description uses that same word as a name: that is the
-    shape keyword stuffing takes."""
-    jd_named = {
-        m.group().casefold() for m in _TERM_RE.finditer(jd_text or "")
-        if _looks_named(m.group(), sentence_initial=False)
-    }
+    Two ways of being a name. By its shape: a digit, a capital inside
+    it, a capital in the middle of a sentence. Or by being one of the
+    names the posting uses, in any case and at any position.
+
+    `known_names` is what the candidate gave, as names. A name from the
+    posting is looked for there, name against name. Without it the
+    squashed text is searched, as it is for names found by shape."""
+    from_the_posting = posting_names(jd_text)
     found: list[str] = []
+
+    def known(term: str) -> bool:
+        if known_names is not None and not _looks_named(term, sentence_initial=True):
+            return _squash(term) in known_names
+        return _term_present(term, known_squashed)
+
     for sentence in re.split(r"(?<=[.!?;:])\s+|\n+", text or ""):
         for k, m in enumerate(_TERM_RE.finditer(sentence.replace(METRIC_TOKEN, " "))):
             token = m.group().strip(".-/")
-            initial = k == 0
-            named = _looks_named(token, initial) or (
-                initial and token.casefold() in jd_named)
-            if not named or _term_present(token, known_squashed):
-                continue
-            if token not in found:
-                found.append(token)
+            candidates = [token] if _looks_named(token, k == 0) else []
+            for piece in ([token] if candidates else _pieces(token)):
+                key = piece.casefold()
+                if key not in from_the_posting or piece in candidates:
+                    continue
+                if piece[0].isupper() or key not in _ALSO_A_WORD:
+                    candidates.append(piece)
+            for term in candidates:
+                if known(term):
+                    continue
+                if term.casefold() not in {f.casefold() for f in found}:
+                    found.append(term)
     return found
 
 
@@ -1007,13 +1273,18 @@ def refuse_new_terms(
     source = earlier if earlier is not None else original
     resume = candidate.resume
 
+    given = " ".join(_all_strings(original)) + " " + vouched_text(user_text)
+    if earlier is not None:
+        given += " " + " ".join(_all_strings(earlier))
+    known_names = _parts(given)
+
     def new_in(text: str, was: str | None = None) -> list[str]:
         """Names the model may not have here. `was` is the earlier
         version of this same line, where there is one: a flagged name it
         already held is not new to it."""
         if not text:
             return []
-        found = new_named_terms(text, known, jd_text)
+        found = new_named_terms(text, known, jd_text, known_names)
         for name in flagged:
             if names(name, text) and not (was is not None and names(name, was)):
                 if name.casefold() not in {f.casefold() for f in found}:

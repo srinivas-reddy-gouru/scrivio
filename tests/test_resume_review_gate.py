@@ -1033,12 +1033,16 @@ def test_fe22bc1_a_stored_finding_is_still_read_from_the_stored_record():
 
 
 def test_fe22bc1_a_model_being_right_does_not_make_it_the_models_to_raise(api):
-    """A limit, and the cost of the rule. The model writes a technology
-    in lower case, which the check for new names does not see, and then
-    says so itself in the form of a finding. It is right. The finding is
-    still not the model's to raise, and nothing is raised. What would
-    catch this is the check for new names seeing lower case, which is
-    listed as a limit."""
+    """The model writes a technology in lower case and then says so
+    itself, in the form of a finding. It is right, and the finding is
+    still not the model's to raise.
+
+    This test used to end by asserting that the claim stayed on the
+    resume. It recorded a limit: the check for new names went by capital
+    letters, so "kubernetes" got past it, and with the model's finding
+    discarded nothing caught it at all. The check now knows the names
+    the posting uses, in any case (tests/test_posting_names.py). So the
+    line goes back, on the application's say-so."""
     client, rid, scripted = api
     written = with_line(2, "Consolidated build clusters on kubernetes to reduce costs")
     scripted["resume"], scripted["warnings"] = written, [invented("kubernetes")]
@@ -1047,4 +1051,6 @@ def test_fe22bc1_a_model_being_right_does_not_make_it_the_models_to_raise(api):
 
     doc = client.get(f"/resumes/{rid}").json()
     assert findings_in(doc["tailored"]["warnings"]) == []
-    assert "on kubernetes" in str(doc["tailored"]["resume"])
+    assert doc["tailored"]["resume"]["work"][0]["highlights"][2] == LINES[2]
+    assert finished(client, rid).status_code == 200
+    assert "kubernetes" not in finished(client, rid).text.casefold()
